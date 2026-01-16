@@ -1,0 +1,240 @@
+services:
+  # SQL Server
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - recruitment-network
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q 'SELECT 1' -C || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # API Gateway
+  apigateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/Dockerfile
+    container_name: apigateway
+    ports:
+      - "5000:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - auth-service
+    networks:
+      - recruitment-network
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: src/Services/Auth/Dockerfile
+    container_name: auth-service
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AuthServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # User Profile Service
+  userprofile-service:
+    build:
+      context: .
+      dockerfile: src/Services/UserProfile/Dockerfile
+    container_name: userprofile-service
+    ports:
+      - "5002:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=UserProfileServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Portfolio Service
+  portfolio-service:
+    build:
+      context: .
+      dockerfile: src/Services/Portfolio/Dockerfile
+    container_name: portfolio-service
+    ports:
+      - "5003:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PortfolioServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Company Service
+  company-service:
+    build:
+      context: .
+      dockerfile: src/Services/Company/Dockerfile
+    container_name: company-service
+    ports:
+      - "5004:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CompanyServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Job & Hiring Service
+  jobhiring-service:
+    build:
+      context: .
+      dockerfile: src/Services/JobHiring/Dockerfile
+    container_name: jobhiring-service
+    ports:
+      - "5005:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=JobHiringServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Connection & Chat Service
+  connection-service:
+    build:
+      context: .
+      dockerfile: src/Services/Connection/Dockerfile
+    container_name: connection-service
+    ports:
+      - "5006:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ConnectionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Community Service
+  community-service:
+    build:
+      context: .
+      dockerfile: src/Services/Community/Dockerfile
+    container_name: community-service
+    ports:
+      - "5007:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CommunityServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Subscription & Billing Service
+  subscription-service:
+    build:
+      context: .
+      dockerfile: src/Services/Subscription/Dockerfile
+    container_name: subscription-service
+    ports:
+      - "5008:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=SubscriptionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Advertisement Service
+  advertisement-service:
+    build:
+      context: .
+      dockerfile: src/Services/Advertisement/Dockerfile
+    container_name: advertisement-service
+    ports:
+      - "5009:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AdvertisementServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Moderation Service
+  moderation-service:
+    build:
+      context: .
+      dockerfile: src/Services/Moderation/Dockerfile
+    container_name: moderation-service
+    ports:
+      - "5010:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ModerationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: src/Services/Notification/Dockerfile
+    container_name: notification-service
+    ports:
+      - "5011:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NotificationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+networks:
+  recruitment-network:
+    driver: bridge
+
+volumes:
+  sqlserver_data:

@@ -1,0 +1,17 @@
+**/.vs
+**/.vscode
+**/*.*proj.user
+**/*.dbmdl
+**/*.jfm
+**/bin
+**/obj
+**/out
+**/Logs
+**/.git
+**/.gitignore
+**/.dockerignore
+**/docker-compose*
+**/Dockerfile*
+**/.env
+**/secrets.json
+**/appsettings.Development.json

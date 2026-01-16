@@ -1,0 +1,14 @@
+using RecruitmentPlatform.Contracts.Auth;
+
+namespace Auth.Application.Interfaces;
+
+public interface IAuthService
+{
+    Task<LoginResponse> RegisterAsync(RegisterRequest request);
+    Task<LoginResponse> LoginAsync(LoginRequest request);
+    Task<LoginResponse> RefreshTokenAsync(string refreshToken);
+    Task RevokeTokenAsync(string refreshToken);
+    Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
+    Task LockUserAsync(int userId);
+    Task<IEnumerable<UserDto>> GetAllUsersAsync();
+}
