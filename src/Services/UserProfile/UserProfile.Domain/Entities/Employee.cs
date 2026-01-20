@@ -5,9 +5,8 @@ namespace UserProfile.Domain.Entities;
 public class Employee : BaseEntity
 {
     public int UserId { get; set; }
-    public string FullName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
-    public string AvatarUrl { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public int Status { get; set; } = 1; // 1 = Active, 0 = Inactive
+    public string CoverImage { get; set; } = string.Empty;
+    public string Avatar { get; set; } = string.Empty;
 }
