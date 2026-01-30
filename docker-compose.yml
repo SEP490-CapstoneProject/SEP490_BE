@@ -232,6 +232,28 @@ services:
       - recruitment-network
     restart: on-failure
 
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/Dockerfile.runtime
+    container_name: api-gateway
+    ports:
+      - "5000:8080" # HTTP
+      - "7000:8081" # HTTPS
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:8081;http://+:8080
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=YourSecurePassword123!
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+    volumes:
+      - ${USERPROFILE}/.aspnet/https:/https:ro
+    depends_on:
+      - auth-service
+    networks:
+      - recruitment-network
+    restart: on-failure
+
 networks:
   recruitment-network:
     driver: bridge
