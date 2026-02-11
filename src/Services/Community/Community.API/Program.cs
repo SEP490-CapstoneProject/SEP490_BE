@@ -19,6 +19,13 @@ builder.Services.AddDbContext<CommunityDbContext>(options =>
 builder.Services.AddScoped<ICommunityRepository, CommunityRepository>();
 builder.Services.AddScoped<ICommunityService, CommunityService>();
 
+// Add HttpClient for calling Media Service
+builder.Services.AddHttpClient("MediaService", client =>
+{
+    client.BaseAddress = new Uri("http://media-service:8080");
+    client.Timeout = TimeSpan.FromMinutes(5); // For large file uploads
+});
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
