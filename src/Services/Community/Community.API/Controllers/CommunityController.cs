@@ -9,10 +9,17 @@ namespace Community.API.Controllers;
 public class CommunityController : ControllerBase
 {
     private readonly ICommunityService _service;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<CommunityController> _logger;
 
-    public CommunityController(ICommunityService service)
+    public CommunityController(
+        ICommunityService service, 
+        IHttpClientFactory httpClientFactory,
+        ILogger<CommunityController> logger)
     {
         _service = service;
+        _httpClientFactory = httpClientFactory;
+        _logger = logger;
     }
 
     // POST OPERATIONS
@@ -39,9 +46,57 @@ public class CommunityController : ControllerBase
         return Ok(posts);
     }
 
+    /// <summary>
+    /// Create a post with optional image/video upload
+    /// </summary>
     [HttpPost("posts")]
-    public async Task<IActionResult> CreatePost([FromBody] CommunityPost post)
+    public async Task<IActionResult> CreatePost([FromForm] int userId, [FromForm] string description, 
+        [FromForm] int? portfolioId, [FromForm] int status, [FromForm] IFormFile? coverMedia)
     {
+        string? mediaUrl = null;
+
+        // Upload cover media to Media Service if provided
+        if (coverMedia != null)
+        {
+            try
+            {
+                var client = _httpClientFactory.CreateClient("MediaService");
+                var formData = new MultipartFormDataContent();
+                formData.Add(new StreamContent(coverMedia.OpenReadStream()), "file", coverMedia.FileName);
+                formData.Add(new StringContent("community/posts"), "folder");
+
+                var endpoint = coverMedia.ContentType.StartsWith("video/") 
+                    ? "/api/upload/video" 
+                    : "/api/upload/image";
+
+                var response = await client.PostAsync(endpoint, formData);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<MediaUploadResponse>();
+                    mediaUrl = result?.Url;
+                }
+                else
+                {
+                    _logger.LogWarning("Media upload failed: {StatusCode}", response.StatusCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading media to Media Service");
+                return StatusCode(500, new { error = "Failed to upload media" });
+            }
+        }
+
+        var post = new CommunityPost
+        {
+            UserId = userId,
+            Description = description,
+            CoverImageVideo = mediaUrl ?? string.Empty,
+            PortfolioId = portfolioId,
+            Status = status
+        };
+
         var created = await _service.CreatePostAsync(post);
         return CreatedAtAction(nameof(GetPostById), new { id = created.Id }, created);
     }
@@ -154,4 +209,14 @@ public class CommunityController : ControllerBase
         await _service.DeleteReplyAsync(replyId);
         return NoContent();
     }
+}
+
+// DTO for Media Service response
+public class MediaUploadResponse
+{
+    public bool Success { get; set; }
+    public string? Url { get; set; }
+    public string? PublicId { get; set; }
+    public string? Message { get; set; }
+    public string? Error { get; set; }
 }
