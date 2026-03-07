@@ -1,0 +1,71 @@
+using Connection.Application.Interfaces;
+
+namespace Connection.Application.Services;
+
+public class ConnectionService : IConnectionService
+{
+    private readonly Connection.Application.Interfaces.IConnectionRepository _repo;
+
+    public ConnectionService(Connection.Application.Interfaces.IConnectionRepository repo)
+    {
+        _repo = repo;
+    }
+
+    public async Task<Connection.Domain.Entities.Connection> CreateConnectionAsync(Connection.Domain.Entities.Connection conn)
+    {
+        return await _repo.CreateAsync(conn);
+    }
+
+    public async Task UpdateConnectionAsync(Connection.Domain.Entities.Connection conn)
+    {
+        await _repo.UpdateAsync(conn);
+    }
+
+    public async Task<Connection.Domain.Entities.Connection?> GetConnectionByIdAsync(int id)
+    {
+        return await _repo.GetByIdAsync(id);
+    }
+
+    public async Task<IEnumerable<Connection.Domain.Entities.Connection>> GetAllConnectionsAsync()
+    {
+        return await _repo.GetAllAsync();
+    }
+
+    public async Task<Connection.Domain.Entities.Room> CreateRoomAsync(Connection.Domain.Entities.Room room)
+    {
+        return await _repo.CreateRoomAsync(room);
+    }
+
+    public async Task<Connection.Domain.Entities.Message> CreateMessageAsync(Connection.Domain.Entities.Message message)
+    {
+        var created = await _repo.CreateMessageAsync(message);
+        // update room last message time
+        var room = await _repo.GetRoomByIdAsync(created.MessageRoomId);
+        if (room != null)
+        {
+            room.LastMessAt = created.CreatedAt;
+            await _repo.UpdateRoomAsync(room);
+        }
+        return created;
+    }
+
+    public async Task<Connection.Domain.Entities.Room?> GetRoomByIdAsync(int id)
+    {
+        return await _repo.GetRoomByIdAsync(id);
+    }
+
+    public async Task<IEnumerable<Connection.Domain.Entities.Room>> GetRoomsByConnectionAsync(int connectionId)
+    {
+        return await _repo.GetRoomsByConnectionAsync(connectionId);
+    }
+
+    public async Task<IEnumerable<Connection.Domain.Entities.Message>> GetMessagesByRoomAsync(int roomId)
+    {
+        return await _repo.GetMessagesByRoomAsync(roomId);
+    }
+
+    public async Task<IEnumerable<Connection.Domain.Entities.Room>> GetRoomsByUserIdAsync(int userId)
+    {
+        return await _repo.GetRoomsByUserIdAsync(userId);
+    }
+}

@@ -8,6 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connection.Application\Connection.Application.csproj" />
+    <ProjectReference Include="..\Connection.Infrastructure\Connection.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Common\RecruitmentPlatform.Common.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
