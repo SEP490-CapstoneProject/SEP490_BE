@@ -16,11 +16,13 @@ public class AuthService : IAuthService
 {
     private readonly IAuthRepository _repository;
     private readonly JwtSettings _jwtSettings;
+    private readonly IUserProfileClient _userProfileClient;
 
-    public AuthService(IAuthRepository repository, IOptions<JwtSettings> jwtSettings)
+    public AuthService(IAuthRepository repository, IOptions<JwtSettings> jwtSettings, IUserProfileClient userProfileClient)
     {
         _repository = repository;
         _jwtSettings = jwtSettings.Value;
+        _userProfileClient = userProfileClient;
     }
 
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
@@ -123,7 +125,15 @@ public class AuthService : IAuthService
 
     private async Task<LoginResponse> GenerateTokenResponse(User user)
     {
-        var accessToken = GenerateAccessToken(user);
+        int? employeeId = null;
+        int? companyId = null;
+
+        if (user.Role == UserRole.USER)
+            employeeId = await _userProfileClient.GetEmployeeIdByUserIdAsync(user.Id);
+        else if (user.Role == UserRole.RECRUITER)
+            companyId = await _userProfileClient.GetCompanyIdByUserIdAsync(user.Id);
+
+        var accessToken = GenerateAccessToken(user, employeeId, companyId);
         var refreshToken = GenerateRefreshToken();
 
         var refreshTokenEntity = new RefreshToken
@@ -135,7 +145,7 @@ public class AuthService : IAuthService
 
         await _repository.AddRefreshTokenAsync(refreshTokenEntity);
 
-        return new LoginResponse
+        var response = new LoginResponse
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
@@ -145,19 +155,34 @@ public class AuthService : IAuthService
                 Email = user.Email,
                 Role = user.Role,
                 Status = user.Status,
-                CreatedAt = user.CreatedAt
+                CreatedAt = user.CreatedAt,
+                EmployeeId = employeeId,
+                CompanyId = companyId
             }
         };
+
+        if (user.Role == UserRole.USER && employeeId == null)
+            response.Message = "Chưa nhập thông tin người dùng";
+        else if (user.Role == UserRole.RECRUITER && companyId == null)
+            response.Message = "Chưa nhập thông tin công ty";
+
+        return response;
     }
 
-    private string GenerateAccessToken(User user)
+    private string GenerateAccessToken(User user, int? employeeId = null, int? companyId = null)
     {
-        var claims = new[]
+        var claimsList = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role.ToString())
         };
+
+        if (employeeId.HasValue)
+            claimsList.Add(new Claim("employeeId", employeeId.Value.ToString()));
+
+        if (companyId.HasValue)
+            claimsList.Add(new Claim("companyId", companyId.Value.ToString()));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -165,7 +190,7 @@ public class AuthService : IAuthService
         var token = new JwtSecurityToken(
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
-            claims: claims,
+            claims: claimsList,
             expires: DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
             signingCredentials: credentials
         );

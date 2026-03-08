@@ -20,6 +20,7 @@ public class LoginResponse
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;
     public UserDto User { get; set; } = null!;
+    public string? Message { get; set; }
 }
 
 public class RefreshTokenRequest
@@ -40,4 +41,6 @@ public class UserDto
     public UserRole Role { get; set; }
     public UserStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
+    public int? EmployeeId { get; set; }
+    public int? CompanyId { get; set; }
 }
