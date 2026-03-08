@@ -42,6 +42,22 @@ public class CompanyController : ControllerBase
     }
 
     /// <summary>
+    /// Get company profile by user ID (service-to-service, no auth required)
+    /// </summary>
+    [HttpGet("by-user/{userId}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetByUserId(int userId)
+    {
+        var company = await _service.GetByUserIdAsync(userId);
+        if (company == null)
+        {
+            return NotFound(new { error = "Company profile not found" });
+        }
+
+        return Ok(company);
+    }
+
+    /// <summary>
     /// Get company profile by ID
     /// </summary>
     [HttpGet("{id}")]
