@@ -29,6 +29,24 @@ public class PortfolioController : ControllerBase
         _logger = logger;
     }
 
+    [HttpGet]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? status = null)
+    {
+        var result = await _portfolioService.GetAllAsync(page, pageSize, status);
+
+        foreach (var p in result.Items)
+        {
+            var blocks = await _blockRepo.GetByPortfolioIdAsync(p.PortfolioId);
+            p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+        }
+
+        return Ok(result);
+    }
+
     [HttpPost]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> Create([FromForm] string portfolioJson, [FromForm] List<IFormFile>? files)
@@ -46,8 +64,9 @@ public class PortfolioController : ControllerBase
             return BadRequest(new { error = $"Invalid JSON: {ex.Message}" });
         }
 
-        var fileMap = (files ?? new List<IFormFile>())
-            .ToDictionary(f => Path.GetFileName(f.FileName), f => f);
+        var fileMap = Request.Form.Files
+            .GroupBy(f => Path.GetFileName(f.FileName))
+            .ToDictionary(g => g.Key, g => g.First());
 
         try
         {
@@ -124,6 +143,45 @@ public class PortfolioController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating portfolio {Id}", id);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    [HttpPut("{id:int}/full")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UpdateFull(int id, [FromForm] string portfolioJson, [FromForm] List<IFormFile>? files)
+    {
+        var employeeId = GetEmployeeId();
+        if (employeeId == null) return Unauthorized(new { error = "EmployeeId claim not found" });
+
+        UpdateFullPortfolioRequest request;
+        try
+        {
+            request = System.Text.Json.JsonSerializer.Deserialize<UpdateFullPortfolioRequest>(
+                portfolioJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new ArgumentException("portfolioJson cannot be null");
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            return BadRequest(new { error = $"Invalid JSON: {ex.Message}" });
+        }
+
+        var fileMap = Request.Form.Files
+            .GroupBy(f => Path.GetFileName(f.FileName))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        try
+        {
+            var result = await _portfolioService.UpdateFullPortfolioAsync(id, employeeId.Value, request, fileMap);
+            return Ok(result);
+        }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fully updating portfolio {Id}", id);
             return StatusCode(500, new { error = "Internal server error" });
         }
     }

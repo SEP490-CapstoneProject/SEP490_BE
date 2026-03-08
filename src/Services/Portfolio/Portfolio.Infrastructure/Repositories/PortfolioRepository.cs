@@ -25,6 +25,23 @@ public class PortfolioRepository : IPortfolioRepository
             .Include(p => p.Blocks)
             .ToListAsync();
 
+    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total)> GetAllAsync(int page, int pageSize, string? status)
+    {
+        var query = _context.Portfolios.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(p => p.Status == status);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
     public async Task<bool> ExistsByEmployeeIdAsync(int employeeId)
         => await _context.Portfolios.AnyAsync(p => p.EmployeeId == employeeId);
 
@@ -62,5 +79,5 @@ public class PortfolioRepository : IPortfolioRepository
     }
 
     public async Task<Dictionary<string, BlockType>> GetBlockTypesAsync()
-        => await _context.BlockTypes.ToDictionaryAsync(x => x.Code);
+        => await _context.BlockTypes.Where(x => x.IsActive).ToDictionaryAsync(x => x.Code);
 }

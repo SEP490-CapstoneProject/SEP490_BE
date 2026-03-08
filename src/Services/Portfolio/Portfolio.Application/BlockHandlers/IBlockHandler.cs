@@ -9,7 +9,6 @@ public interface IBlockHandler
     string BlockType { get; }
 
     Task HandleAsync(
-        Domain.Entities.Portfolio portfolio,
         PortfolioBlock block,
         JsonElement data,
         Dictionary<string, IFormFile> files);

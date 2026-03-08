@@ -42,6 +42,22 @@ public class EmployeeController : ControllerBase
     }
 
     /// <summary>
+    /// Get employee profile by user ID (service-to-service, no auth required)
+    /// </summary>
+    [HttpGet("by-user/{userId}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetByUserId(int userId)
+    {
+        var employee = await _service.GetByUserIdAsync(userId);
+        if (employee == null)
+        {
+            return NotFound(new { error = "Employee profile not found" });
+        }
+
+        return Ok(employee);
+    }
+
+    /// <summary>
     /// Get employee profile by ID
     /// </summary>
     [HttpGet("{id}")]

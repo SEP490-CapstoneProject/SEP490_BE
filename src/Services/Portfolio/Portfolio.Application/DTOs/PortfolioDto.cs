@@ -16,6 +16,15 @@ public class PortfolioDto
     public List<BlockDto> Blocks { get; set; } = new();
 }
 
+public class PagedResult<T>
+{
+    public List<T> Items { get; set; } = new();
+    public int Total { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)Total / PageSize) : 0;
+}
+
 public class UpdatePortfolioRequest
 {
     public string Name { get; set; } = string.Empty;
@@ -41,39 +50,17 @@ public class BlockDto
 
 public class AddBlockRequest
 {
-    public string BlockTypeCode { get; set; } = string.Empty; // e.g. "INTRO", "SKILL"
+    public string BlockTypeCode { get; set; } = string.Empty;
     public string Variant { get; set; } = string.Empty;
     public int? DisplayOrder { get; set; }
-
-    // Block type-specific data (only one of these should be populated)
-    public IntroDataRequest? IntroData { get; set; }
-    public List<SkillDataRequest>? SkillData { get; set; }
-    public EducationDataRequest? EducationData { get; set; }
-    public DiplomaDataRequest? DiplomaData { get; set; }
-    public ExperienceDataRequest? ExperienceData { get; set; }
-    public ProjectDataRequest? ProjectData { get; set; }
-    public AwardDataRequest? AwardData { get; set; }
-    public ActivitiesDataRequest? ActivitiesData { get; set; }
-    public OtherInfoDataRequest? OtherInfoData { get; set; }
-    public ReferenceDataRequest? ReferenceData { get; set; }
+    public JsonElement Data { get; set; }
 }
 
 public class UpdateBlockRequest
 {
     public string Variant { get; set; } = string.Empty;
     public bool IsVisible { get; set; } = true;
-
-    // Block type-specific data
-    public IntroDataRequest? IntroData { get; set; }
-    public List<SkillDataRequest>? SkillData { get; set; }
-    public EducationDataRequest? EducationData { get; set; }
-    public DiplomaDataRequest? DiplomaData { get; set; }
-    public ExperienceDataRequest? ExperienceData { get; set; }
-    public ProjectDataRequest? ProjectData { get; set; }
-    public AwardDataRequest? AwardData { get; set; }
-    public ActivitiesDataRequest? ActivitiesData { get; set; }
-    public OtherInfoDataRequest? OtherInfoData { get; set; }
-    public ReferenceDataRequest? ReferenceData { get; set; }
+    public JsonElement Data { get; set; }
 }
 
 public class ReorderBlocksRequest

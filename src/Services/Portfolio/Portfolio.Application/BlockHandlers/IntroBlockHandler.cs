@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Http;
-using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
 using System.Text.Json;
@@ -15,27 +14,39 @@ public class IntroBlockHandler : IBlockHandler
     public string BlockType => "INTRO";
 
     public async Task HandleAsync(
-        Domain.Entities.Portfolio portfolio,
         PortfolioBlock block,
         JsonElement data,
         Dictionary<string, IFormFile> files)
     {
-        var request = data.Deserialize<IntroDataRequest>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var request = data.Deserialize<IntroDataRequest>(options)
             ?? throw new ArgumentException("Invalid INTRO data");
 
         string? avatarUrl = null;
         if (!string.IsNullOrWhiteSpace(request.AvatarKey) && files.TryGetValue(request.AvatarKey, out var avatarFile))
             avatarUrl = await _media.SaveFileAsync(avatarFile);
 
-        block.Intro = new Intro
+        var result = new
         {
-            PortfolioBlock = block,
-            Avatar = avatarUrl,
-            Name = request.Name,
-            StudyField = request.StudyField,
-            Description = request.Description,
-            Email = request.Email,
-            Phone = request.Phone
+            avatar = avatarUrl,
+            name = request.Name,
+            studyField = request.StudyField,
+            description = request.Description,
+            email = request.Email,
+            phone = request.Phone
         };
+
+        block.DataJson = JsonSerializer.Serialize(result);
+    }
+
+    // DTO only used inside this handler
+    private class IntroDataRequest
+    {
+        public string? AvatarKey { get; set; }
+        public string? Name { get; set; }
+        public string? StudyField { get; set; }
+        public string? Description { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
     }
 }

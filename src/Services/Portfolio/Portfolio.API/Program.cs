@@ -1,4 +1,3 @@
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -6,7 +5,6 @@ using System.Text;
 using Portfolio.Infrastructure.Data;
 using Portfolio.Application.Interfaces;
 using Portfolio.Application.Services;
-using Portfolio.Application.Mappings;
 using Portfolio.Infrastructure.Repositories;
 using Portfolio.Infrastructure.Clients;
 using Portfolio.Infrastructure.Services;
@@ -82,17 +80,16 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// AutoMapper
-builder.Services.AddAutoMapper(typeof(PortfolioMappingProfile));
-
 // Repositories
 builder.Services.AddScoped<IPortfolioRepository, PortfolioRepository>();
 builder.Services.AddScoped<IBlockRepository, BlockRepository>();
+builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<IBlockService, BlockService>();
-builder.Services.AddScoped<BlockService>(); // also register concrete for PortfolioController
+builder.Services.AddScoped<BlockService>(); // concrete registration for PortfolioController
+builder.Services.AddScoped<IBlockTypeService, BlockTypeService>();
 
 // Block Handlers
 builder.Services.AddScoped<IBlockHandler, IntroBlockHandler>();

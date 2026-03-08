@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Portfolio.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Portfolio.Infrastructure.Data;
 namespace Portfolio.Infrastructure.Migrations
 {
     [DbContext(typeof(PortfolioDbContext))]
-    partial class PortfolioDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260305151547_InitialDataJson")]
+    partial class InitialDataJson
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -40,11 +43,6 @@ namespace Portfolio.Infrastructure.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -57,71 +55,61 @@ namespace Portfolio.Infrastructure.Migrations
                         {
                             Id = 1,
                             Code = "INTRO",
-                            IsMultiple = false,
-                            IsActive = true
+                            IsMultiple = false
                         },
                         new
                         {
                             Id = 2,
                             Code = "SKILL",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 3,
                             Code = "EDUCATION",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 4,
                             Code = "DIPLOMA",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 5,
                             Code = "EXPERIMENT",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 6,
                             Code = "PROJECT",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 7,
                             Code = "AWARD",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 8,
                             Code = "ACTIVITIES",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 9,
                             Code = "OTHERINFO",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 10,
                             Code = "REFERENCE",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsMultiple = true
                         });
                 });
 
