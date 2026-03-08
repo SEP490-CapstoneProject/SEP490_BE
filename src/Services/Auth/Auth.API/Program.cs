@@ -1,5 +1,6 @@
 using Auth.Application.Interfaces;
 using Auth.Application.Services;
+using Auth.Infrastructure.Clients;
 using Auth.Infrastructure.Data;
 using Auth.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -70,6 +71,11 @@ builder.Services.AddAuthorization();
 // Register Services
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Register UserProfile Service client (service-to-service)
+var userProfileUrl = builder.Configuration["ServiceUrls:UserProfileService"] ?? "http://userprofile-service:8080";
+builder.Services.AddHttpClient<IUserProfileClient, UserProfileClient>(c =>
+    c.BaseAddress = new Uri(userProfileUrl));
 
 // CORS
 builder.Services.AddCors(options =>
