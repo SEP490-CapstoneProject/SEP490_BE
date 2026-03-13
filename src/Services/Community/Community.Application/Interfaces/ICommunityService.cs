@@ -1,17 +1,28 @@
+using Community.Application.DTOs;
 using Community.Domain.Entities;
+using Microsoft.AspNetCore.Http;
 
 namespace Community.Application.Interfaces;
 
 public interface ICommunityService
 {
+    // Feed (with DTOs)
+    Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId);
+    Task<CommunityPostDto?> GetPostDtoAsync(int postId, int? currentUserId);
+    Task<PostCommentsResponseDto> GetCommentsResponseAsync(int postId);
+
     // Post operations
     Task<CommunityPost?> GetPostByIdAsync(int id);
     Task<IEnumerable<CommunityPost>> GetAllPostsAsync();
     Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId);
-    Task<CommunityPost> CreatePostAsync(CommunityPost post);
+    Task<CommunityPost> CreatePostAsync(CreatePostRequest request, int userId, Dictionary<string, IFormFile> fileMap);
     Task UpdatePostAsync(CommunityPost post);
     Task DeletePostAsync(int id);
-    
+
+    // Ownership checks
+    Task<int?> GetCommentOwnerAsync(int commentId);
+    Task<int?> GetReplyOwnerAsync(int replyId);
+
     // Interaction operations
     Task<bool> SavePostAsync(int postId, int userId);
     Task<bool> UnsavePostAsync(int postId, int userId);
@@ -19,14 +30,15 @@ public interface ICommunityService
     Task<bool> UnfavoritePostAsync(int postId, int userId);
     Task<IEnumerable<CommunityPost>> GetSavedPostsAsync(int userId);
     Task<IEnumerable<CommunityPost>> GetFavoritedPostsAsync(int userId);
-    
+
     // Comment operations
     Task<Comment> AddCommentAsync(int postId, int userId, string content);
     Task<IEnumerable<Comment>> GetCommentsAsync(int postId);
     Task DeleteCommentAsync(int commentId);
-    
+
     // Reply operations
     Task<ReplyComment> AddReplyAsync(int commentId, int userId, int? replyToUserId, string content);
     Task<IEnumerable<ReplyComment>> GetRepliesAsync(int commentId);
     Task DeleteReplyAsync(int replyId);
 }
+
