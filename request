@@ -1,363 +1,247 @@
-You are a senior .NET architect.
-Refactor an existing ASP.NET Core Portfolio microservice to support dynamic block storage using JSON instead of many relational tables.
+Bạn là Senior Backend Engineer.
 
-The current system has many tables like:
+Hãy xây dựng Community Service API sử dụng:
 
-Intro
+.NET 8 Web API
 
-Skill
+Entity Framework Core
 
-Education
-
-Diploma
-
-Experience
-
-Project
-
-Award
-
-Activities
-
-OtherInfo
-
-Reference
-
-Each block type currently has its own table.
-
-We want to replace all these tables with a single flexible JSON storage model that:
-
-Allows adding new block types without DB schema changes
-
-Works well with AI processing later
-
-Supports vector search in the future
-
-Keeps current API behavior
-
-TARGET ARCHITECTURE
-
-Instead of multiple content tables, we will store all block data inside PortfolioBlock.DataJson.
-
-New structure:
-
-Portfolio
- └── PortfolioBlock
-        └── DataJson (JSON)
-NEW DATABASE SCHEMA
-
-Keep:
-
-Portfolio
-BlockType
-PortfolioBlock
-
-Remove these tables:
-
-Intro
-Skill
-Education
-Diploma
-Experience
-Project
-ProjectLink
-Award
-Activities
-OtherInfo
-Reference
-Portfolio Table
-Portfolio
----------
-Id
-EmployeeId
-Name
-Status
-CreatedAt
-UpdatedAt
-BlockType Table
-BlockType
----------
-Id
-Code
-IsMultiple
-
-Example data:
-
-INTRO
-SKILL
-EDUCATION
-DIPLOMA
-EXPERIMENT
-PROJECT
-AWARD
-ACTIVITIES
-OTHERINFO
-REFERENCE
-PortfolioBlock Table
-PortfolioBlock
----------------
-Id
-PortfolioId
-BlockTypeId
-Variant
-DisplayOrder
-IsVisible
-DataJson NVARCHAR(MAX)
-
-Important:
-
-DataJson stores the entire block data
-
-Example stored JSON for SKILL:
-
-[
-  { "name": "React" },
-  { "name": "TypeScript" }
-]
-
-Example INTRO:
-
-{
-  "avatar": "...",
-  "name": "John Doe",
-  "studyField": "Frontend Developer",
-  "email": "...",
-  "phone": "..."
-}
-
-Example PROJECT:
-
-[
- {
-   "name": "Banking App",
-   "image": "...",
-   "role": "Frontend",
-   "technology": "React Native",
-   "links":[
-     { "type":"github","link":"..." }
-   ]
- }
-]
-DB CONTEXT CHANGES
-
-Modify PortfolioDbContext.
-
-Remove DbSets:
-
-Intro
-Skill
-Education
-Diploma
-Experience
-Project
-ProjectLink
-Award
-Activities
-OtherInfo
-Reference
-
-Add property:
-
-modelBuilder.Entity<PortfolioBlock>()
-    .Property(x => x.DataJson)
-    .HasColumnType("NVARCHAR(MAX)");
-ENTITY CHANGE
-
-Update PortfolioBlock.
-
-Old:
-
-public Intro? Intro {get;set;}
-public ICollection<Skill> Skills
-...
-
-Remove all navigation collections.
-
-New entity:
-
-public class PortfolioBlock
-{
-    public int Id { get; set; }
-
-    public int PortfolioId { get; set; }
-
-    public int BlockTypeId { get; set; }
-
-    public string Variant { get; set; } = string.Empty;
-
-    public int DisplayOrder { get; set; }
-
-    public bool IsVisible { get; set; } = true;
-
-    public string DataJson { get; set; } = "{}";
-
-    public Portfolio Portfolio { get; set; } = null!;
-
-    public BlockType BlockType { get; set; } = null!;
-}
-API REQUEST FORMAT
-
-Controller still receives:
-
-multipart/form-data
-
-Fields:
-
-portfolioJson
-files[]
-
-Example JSON:
-
-{
-  "userId":2,
-  "name":"My Portfolio",
-  "blocks":[
-    {
-      "type":"INTRO",
-      "variant":"INTROONE",
-      "order":1,
-      "data":{
-        "avatarKey":"avatar_main",
-        "name":"John"
-      }
-    },
-    {
-      "type":"SKILL",
-      "variant":"SKILLONE",
-      "order":2,
-      "data":[
-        { "name":"React"},
-        { "name":"Node"}
-      ]
-    }
-  ]
-}
-FILE UPLOAD HANDLING
-
-Files are sent as:
-
-files[avatar_main]
-files[project_img1]
-
-Controller builds dictionary:
-
-Dictionary<string,IFormFile> fileMap
-
-Handlers read key from JSON:
-
-avatarKey
-imageKey
-
-Upload using existing IMediaService.
-
-Replace key with returned URL inside JSON.
-
-SERVICE IMPLEMENTATION
-
-Keep BlockHandler pattern.
-
-Handlers no longer create database entities.
-
-Handlers now:
-
-1 Deserialize JsonElement
-2 Upload files if needed
-3 Replace keys with URLs
-4 Serialize back to JSON
-5 Assign to block.DataJson
-
-Example:
-
-block.DataJson = JsonSerializer.Serialize(processedData);
-TRANSACTION RULE
-
-PortfolioService must use:
-
-TransactionScope
-
-Flow:
-
-1 Begin transaction
-2 Create Portfolio
-3 For each block
-4   Validate block type
-5   Call handler
-6 SaveChangesAsync()
-7 Complete transaction
-
-Only ONE SaveChangesAsync() allowed.
-
-API RESPONSE
-
-Return created portfolio.
-
-Example:
-
-{
-  "id": 12,
-  "name": "My Portfolio",
-  "blocks":[
-    {
-      "type":"INTRO",
-      "variant":"INTROONE",
-      "order":1,
-      "data":{...}
-    }
-  ]
-}
-PREPARE FOR AI + VECTOR SEARCH
-
-Design DataJson to be AI friendly.
-
-Later we will:
-
-Extract text:
-
-skills
-projects
-experience
-education
-
-Generate embedding.
-
-Store in:
-
-PortfolioEmbedding
-
-Example future table:
-
-PortfolioEmbedding
--------------------
-Id
-PortfolioId
-Vector
-
-Compatible with:
-
-Postgres pgvector
-Azure AI Search
-ElasticSearch
-CODE QUALITY REQUIREMENTS
-
-Follow:
+SQL Server
 
 Clean Architecture
-SOLID
-Single SaveChanges
-Handler Pattern
-Async code
 
-Avoid:
+DTO Mapping
 
-switch-case by block type
-multiple SaveChanges
-direct DbContext usage in controller
-FINAL GOAL
+Pagination
 
-The new system must allow:
+Backend phải map dữ liệu từ database sang JSON đúng format frontend.
 
-✔ Add new block types without DB migration
-✔ Store flexible portfolio structures
-✔ Support AI portfolio analysis
-✔ Support future vector search
-✔ Maintain current API behavior
+Database Schema
+COMMUNITY_POST
+COMMUNITY_POST
+--------------
+id INT PK
+userId INT FK
+portfolioId INT NULL
+description NVARCHAR(MAX)
+coverImageVideo NVARCHAR(500)
+favoriteCount INT
+createAt DATETIME
+status INT
+COMMUNITY_POST_MEDIA
+COMMUNITY_POST_MEDIA
+--------------------
+id INT PK
+communityPostId INT FK
+type NVARCHAR(50)
+name NVARCHAR(255)
+address NVARCHAR(500)
+COMMENT
+COMMENT
+-------
+id INT PK
+communityPostId INT FK
+userId INT
+content NVARCHAR(MAX)
+createAt DATETIME
+REPLY_COMMENT
+REPLY_COMMENT
+-------------
+id INT PK
+commentId INT FK
+userId INT
+replyToUserId INT
+content NVARCHAR(MAX)
+createAt DATETIME
+COMMUNITY_POST_SAVE
+COMMUNITY_POST_SAVE
+-------------------
+id INT PK
+communityPostId INT FK
+userId INT
+COMMUNITY_POST_FAVORITE
+COMMUNITY_POST_FAVORITE
+-----------------------
+id INT PK
+communityPostId INT FK
+userId INT
+API 1 — Get Community Feed
+
+Trang chính lấy 50 posts mỗi lần
+
+Endpoint
+GET /api/community/posts
+Query
+?page=1
+&pageSize=50
+Response JSON (Frontend Contract)
+
+Backend phải trả đúng format:
+
+export interface CommunityPost {
+  id: number;
+  author: {
+    id: number;
+    name: string;
+    avatar: string;
+    role: "COMPANY" | "USER";
+  };
+  description?: string;
+  media?: string[];
+  portfolioId?: number;
+  portfolioPreview?: {
+    type: string;
+    variant: string;
+    data: any;
+  };
+  favoriteCount: number;
+  commentCount: number;
+  isFavorited: boolean;
+  isSaved: boolean;
+  createdAt: string;
+}
+Feed Query Optimization (Quan trọng)
+
+Feed phải tránh N+1 query.
+
+Cách làm:
+
+Bước 1 — lấy danh sách posts
+SELECT *
+FROM COMMUNITY_POST
+WHERE status = 1
+ORDER BY createAt DESC
+OFFSET @offset ROWS
+FETCH NEXT @pageSize ROWS ONLY
+Bước 2 — lấy media cho toàn bộ posts
+SELECT *
+FROM COMMUNITY_POST_MEDIA
+WHERE communityPostId IN (@postIds)
+Bước 3 — lấy comment count
+SELECT communityPostId, COUNT(*) AS commentCount
+FROM COMMENT
+WHERE communityPostId IN (@postIds)
+GROUP BY communityPostId
+Bước 4 — lấy favorite status của user
+SELECT communityPostId
+FROM COMMUNITY_POST_FAVORITE
+WHERE userId = @currentUserId
+AND communityPostId IN (@postIds)
+Bước 5 — lấy saved status
+SELECT communityPostId
+FROM COMMUNITY_POST_SAVE
+WHERE userId = @currentUserId
+AND communityPostId IN (@postIds)
+Mapping media
+
+Media array lấy từ:
+
+COMMUNITY_POST_MEDIA.address
+Mapping author
+
+Author lấy từ User Service
+
+GET /api/users/{userId}
+
+response:
+
+{
+ id,
+ name,
+ avatar,
+ role
+}
+
+Backend nên batch call hoặc cache.
+
+Mapping portfolio preview
+
+Nếu portfolioId != null
+
+call:
+
+GET /api/portfolio/{portfolioId}/preview
+API 2 — Get Post By Id
+GET /api/community/posts/{postId}
+
+Response:
+
+CommunityPost
+API 3 — Get Post Comments
+GET /api/community/posts/{postId}/comments
+Response
+export interface ReplyComment {
+  id: number;
+  author: CommentUser;
+  replyToUser: CommentUser;
+  content: string;
+  createdAt: string;
+}
+
+export interface PostComment {
+  id: number;
+  author: CommentUser;
+  content: string;
+  createdAt: string;
+  replies: ReplyComment[];
+}
+
+export interface PostCommentsResponse {
+  postId: number;
+  comments: PostComment[];
+}
+Comment Query
+lấy comment
+SELECT *
+FROM COMMENT
+WHERE communityPostId = @postId
+ORDER BY createAt
+lấy replies
+SELECT *
+FROM REPLY_COMMENT
+WHERE commentId IN (@commentIds)
+ORDER BY createAt
+SQL Server Index Optimization (Rất quan trọng)
+
+Thêm index:
+
+CREATE INDEX IX_Post_CreateAt
+ON COMMUNITY_POST(createAt DESC)
+CREATE INDEX IX_PostMedia_PostId
+ON COMMUNITY_POST_MEDIA(communityPostId)
+CREATE INDEX IX_Comment_PostId
+ON COMMENT(communityPostId)
+CREATE INDEX IX_Favorite_Post_User
+ON COMMUNITY_POST_FAVORITE(communityPostId, userId)
+CREATE INDEX IX_Save_Post_User
+ON COMMUNITY_POST_SAVE(communityPostId, userId)
+Project Structure
+CommunityService
+│
+├── Controllers
+│   └── CommunityController
+│
+├── Application
+│   ├── DTOs
+│   ├── Queries
+│   │   ├── GetCommunityFeedQuery
+│   │   ├── GetPostByIdQuery
+│   │   └── GetPostCommentsQuery
+│
+├── Domain
+│   ├── Entities
+│
+├── Infrastructure
+│   ├── DbContext
+│   └── Repositories
+Optional APIs
+Create Post
+POST /api/community/posts
+Favorite Post
+POST /api/community/posts/{id}/favorite
+Save Post
+POST /api/community/posts/{id}/save
+Comment
+POST /api/community/posts/{id}/comment
+Reply Comment
+POST /api/community/comments/{commentId}/reply
