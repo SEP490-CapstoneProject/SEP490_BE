@@ -84,6 +84,21 @@ public class PortfolioController : ControllerBase
         }
     }
 
+    [HttpGet("{id:int}/preview")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPreview(int id)
+    {
+        var portfolio = await _portfolioService.GetByIdAsync(id);
+        if (portfolio == null) return NotFound(new { error = $"Portfolio {id} not found" });
+
+        var blocks = await _blockRepo.GetByPortfolioIdAsync(id);
+        var firstBlock = blocks.OrderBy(b => b.DisplayOrder).FirstOrDefault();
+        if (firstBlock == null) return NotFound(new { error = "No blocks found" });
+
+        var dto = _blockService.MapBlockToDto(firstBlock);
+        return Ok(new { type = dto.Type, variant = dto.Variant, data = dto.Data });
+    }
+
     [HttpGet("{id:int}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetById(int id)
