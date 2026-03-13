@@ -42,6 +42,29 @@ public class CompanyController : ControllerBase
     }
 
     /// <summary>
+    /// Batch get company profiles by userIds (service-to-service)
+    /// </summary>
+    [HttpGet("batch")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetBatch([FromQuery] string userIds)
+    {
+        if (string.IsNullOrWhiteSpace(userIds)) return Ok(new List<object>());
+
+        var ids = userIds.Split(',')
+            .Select(s => int.TryParse(s.Trim(), out var id) ? (int?)id : null)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0) return Ok(new List<object>());
+
+        var all = await _service.GetAllAsync();
+        var result = all.Where(c => ids.Contains(c.UserId)).ToList();
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Get company profile by user ID (service-to-service, no auth required)
     /// </summary>
     [HttpGet("by-user/{userId}")]
