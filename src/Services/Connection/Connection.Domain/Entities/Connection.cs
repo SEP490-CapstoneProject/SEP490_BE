@@ -9,7 +9,7 @@ public class Connection : BaseEntity
     public int ProfileId { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreateAt { get; set; }
-    public DateTime ConnectionAt { get; set; }
+    public DateTime? ConnectionAt { get; set; }
 
     // Navigation properties
     public virtual ICollection<Room> Rooms { get; set; } = new List<Room>();
