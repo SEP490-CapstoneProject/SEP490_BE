@@ -68,4 +68,46 @@ public class ConnectionService : IConnectionService
     {
         return await _repo.GetRoomsByUserIdAsync(userId);
     }
+
+    public async Task<IEnumerable<Connection.Domain.Entities.Message>> GetLatestMessagesByRoomAsync(int roomId, int limit)
+    {
+        return await _repo.GetLatestMessagesByRoomAsync(roomId, limit);
+    }
+
+    public async Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId)
+    {
+        return await _repo.GetRoomSummariesByUserIdAsync(userId);
+    }
+
+    public async Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId)
+    {
+        return await _repo.MarkRoomMessagesAsReadAsync(roomId, userId);
+    }
+
+    public async Task<Connection.Domain.Entities.Connection?> UpdateConnectionStatusAsync(int connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus status)
+    {
+        var conn = await _repo.GetByIdAsync(connectionId);
+        if (conn == null) return null;
+
+        conn.Status = status.ToString();
+        if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED)
+        {
+            conn.ConnectionAt = DateTime.UtcNow;
+            // create room if not exists for this connection
+            var rooms = await _repo.GetRoomsByConnectionAsync(conn.Id);
+            if (rooms == null || !rooms.Any())
+            {
+                var room = new Connection.Domain.Entities.Room
+                {
+                    ConnectionId = conn.Id,
+                    CreatedAt = DateTime.UtcNow,
+                    LastMessAt = null
+                };
+                await _repo.CreateRoomAsync(room);
+            }
+        }
+
+        await _repo.UpdateAsync(conn);
+        return conn;
+    }
 }

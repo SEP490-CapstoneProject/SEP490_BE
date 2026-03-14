@@ -38,54 +38,42 @@ public class ConnectionController : ControllerBase
         return Ok(list);
     }
 
-    [HttpPost("rooms")]
-    public async Task<IActionResult> CreateRoom([FromBody] Connection.Domain.Entities.Room room)
+    public class UpdateStatusRequest { public string Status { get; set; } = string.Empty; }
+
+    [HttpPut("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
     {
-        var created = await _service.CreateRoomAsync(room);
-        return CreatedAtAction(nameof(GetRoomById), new { id = created.Id }, created);
+        if (string.IsNullOrEmpty(request?.Status)) return BadRequest(new { error = "Status is required" });
+
+        if (!System.Enum.TryParse<RecruitmentPlatform.Contracts.Enums.ConnectionStatus>(request.Status, true, out var status))
+        {
+            return BadRequest(new { error = "Invalid status value" });
+        }
+
+        var updated = await _service.UpdateConnectionStatusAsync(id, status);
+        if (updated == null) return NotFound();
+        return Ok(updated);
     }
 
-    [HttpGet("rooms/{id}")]
-    public async Task<IActionResult> GetRoomById(int id)
-    {
-        var room = await _service.GetRoomByIdAsync(id);
-        if (room == null) return NotFound();
-        return Ok(room);
-    }
-
-    [HttpGet("rooms/connection/{connectionId}")]
-    public async Task<IActionResult> GetRoomsByConnection(int connectionId)
-    {
-        var rooms = await _service.GetRoomsByConnectionAsync(connectionId);
-        return Ok(rooms);
-    }
+    // Room creation is handled automatically when a Connection is matched; manual room endpoints removed
 
     [HttpGet("rooms/summary/{userId}")]
     public async Task<IActionResult> GetRoomSummaries(int userId)
     {
-        var rooms = await _service.GetRoomsByUserIdAsync(userId);
+        var raw = await _service.GetRoomSummariesByUserIdAsync(userId);
         var client = _httpClientFactory.CreateClient("UserProfile");
         var summaries = new List<Connection.Application.DTOs.RoomSummaryDto>();
 
-        foreach (var room in rooms)
+        foreach (var room in raw)
         {
-            var last = room.Messages?.OrderByDescending(m => m.CreatedAt).FirstOrDefault();
-            var unread = room.Messages?.Count(m => m.Status == 0 && m.UserId != userId) ?? 0;
-
-            // Determine other user id
-            var conn = room.Connection;
-            int otherUserId = (conn.UserIdFrom == userId) ? conn.UserIdTo : conn.UserIdFrom;
-            int profileId = conn.ProfileId;
-
-            string name = otherUserId.ToString();
+            string name = room.ProfileId.ToString();
             string? avatar = null;
             string? cover = null;
             string role = "USER";
 
-            // Try company first
             try
             {
-                var res = await client.GetAsync($"/api/company/{profileId}");
+                var res = await client.GetAsync($"/api/company/{room.ProfileId}");
                 if (res.IsSuccessStatusCode)
                 {
                     var json = await res.Content.ReadAsStringAsync();
@@ -97,7 +85,7 @@ public class ConnectionController : ControllerBase
                 }
                 else
                 {
-                    var res2 = await client.GetAsync($"/api/employee/{profileId}");
+                    var res2 = await client.GetAsync($"/api/employee/{room.ProfileId}");
                     if (res2.IsSuccessStatusCode)
                     {
                         var json2 = await res2.Content.ReadAsStringAsync();
@@ -116,14 +104,14 @@ public class ConnectionController : ControllerBase
 
             summaries.Add(new Connection.Application.DTOs.RoomSummaryDto
             {
-                RoomId = room.Id,
+                RoomId = room.RoomId,
                 Name = name,
                 Avatar = avatar,
                 CoverImage = cover,
                 Role = role,
-                LastContent = last?.Content,
-                LastAt = last?.CreatedAt,
-                UnreadCount = unread
+                LastContent = room.LastContent,
+                LastAt = room.LastAt,
+                UnreadCount = room.UnreadCount
             });
         }
 
@@ -135,13 +123,39 @@ public class ConnectionController : ControllerBase
     {
         message.MessageRoomId = roomId;
         var created = await _service.CreateMessageAsync(message);
-        return CreatedAtAction(nameof(GetMessagesByRoom), new { roomId = roomId }, created);
+        return CreatedAtAction(nameof(GetLatestMessages), new { roomId = roomId }, created);
     }
 
-    [HttpGet("rooms/{roomId}/messages")]
-    public async Task<IActionResult> GetMessagesByRoom(int roomId)
+    [HttpGet("rooms/{roomId}/messages/latest")]
+    public async Task<IActionResult> GetLatestMessages(int roomId, [FromQuery] int limit = 50)
     {
-        var messages = await _service.GetMessagesByRoomAsync(roomId);
-        return Ok(messages);
+        var msgs = await _service.GetLatestMessagesByRoomAsync(roomId, limit);
+
+        var result = msgs.Select(m => new Connection.Application.DTOs.MessageDto
+        {
+            Id = m.Id,
+            MessageRoomId = m.MessageRoomId,
+            UserId = m.UserId,
+            Content = m.Content,
+            CreatedAt = m.CreatedAt,
+            Status = m.Status == 1 ? "READ" : m.Status == 2 ? "DELIVERED" : "UNREAD"
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    // Bulk tick-mark endpoint removed; messages are auto-marked READ when user joins a room (via SignalR JoinRoom)
+
+    [HttpPost("rooms/{roomId}/mark-read")]
+    public async Task<IActionResult> MarkRoomRead(int roomId)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int currentUserId))
+        {
+            return Unauthorized(new { error = "Invalid or missing user ID in token" });
+        }
+
+        var updated = await _service.MarkRoomMessagesAsReadAsync(roomId, currentUserId);
+        return Ok(new { updated = updated?.Count ?? 0 });
     }
 }
