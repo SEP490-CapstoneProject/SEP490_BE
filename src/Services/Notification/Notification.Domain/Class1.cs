@@ -1,6 +1,1 @@
-﻿namespace Notification.Domain;
-
-public class Class1
-{
-
-}
+// Domain layer placeholder

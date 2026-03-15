@@ -1,297 +1,358 @@
-You are implementing the Company Post Service for a talent marketplace platform.
+Implement a Notification Service for a microservice architecture system called SkillSnap.
 
-This service is similar to the Community Service feed, but it serves job recruitment posts from companies.
+This service must:
 
-The system allows users to:
+Consume events from RabbitMQ
 
-View job posts
+Convert events into notifications
 
-View post details
+Store notifications in SQL Server
 
-Save posts
+Provide REST APIs for frontend
 
-See whether a post is saved
+Provide realtime notifications using SignalR
 
-Your task is to implement the service layer and repository logic.
+Maintain its own SignalR Hub (do NOT reuse Chat Service)
 
-Follow the same architecture used in the Community Service.
+The service must be independent from Chat Service.
 
+System Architecture Context
+
+The system uses event-driven microservices.
+
+Services communicate via RabbitMQ event bus.
+
+Example services:
+
+Community Service
+
+Portfolio Service
+
+Connection Service
+
+Company Service
+
+Chat Service
+
+Notification Service
+
+Notification Service listens to events and generates notifications.
+
+Architecture flow:
+
+Service → RabbitMQ → Notification Service → Database
+                                 │
+                                 ▼
+                           SignalR Hub
+                                 │
+                                 ▼
+                              Frontend
+Tech Stack
+
+Use:
+
+.NET 8 Web API
+Entity Framework Core
+SQL Server
+RabbitMQ
+SignalR
+JWT Authentication
 Database Schema
-COMPANY_POST
-Column	Type
-postId (PK)	int
-companyId (FK)	int
-position	nvarchar
-address	nvarchar
-salary	nvarchar
-employmentType	enum
-experienceYear	int
-quantity	int
-jobDescription	nvarchar
-requirementsMandatory	nvarchar
-requirementsPreferred	nvarchar
-benefits	nvarchar
-createAt	datetime
-status	int
 
-Status meaning:
+Create table:
 
-1 = active
-0 = deleted
-2 = hidden
-COMPANY_POST_MEDIA
+NOTIFICATION
 
-Stores media attached to the job post.
+Columns:
 
-Column	Type
-id (PK)	int
-companyPostId (FK)	int
-type	nvarchar (image / video)
-name	nvarchar
-address	nvarchar (media url)
+id INT PRIMARY KEY IDENTITY
+userId INT NOT NULL
+title NVARCHAR(255)
+content NVARCHAR(500)
+type NVARCHAR(50)
+objectId INT NULL
+actorId INT NULL
+actorType NVARCHAR(20)
+createdAt DATETIME
+isRead BIT
 
-Each post can have multiple media items.
+actorType values:
 
-COMPANY_POST_SAVE
+USER
+COMPANY
+SYSTEM
 
-Stores saved posts by users.
+Indexes:
 
-Column	Type
-id (PK)	int
-companyPostId (FK)	int
-userId (FK)	int
+(userId, id DESC)
+(userId, isRead)
+Frontend Notification Types
 
-Rules:
+The API must match these frontend types.
 
-1 user can save many posts
-1 post can be saved by many users
+export type NotificationType =
+  | "CONNECTION_ACCEPTED"
+  | "CONNECTION_REJECTED"
+  | "PROFILE_VIEWED"
+  | "JOB_INVITATION"
+  | "PORTFOLIO_APPROVED"
+  | "SYSTEM_ANNOUNCEMENT"
+  | "COMMUNITY_POST_REPORTED"
+  | "PORTFOLIO_REPORTED"
+  | "POST_LIKED"
+  | "POST_COMMENTED"
+  | "POST_COMMENT_REPLIED"
+  | "POST_SHARED"
+  | "POST_MENTIONED";
 
-Recommended constraint:
+Notification response:
 
-UNIQUE(userId, companyPostId)
-COMPLIMENT
+UserNotification
 
-(Not directly used in feed)
+Fields:
 
-Column	Type
-id (PK)	int
-portfolioId (FK)	int
-companyId (FK)	int
-state	int
-content	nvarchar
-API 1: Get Job Post Feed
-Endpoint
-GET /api/company/posts
+id
+userId
+title
+content
+type
+objectId
+createdAt
+isRead
+actor
+company
+API Endpoints
+Get notifications
+GET /api/notifications
 
-Query parameters:
+Query params:
 
 cursor
 limit
 
+Return:
+
+{
+ items: UserNotification[],
+ nextCursor: number
+}
+
+Use cursor pagination.
+
+Query pattern:
+
+WHERE userId = @userId
+AND id < @cursor
+ORDER BY id DESC
+LIMIT @limit
+Get unread count
+GET /api/notifications/unread-count
+
+Response:
+
+{
+ count: number
+}
+Mark notification read
+PUT /api/notifications/{id}/read
+Mark all notifications read
+PUT /api/notifications/read-all
+RabbitMQ Event Bus
+
+Use exchange:
+
+skillsnap.events
+
+Exchange type:
+
+topic
+
+Queues:
+
+notification.community
+notification.connection
+notification.system
+
+Routing keys:
+
+post.liked
+post.commented
+post.replied
+post.shared
+post.mentioned
+connection.accepted
+connection.rejected
+portfolio.approved
+job.invitation
+system.announcement
+Event Contracts
+
+Example events:
+
+PostLikedEvent
+{
+ actorId: number
+ postId: number
+ postOwnerId: number
+}
+PostCommentedEvent
+{
+ actorId: number
+ postId: number
+ postOwnerId: number
+ commentId: number
+}
+JobInvitationEvent
+{
+ companyId: number
+ userId: number
+ jobId: number
+}
+ConnectionAcceptedEvent
+{
+ actorId: number
+ userId: number
+}
+Event → Notification Mapping
+
 Example:
 
-GET /api/company/posts?cursor=20&limit=10
-Feed Response
-[
-  {
-    "postId": 1,
-    "position": "Senior UX Designer",
-    "companyName": "Google Inc.",
-    "companyAvatar": "url",
-    "mediaType": "image",
-    "mediaUrl": "url",
-    "address": "Hồ Chí Minh",
-    "salary": "25.000.000 - 30.000.000",
-    "employmentType": "Full-time",
-    "isSaved": true
-  }
-]
-Feed Query Logic
+POST_LIKED
+userId = postOwnerId
+title = "Bài viết được yêu thích"
+content = "đã thích bài viết của bạn"
+type = POST_LIKED
+objectId = postId
+actorId = actorId
+actorType = USER
+POST_COMMENTED
+userId = postOwnerId
+type = POST_COMMENTED
+actorType = USER
+objectId = postId
+JOB_INVITATION
+userId = userId
+type = JOB_INVITATION
+actorType = COMPANY
+actorId = companyId
+objectId = jobId
+SignalR Realtime Notification
 
-Tables used:
+The Notification Service must expose a SignalR Hub.
 
-COMPANY_POST
-JOIN COMPANY
-LEFT JOIN COMPANY_POST_MEDIA
-LEFT JOIN COMPANY_POST_SAVE
+Create:
 
-Rules:
+NotificationHub
 
-Only active posts
-WHERE COMPANY_POST.status = 1
-Pagination (Cursor Based)
-WHERE postId < @cursor
-ORDER BY postId DESC
-LIMIT @limit
-Media selection
+Endpoint:
 
-A post may contain many media items.
+/hubs/notifications
 
-For the feed, return only the first media.
+Users connect using JWT authentication.
 
-Example SQL logic:
+SignalR Group Strategy
 
-SELECT TOP 1 *
-FROM COMPANY_POST_MEDIA
-WHERE companyPostId = postId
-ORDER BY id ASC
-Saved state
+When user connects:
 
-Determine if user saved the post.
+extract userId from JWT
+add connection to group: user_{userId}
 
-isSaved =
-EXISTS(
- SELECT 1
- FROM COMPANY_POST_SAVE
- WHERE userId = @userId
- AND companyPostId = postId
-)
-API 2: Get Post Detail
-Endpoint
-GET /api/company/posts/{postId}
-Detail Response
-{
-  "postId": 1,
-  "position": "Senior UX Designer",
-  "companyName": "Google Inc.",
-  "companyAvatar": "...",
-  "address": "...",
-  "salary": "...",
-  "employmentType": "Full-time",
-  "experienceYear": 3,
-  "quantity": 2,
-  "jobDescription": "...",
-  "requirementsMandatory": "...",
-  "requirementsPreferred": "...",
-  "benefits": "...",
-  "createAt": "...",
-  "media": [
-    {
-      "type": "image",
-      "url": "..."
-    }
-  ],
-  "isSaved": true
+Example:
+
+Groups.AddToGroupAsync(connectionId, $"user_{userId}")
+Send Realtime Notification
+
+After saving a notification in database:
+
+Send realtime message:
+
+await hubContext
+ .Clients
+ .Group($"user_{userId}")
+ .SendAsync("notification", notification);
+
+Payload must match UserNotification format.
+
+Actor Resolution
+
+If actorType = USER:
+
+Fetch data from User Service API.
+
+Return:
+
+actor: {
+ id
+ name
+ avatar
+ role: "USER"
 }
-Detail Query Logic
 
-Tables used:
+If actorType = COMPANY:
 
-COMPANY_POST
-JOIN COMPANY
-LEFT JOIN COMPANY_POST_MEDIA
-
-Rules:
-
-WHERE postId = @postId
-AND status = 1
-
-Return all media items.
-
-API 3: Save Post
-Endpoint
-POST /api/company/posts/{postId}/save
-
-Logic:
-
-INSERT INTO COMPANY_POST_SAVE(userId, companyPostId)
-
-If already saved:
-
-return success
-(do not insert duplicate)
-API 4: Unsave Post
-Endpoint
-DELETE /api/company/posts/{postId}/save
-
-Logic:
-
-DELETE FROM COMPANY_POST_SAVE
-WHERE userId = @userId
-AND companyPostId = @postId
-Service Architecture (Same as Community Service)
-Controller
-   ↓
-CompanyPostService
-   ↓
-CompanyPostRepository
-   ↓
-Database
-Required Repository Methods
-GetPostFeed(cursor, limit)
-GetPostDetail(postId)
-CheckPostSaved(userId, postId)
-SavePost(userId, postId)
-UnsavePost(userId, postId)
-Service Methods
-GetCompanyPosts(userId, cursor, limit)
-GetCompanyPostDetail(postId, userId)
-SaveCompanyPost(postId, userId)
-UnsaveCompanyPost(postId, userId)
-DTOs
-CompanyPostFeedDTO
-postId
-position
-companyName
-companyAvatar
-mediaType
-mediaUrl
-address
-salary
-employmentType
-isSaved
-CompanyPostDetailDTO
-postId
-position
-companyName
-companyAvatar
-address
-salary
-employmentType
-experienceYear
-quantity
-jobDescription
-requirementsMandatory
-requirementsPreferred
-benefits
-createAt
-media[]
-isSaved
-Performance Optimization
-
-Recommended indexes.
-
-Post feed index
-IX_Post_Status_Id
-(status, postId DESC)
-Media lookup
-IX_PostMedia_PostId
-(companyPostId)
-Saved lookup
-IX_PostSave_User_Post
-(userId, companyPostId)
-Edge Cases
-Post not found
+Fetch data from Company Service API.
 
 Return:
 
-404 Not Found
-Post has no media
+company: {
+ id
+ name
+ avatar
+ role: "COMPANY"
+}
 
-Return:
+If actorType = SYSTEM:
 
-mediaType = null
-mediaUrl = null
-Post deleted
+Return no actor or company.
 
-If
+Service Architecture
 
-status != 1
+Use Clean Architecture.
 
-Do not return the post.
+Layers:
 
-Implementation Language
-C#
-.NET Web API
-SQL Server
-Async Repository Pattern
+API
+Application
+Domain
+Infrastructure
+
+Required components:
+
+Notification entity
+NotificationRepository
+NotificationService
+NotificationController
+NotificationHub
+RabbitMQConsumer
+EventHandlers
+Expected Result
+
+The Notification Service must:
+
+Consume events from RabbitMQ
+
+Convert events into notifications
+
+Store notifications in SQL Server
+
+Provide REST API for frontend
+
+Send realtime notifications via SignalR Hub
+
+Support cursor pagination
+
+Support unread count
+
+Support mark-as-read
+
+Users must receive notifications instantly without refreshing the page.
+
+Example:
+
+User A likes post
+↓
+Notification created
+↓
+SignalR push
+↓
+User B sees notification immediately
