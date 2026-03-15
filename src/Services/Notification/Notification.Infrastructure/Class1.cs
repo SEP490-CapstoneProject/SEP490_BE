@@ -1,6 +1,1 @@
-﻿namespace Notification.Infrastructure;
-
-public class Class1
-{
-
-}
+// Infrastructure layer placeholder
