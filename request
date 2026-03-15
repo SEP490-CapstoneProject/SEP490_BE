@@ -1,247 +1,297 @@
-Bạn là Senior Backend Engineer.
+You are implementing the Company Post Service for a talent marketplace platform.
 
-Hãy xây dựng Community Service API sử dụng:
+This service is similar to the Community Service feed, but it serves job recruitment posts from companies.
 
-.NET 8 Web API
+The system allows users to:
 
-Entity Framework Core
+View job posts
 
-SQL Server
+View post details
 
-Clean Architecture
+Save posts
 
-DTO Mapping
+See whether a post is saved
 
-Pagination
+Your task is to implement the service layer and repository logic.
 
-Backend phải map dữ liệu từ database sang JSON đúng format frontend.
+Follow the same architecture used in the Community Service.
 
 Database Schema
-COMMUNITY_POST
-COMMUNITY_POST
---------------
-id INT PK
-userId INT FK
-portfolioId INT NULL
-description NVARCHAR(MAX)
-coverImageVideo NVARCHAR(500)
-favoriteCount INT
-createAt DATETIME
-status INT
-COMMUNITY_POST_MEDIA
-COMMUNITY_POST_MEDIA
---------------------
-id INT PK
-communityPostId INT FK
-type NVARCHAR(50)
-name NVARCHAR(255)
-address NVARCHAR(500)
-COMMENT
-COMMENT
--------
-id INT PK
-communityPostId INT FK
-userId INT
-content NVARCHAR(MAX)
-createAt DATETIME
-REPLY_COMMENT
-REPLY_COMMENT
--------------
-id INT PK
-commentId INT FK
-userId INT
-replyToUserId INT
-content NVARCHAR(MAX)
-createAt DATETIME
-COMMUNITY_POST_SAVE
-COMMUNITY_POST_SAVE
--------------------
-id INT PK
-communityPostId INT FK
-userId INT
-COMMUNITY_POST_FAVORITE
-COMMUNITY_POST_FAVORITE
------------------------
-id INT PK
-communityPostId INT FK
-userId INT
-API 1 — Get Community Feed
+COMPANY_POST
+Column	Type
+postId (PK)	int
+companyId (FK)	int
+position	nvarchar
+address	nvarchar
+salary	nvarchar
+employmentType	enum
+experienceYear	int
+quantity	int
+jobDescription	nvarchar
+requirementsMandatory	nvarchar
+requirementsPreferred	nvarchar
+benefits	nvarchar
+createAt	datetime
+status	int
 
-Trang chính lấy 50 posts mỗi lần
+Status meaning:
 
+1 = active
+0 = deleted
+2 = hidden
+COMPANY_POST_MEDIA
+
+Stores media attached to the job post.
+
+Column	Type
+id (PK)	int
+companyPostId (FK)	int
+type	nvarchar (image / video)
+name	nvarchar
+address	nvarchar (media url)
+
+Each post can have multiple media items.
+
+COMPANY_POST_SAVE
+
+Stores saved posts by users.
+
+Column	Type
+id (PK)	int
+companyPostId (FK)	int
+userId (FK)	int
+
+Rules:
+
+1 user can save many posts
+1 post can be saved by many users
+
+Recommended constraint:
+
+UNIQUE(userId, companyPostId)
+COMPLIMENT
+
+(Not directly used in feed)
+
+Column	Type
+id (PK)	int
+portfolioId (FK)	int
+companyId (FK)	int
+state	int
+content	nvarchar
+API 1: Get Job Post Feed
 Endpoint
-GET /api/community/posts
-Query
-?page=1
-&pageSize=50
-Response JSON (Frontend Contract)
+GET /api/company/posts
 
-Backend phải trả đúng format:
+Query parameters:
 
-export interface CommunityPost {
-  id: number;
-  author: {
-    id: number;
-    name: string;
-    avatar: string;
-    role: "COMPANY" | "USER";
-  };
-  description?: string;
-  media?: string[];
-  portfolioId?: number;
-  portfolioPreview?: {
-    type: string;
-    variant: string;
-    data: any;
-  };
-  favoriteCount: number;
-  commentCount: number;
-  isFavorited: boolean;
-  isSaved: boolean;
-  createdAt: string;
-}
-Feed Query Optimization (Quan trọng)
+cursor
+limit
 
-Feed phải tránh N+1 query.
+Example:
 
-Cách làm:
+GET /api/company/posts?cursor=20&limit=10
+Feed Response
+[
+  {
+    "postId": 1,
+    "position": "Senior UX Designer",
+    "companyName": "Google Inc.",
+    "companyAvatar": "url",
+    "mediaType": "image",
+    "mediaUrl": "url",
+    "address": "Hồ Chí Minh",
+    "salary": "25.000.000 - 30.000.000",
+    "employmentType": "Full-time",
+    "isSaved": true
+  }
+]
+Feed Query Logic
 
-Bước 1 — lấy danh sách posts
-SELECT *
-FROM COMMUNITY_POST
-WHERE status = 1
-ORDER BY createAt DESC
-OFFSET @offset ROWS
-FETCH NEXT @pageSize ROWS ONLY
-Bước 2 — lấy media cho toàn bộ posts
-SELECT *
-FROM COMMUNITY_POST_MEDIA
-WHERE communityPostId IN (@postIds)
-Bước 3 — lấy comment count
-SELECT communityPostId, COUNT(*) AS commentCount
-FROM COMMENT
-WHERE communityPostId IN (@postIds)
-GROUP BY communityPostId
-Bước 4 — lấy favorite status của user
-SELECT communityPostId
-FROM COMMUNITY_POST_FAVORITE
-WHERE userId = @currentUserId
-AND communityPostId IN (@postIds)
-Bước 5 — lấy saved status
-SELECT communityPostId
-FROM COMMUNITY_POST_SAVE
-WHERE userId = @currentUserId
-AND communityPostId IN (@postIds)
-Mapping media
+Tables used:
 
-Media array lấy từ:
+COMPANY_POST
+JOIN COMPANY
+LEFT JOIN COMPANY_POST_MEDIA
+LEFT JOIN COMPANY_POST_SAVE
 
-COMMUNITY_POST_MEDIA.address
-Mapping author
+Rules:
 
-Author lấy từ User Service
+Only active posts
+WHERE COMPANY_POST.status = 1
+Pagination (Cursor Based)
+WHERE postId < @cursor
+ORDER BY postId DESC
+LIMIT @limit
+Media selection
 
-GET /api/users/{userId}
+A post may contain many media items.
 
-response:
+For the feed, return only the first media.
 
+Example SQL logic:
+
+SELECT TOP 1 *
+FROM COMPANY_POST_MEDIA
+WHERE companyPostId = postId
+ORDER BY id ASC
+Saved state
+
+Determine if user saved the post.
+
+isSaved =
+EXISTS(
+ SELECT 1
+ FROM COMPANY_POST_SAVE
+ WHERE userId = @userId
+ AND companyPostId = postId
+)
+API 2: Get Post Detail
+Endpoint
+GET /api/company/posts/{postId}
+Detail Response
 {
- id,
- name,
- avatar,
- role
+  "postId": 1,
+  "position": "Senior UX Designer",
+  "companyName": "Google Inc.",
+  "companyAvatar": "...",
+  "address": "...",
+  "salary": "...",
+  "employmentType": "Full-time",
+  "experienceYear": 3,
+  "quantity": 2,
+  "jobDescription": "...",
+  "requirementsMandatory": "...",
+  "requirementsPreferred": "...",
+  "benefits": "...",
+  "createAt": "...",
+  "media": [
+    {
+      "type": "image",
+      "url": "..."
+    }
+  ],
+  "isSaved": true
 }
+Detail Query Logic
 
-Backend nên batch call hoặc cache.
+Tables used:
 
-Mapping portfolio preview
+COMPANY_POST
+JOIN COMPANY
+LEFT JOIN COMPANY_POST_MEDIA
 
-Nếu portfolioId != null
+Rules:
 
-call:
+WHERE postId = @postId
+AND status = 1
 
-GET /api/portfolio/{portfolioId}/preview
-API 2 — Get Post By Id
-GET /api/community/posts/{postId}
+Return all media items.
 
-Response:
+API 3: Save Post
+Endpoint
+POST /api/company/posts/{postId}/save
 
-CommunityPost
-API 3 — Get Post Comments
-GET /api/community/posts/{postId}/comments
-Response
-export interface ReplyComment {
-  id: number;
-  author: CommentUser;
-  replyToUser: CommentUser;
-  content: string;
-  createdAt: string;
-}
+Logic:
 
-export interface PostComment {
-  id: number;
-  author: CommentUser;
-  content: string;
-  createdAt: string;
-  replies: ReplyComment[];
-}
+INSERT INTO COMPANY_POST_SAVE(userId, companyPostId)
 
-export interface PostCommentsResponse {
-  postId: number;
-  comments: PostComment[];
-}
-Comment Query
-lấy comment
-SELECT *
-FROM COMMENT
-WHERE communityPostId = @postId
-ORDER BY createAt
-lấy replies
-SELECT *
-FROM REPLY_COMMENT
-WHERE commentId IN (@commentIds)
-ORDER BY createAt
-SQL Server Index Optimization (Rất quan trọng)
+If already saved:
 
-Thêm index:
+return success
+(do not insert duplicate)
+API 4: Unsave Post
+Endpoint
+DELETE /api/company/posts/{postId}/save
 
-CREATE INDEX IX_Post_CreateAt
-ON COMMUNITY_POST(createAt DESC)
-CREATE INDEX IX_PostMedia_PostId
-ON COMMUNITY_POST_MEDIA(communityPostId)
-CREATE INDEX IX_Comment_PostId
-ON COMMENT(communityPostId)
-CREATE INDEX IX_Favorite_Post_User
-ON COMMUNITY_POST_FAVORITE(communityPostId, userId)
-CREATE INDEX IX_Save_Post_User
-ON COMMUNITY_POST_SAVE(communityPostId, userId)
-Project Structure
-CommunityService
-│
-├── Controllers
-│   └── CommunityController
-│
-├── Application
-│   ├── DTOs
-│   ├── Queries
-│   │   ├── GetCommunityFeedQuery
-│   │   ├── GetPostByIdQuery
-│   │   └── GetPostCommentsQuery
-│
-├── Domain
-│   ├── Entities
-│
-├── Infrastructure
-│   ├── DbContext
-│   └── Repositories
-Optional APIs
-Create Post
-POST /api/community/posts
-Favorite Post
-POST /api/community/posts/{id}/favorite
-Save Post
-POST /api/community/posts/{id}/save
-Comment
-POST /api/community/posts/{id}/comment
-Reply Comment
-POST /api/community/comments/{commentId}/reply
+Logic:
+
+DELETE FROM COMPANY_POST_SAVE
+WHERE userId = @userId
+AND companyPostId = @postId
+Service Architecture (Same as Community Service)
+Controller
+   ↓
+CompanyPostService
+   ↓
+CompanyPostRepository
+   ↓
+Database
+Required Repository Methods
+GetPostFeed(cursor, limit)
+GetPostDetail(postId)
+CheckPostSaved(userId, postId)
+SavePost(userId, postId)
+UnsavePost(userId, postId)
+Service Methods
+GetCompanyPosts(userId, cursor, limit)
+GetCompanyPostDetail(postId, userId)
+SaveCompanyPost(postId, userId)
+UnsaveCompanyPost(postId, userId)
+DTOs
+CompanyPostFeedDTO
+postId
+position
+companyName
+companyAvatar
+mediaType
+mediaUrl
+address
+salary
+employmentType
+isSaved
+CompanyPostDetailDTO
+postId
+position
+companyName
+companyAvatar
+address
+salary
+employmentType
+experienceYear
+quantity
+jobDescription
+requirementsMandatory
+requirementsPreferred
+benefits
+createAt
+media[]
+isSaved
+Performance Optimization
+
+Recommended indexes.
+
+Post feed index
+IX_Post_Status_Id
+(status, postId DESC)
+Media lookup
+IX_PostMedia_PostId
+(companyPostId)
+Saved lookup
+IX_PostSave_User_Post
+(userId, companyPostId)
+Edge Cases
+Post not found
+
+Return:
+
+404 Not Found
+Post has no media
+
+Return:
+
+mediaType = null
+mediaUrl = null
+Post deleted
+
+If
+
+status != 1
+
+Do not return the post.
+
+Implementation Language
+C#
+.NET Web API
+SQL Server
+Async Repository Pattern
