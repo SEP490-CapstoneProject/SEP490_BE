@@ -243,16 +243,59 @@ services:
       dockerfile: src/Services/Notification/Dockerfile
     container_name: notification-service
     ports:
-      - "5011:80"
+      - "5011:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NotificationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
+      - JwtSettings__Issuer=SkillSnapAuth
+      - JwtSettings__Audience=SkillSnapUsers
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - RabbitMQ__Port=5672
+      - Redis__ConnectionString=redis:6379
+      - ServiceUrls__UserProfile=http://userprofile-service:8080
     depends_on:
       sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - recruitment-network
     restart: on-failure
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - recruitment-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - recruitment-network
 
   # API Gateway
   api-gateway:
