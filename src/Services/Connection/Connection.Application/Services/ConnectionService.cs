@@ -13,6 +13,13 @@ public class ConnectionService : IConnectionService
 
     public async Task<Connection.Domain.Entities.Connection> CreateConnectionAsync(Connection.Domain.Entities.Connection conn)
     {
+        // Sanitize input: server sets timestamps and initial status, ignore any nested rooms/messages from client
+        conn.Id = 0; // ensure EF will insert
+        conn.Rooms = new List<Connection.Domain.Entities.Room>();
+        conn.CreateAt = DateTime.UtcNow;
+        conn.ConnectionAt = null;
+        conn.Status = RecruitmentPlatform.Contracts.Enums.ConnectionStatus.PENDING.ToString();
+
         return await _repo.CreateAsync(conn);
     }
 
@@ -38,6 +45,16 @@ public class ConnectionService : IConnectionService
 
     public async Task<Connection.Domain.Entities.Message> CreateMessageAsync(Connection.Domain.Entities.Message message)
     {
+        // Sanitize input: use only MessageRoomId (room id) and ignore any nested Room object
+        message.Id = 0;
+        message.Room = null;
+        message.CreatedAt = DateTime.UtcNow;
+        // ensure default status (UNREAD = 0) if not provided
+        if (message.Status != 1 && message.Status != 2)
+        {
+            message.Status = 0;
+        }
+
         var created = await _repo.CreateMessageAsync(message);
         // update room last message time
         var room = await _repo.GetRoomByIdAsync(created.MessageRoomId);

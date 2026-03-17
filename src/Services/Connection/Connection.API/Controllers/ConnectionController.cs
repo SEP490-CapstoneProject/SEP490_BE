@@ -17,8 +17,16 @@ public class ConnectionController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateConnection([FromBody] Connection.Domain.Entities.Connection conn)
+    public async Task<IActionResult> CreateConnection([FromBody] Connection.Application.DTOs.CreateConnectionRequest req)
     {
+        var conn = new Connection.Domain.Entities.Connection
+        {
+            UserIdFrom = req.UserIdFrom,
+            UserIdTo = req.UserIdTo,
+            ProfileId = req.ProfileId
+            // Status/CreateAt will be set by service
+        };
+
         var created = await _service.CreateConnectionAsync(conn);
         return CreatedAtAction(nameof(GetConnectionById), new { id = created.Id }, created);
     }
@@ -119,9 +127,22 @@ public class ConnectionController : ControllerBase
     }
 
     [HttpPost("rooms/{roomId}/messages")]
-    public async Task<IActionResult> CreateMessage(int roomId, [FromBody] Connection.Domain.Entities.Message message)
+    public async Task<IActionResult> CreateMessage(int roomId, [FromBody] Connection.Application.DTOs.CreateMessageRequest req)
     {
-        message.MessageRoomId = roomId;
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int currentUserId))
+        {
+            return Unauthorized(new { error = "Invalid or missing user ID in token" });
+        }
+
+        var message = new Connection.Domain.Entities.Message
+        {
+            MessageRoomId = roomId,
+            UserId = currentUserId,
+            Content = req.Content
+            // CreatedAt/Status set by service
+        };
+
         var created = await _service.CreateMessageAsync(message);
         return CreatedAtAction(nameof(GetLatestMessages), new { roomId = roomId }, created);
     }
