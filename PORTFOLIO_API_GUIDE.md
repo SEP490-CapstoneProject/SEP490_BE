@@ -1,23 +1,37 @@
 # Portfolio API — Hướng dẫn sử dụng
 
-> Phiên bản sau refactor **DataJson**: block data được lưu dưới dạng JSON thay vì các bảng quan hệ riêng.
+> Phiên bản sau refactor **DataJson**: block data được lưu dưới dạng JSON thay vì các bảng quan hệ riêng. Hỗ trợ tính năng **Compliment** để công ty đánh giá portfolio của ứng viên.
 
 ---
 
 ## Danh sách endpoint
 
+### Portfolio
+
 | Method | URL | Mô tả | Auth |
 |--------|-----|-------|------|
-| `POST` | `/api/portfolio` | Tạo portfolio đầy đủ (full import) | ✅ |
+| `POST` | `/api/portfolio` | Tạo portfolio đầy đủ (full import) | ✅ Employee |
+| `GET` | `/api/portfolio` | Lấy danh sách portfolio (hỗ trợ lọc compliment) | ❌ |
 | `GET` | `/api/portfolio/{id}` | Lấy portfolio theo ID | ❌ |
 | `GET` | `/api/portfolio/employee/{employeeId}` | Lấy tất cả portfolio của employee | ❌ |
-| `GET` | `/api/portfolio/me` | Lấy portfolio của mình | ✅ |
-| `PUT` | `/api/portfolio/{id}` | Cập nhật tên / trạng thái portfolio | ✅ |
-| `DELETE` | `/api/portfolio/{id}` | Xóa portfolio | ✅ |
-| `POST` | `/api/portfolio/{portfolioId}/blocks` | Thêm block vào portfolio | ✅ |
-| `PUT` | `/api/portfolio/{portfolioId}/blocks/{blockId}` | Cập nhật block | ✅ |
-| `DELETE` | `/api/portfolio/{portfolioId}/blocks/{blockId}` | Xóa block | ✅ |
-| `PUT` | `/api/portfolio/{portfolioId}/blocks/reorder` | Sắp xếp lại thứ tự block | ✅ |
+| `GET` | `/api/portfolio/me` | Lấy portfolio của mình | ✅ Employee |
+| `PUT` | `/api/portfolio/{id}` | Cập nhật tên / trạng thái portfolio | ✅ Employee |
+| `PUT` | `/api/portfolio/{id}/full` | Cập nhật toàn bộ portfolio (thay thế tất cả block) | ✅ Employee |
+| `DELETE` | `/api/portfolio/{id}` | Xóa portfolio | ✅ Employee |
+| `POST` | `/api/portfolio/{portfolioId}/blocks` | Thêm block vào portfolio | ✅ Employee |
+| `PUT` | `/api/portfolio/{portfolioId}/blocks/{blockId}` | Cập nhật block | ✅ Employee |
+| `DELETE` | `/api/portfolio/{portfolioId}/blocks/{blockId}` | Xóa block | ✅ Employee |
+| `PUT` | `/api/portfolio/{portfolioId}/blocks/reorder` | Sắp xếp lại thứ tự block | ✅ Employee |
+
+### Compliment (đánh giá portfolio)
+
+| Method | URL | Mô tả | Auth |
+|--------|-----|-------|------|
+| `POST` | `/api/compliments` | Tạo compliment cho portfolio | ✅ Company |
+| `GET` | `/api/compliments?portfolioId=` | Xem compliment của công ty cho portfolio | ✅ Company |
+| `PUT` | `/api/compliments/{id}` | Cập nhật nội dung / điểm đánh giá | ✅ Company |
+| `PATCH` | `/api/compliments/{id}/state` | Đổi trạng thái compliment | ✅ Company |
+| `DELETE` | `/api/compliments/{id}` | Xóa mềm compliment | ✅ Company |
 
 ---
 
@@ -284,7 +298,86 @@ curl -X POST http://localhost:5003/api/portfolio \
 
 ---
 
-## 2. GET /api/portfolio/{id} — Lấy portfolio
+## 2. GET /api/portfolio — Danh sách portfolio
+
+```
+GET /api/portfolio?page=1&pageSize=10&status=active
+```
+
+### Query params
+
+| Param | Type | Default | Mô tả |
+|-------|------|---------|-------|
+| `page` | `int` | `1` | Trang |
+| `pageSize` | `int` | `10` | Số item mỗi trang (tối đa 100) |
+| `status` | `string` | `null` | Lọc theo status (`active`, `inactive`) |
+| `includeCompliments` | `bool` | `false` | Trả kèm danh sách compliment (yêu cầu JWT company) |
+| `complimentState` | `int` | `null` | Lọc portfolio có compliment theo trạng thái (`0`=Pending, `1`=Approved, `2`=Rejected) |
+| `hasCompliment` | `bool` | `null` | `true` = chỉ portfolio đã có compliment; `false` = chưa có |
+
+> Khi có bất kỳ param compliment nào (`includeCompliments`, `complimentState`, `hasCompliment`), response sẽ dùng schema `PortfolioWithComplimentDto` (xem bên dưới). Nếu không có, response dùng schema `PortfolioDto` thông thường.
+
+### Response — `200 OK` (không có compliment params)
+
+```json
+{
+  "items": [
+    {
+      "portfolioId": 15,
+      "employeeId": 2,
+      "portfolioName": "Portfolio của Phạm An Nhiên",
+      "status": "active",
+      "createdAt": "2026-03-05T10:00:00Z",
+      "updatedAt": null,
+      "blocks": []
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+### Response — `200 OK` (có compliment params)
+
+```json
+{
+  "items": [
+    {
+      "id": 15,
+      "employeeId": 2,
+      "name": "Portfolio của Phạm An Nhiên",
+      "status": "active",
+      "createdAt": "2026-03-05T10:00:00Z",
+      "updatedAt": null,
+      "complimentCount": 2,
+      "approvedComplimentCount": 1,
+      "averageScore": 4.5,
+      "compliments": [
+        {
+          "id": 3,
+          "portfolioId": 15,
+          "companyId": 7,
+          "content": "Ứng viên có kỹ năng frontend rất tốt",
+          "score": 5,
+          "state": 1,
+          "createdAt": "2026-03-10T09:00:00Z",
+          "updatedAt": null
+        }
+      ]
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+> `compliments` chỉ xuất hiện khi `includeCompliments=true`. Mỗi công ty chỉ thấy compliment của **chính công ty mình**. Admin thấy tất cả.
+
+---
+
+## 3. GET /api/portfolio/{id} — Lấy portfolio theo ID
 
 ```
 GET /api/portfolio/15
@@ -331,7 +424,7 @@ GET /api/portfolio/15
 
 ---
 
-## 3. PUT /api/portfolio/{id} — Cập nhật portfolio
+## 4. PUT /api/portfolio/{id} — Cập nhật portfolio
 
 ```
 PUT /api/portfolio/15
@@ -348,7 +441,7 @@ Content-Type: application/json
 
 ---
 
-## 4. DELETE /api/portfolio/{id} — Xóa portfolio
+## 5. DELETE /api/portfolio/{id} — Xóa portfolio
 
 ```
 DELETE /api/portfolio/15
@@ -359,7 +452,7 @@ Response: `204 No Content`
 
 ---
 
-## 5. POST /api/portfolio/{portfolioId}/blocks — Thêm block
+## 6. POST /api/portfolio/{portfolioId}/blocks — Thêm block
 
 ```
 POST /api/portfolio/15/blocks
@@ -468,7 +561,7 @@ Content-Type: multipart/form-data
 
 ---
 
-## 6. PUT /api/portfolio/{portfolioId}/blocks/{blockId} — Cập nhật block
+## 7. PUT /api/portfolio/{portfolioId}/blocks/{blockId} — Cập nhật block
 
 Tương tự Add Block, nhưng dùng `UpdateBlockRequest`:
 
@@ -487,7 +580,7 @@ Tương tự Add Block, nhưng dùng `UpdateBlockRequest`:
 
 ---
 
-## 7. DELETE /api/portfolio/{portfolioId}/blocks/{blockId} — Xóa block
+## 8. DELETE /api/portfolio/{portfolioId}/blocks/{blockId} — Xóa block
 
 ```
 DELETE /api/portfolio/15/blocks/5
@@ -498,7 +591,7 @@ Response: `204 No Content`
 
 ---
 
-## 8. PUT /api/portfolio/{portfolioId}/blocks/reorder — Sắp xếp block
+## 9. PUT /api/portfolio/{portfolioId}/blocks/reorder — Sắp xếp block
 
 ```
 PUT /api/portfolio/15/blocks/reorder
@@ -520,6 +613,182 @@ Response: `204 No Content`
 
 ---
 
+## Compliment — Đánh giá portfolio
+
+> Chỉ tài khoản có role **`company`** mới sử dụng được các endpoint này.  
+> Mỗi công ty chỉ được tạo **1 compliment** cho mỗi portfolio (UNIQUE constraint). Khi xóa và tạo lại vẫn được.
+
+### Trạng thái compliment (`state`)
+
+| Giá trị | Tên | Ý nghĩa |
+|---------|-----|---------|
+| `0` | `Pending` | Đang chờ duyệt (mặc định khi tạo) |
+| `1` | `Approved` | Đã chấp thuận |
+| `2` | `Rejected` | Bị từ chối |
+
+---
+
+## 10. POST /api/compliments — Tạo compliment
+
+```
+POST /api/compliments
+Authorization: Bearer <company_token>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "portfolioId": 15,
+  "content": "Ứng viên có kỹ năng frontend xuất sắc, kinh nghiệm thực tế phong phú",
+  "score": 5
+}
+```
+
+| Field | Type | Bắt buộc | Mô tả |
+|-------|------|-----------|-------|
+| `portfolioId` | `int` | ✅ | ID portfolio cần đánh giá |
+| `content` | `string` | ✅ | Nội dung nhận xét |
+| `score` | `int?` | ❌ | Điểm đánh giá từ 1–5 (null nếu không chấm điểm) |
+
+### Response — `201 Created`
+
+```json
+{
+  "id": 3,
+  "portfolioId": 15,
+  "companyId": 7,
+  "content": "Ứng viên có kỹ năng frontend xuất sắc, kinh nghiệm thực tế phong phú",
+  "score": 5,
+  "state": 0,
+  "createdAt": "2026-03-17T08:00:00Z",
+  "updatedAt": null
+}
+```
+
+### Lỗi
+
+| HTTP | Lỗi | Nguyên nhân |
+|------|-----|-------------|
+| `401` | Unauthorized | Thiếu JWT |
+| `403` | Forbidden | Không có role `company` |
+| `409` | `"This company has already complimented this portfolio."` | Công ty đã tạo compliment cho portfolio này |
+
+---
+
+## 11. GET /api/compliments?portfolioId= — Xem compliment
+
+```
+GET /api/compliments?portfolioId=15
+Authorization: Bearer <company_token>
+```
+
+> Chỉ trả về compliment của **công ty đang đăng nhập** cho portfolio đó.
+
+### Response — `200 OK`
+
+```json
+[
+  {
+    "id": 3,
+    "portfolioId": 15,
+    "companyId": 7,
+    "content": "Ứng viên có kỹ năng frontend xuất sắc",
+    "score": 5,
+    "state": 0,
+    "createdAt": "2026-03-17T08:00:00Z",
+    "updatedAt": null
+  }
+]
+```
+
+---
+
+## 12. PUT /api/compliments/{id} — Cập nhật nội dung / điểm
+
+```
+PUT /api/compliments/3
+Authorization: Bearer <company_token>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "content": "Nội dung cập nhật — ứng viên rất phù hợp với vị trí Frontend Lead",
+  "score": 4
+}
+```
+
+### Response — `200 OK`
+
+```json
+{
+  "id": 3,
+  "portfolioId": 15,
+  "companyId": 7,
+  "content": "Nội dung cập nhật — ứng viên rất phù hợp với vị trí Frontend Lead",
+  "score": 4,
+  "state": 0,
+  "createdAt": "2026-03-17T08:00:00Z",
+  "updatedAt": "2026-03-17T09:30:00Z"
+}
+```
+
+---
+
+## 13. PATCH /api/compliments/{id}/state — Đổi trạng thái
+
+```
+PATCH /api/compliments/3/state
+Authorization: Bearer <company_token>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "state": 1
+}
+```
+
+> `state`: `0` = Pending, `1` = Approved, `2` = Rejected
+
+### Response — `200 OK`
+
+```json
+{
+  "id": 3,
+  "portfolioId": 15,
+  "companyId": 7,
+  "content": "Ứng viên có kỹ năng frontend xuất sắc",
+  "score": 5,
+  "state": 1,
+  "createdAt": "2026-03-17T08:00:00Z",
+  "updatedAt": "2026-03-17T10:00:00Z"
+}
+```
+
+> Khi state chuyển sang `Approved`, `approvedComplimentCount` trên portfolio sẽ được **tự động cập nhật**.
+
+---
+
+## 14. DELETE /api/compliments/{id} — Xóa compliment (soft delete)
+
+```
+DELETE /api/compliments/3
+Authorization: Bearer <company_token>
+```
+
+Response: `204 No Content`
+
+> Compliment không bị xóa vật lý — chỉ đánh dấu `isDeleted=true`. Sau khi xóa, công ty có thể tạo lại compliment mới cho cùng portfolio.
+
+---
+
 ## Lỗi phổ biến
 
 | HTTP | Lỗi | Nguyên nhân |
@@ -528,9 +797,10 @@ Response: `204 No Content`
 | `400` | `"Block type 'INTRO' does not allow multiple blocks"` | INTRO xuất hiện hơn 1 lần |
 | `400` | `"Unknown block type: ..."` | `type` không tồn tại trong hệ thống |
 | `401` | Unauthorized | Thiếu hoặc sai JWT token |
-| `403` | Forbidden | Token hợp lệ nhưng không có quyền (không phải chủ portfolio) |
+| `403` | Forbidden | Token hợp lệ nhưng không có quyền |
 | `404` | `"Portfolio X not found"` | Portfolio ID không tồn tại |
-| `409` | `"Block type '...' allows only one per portfolio"` | Vi phạm IsMultiple=false |
+| `404` | `"Compliment X not found"` | Compliment ID không tồn tại |
+| `409` | `"This company has already complimented this portfolio."` | Vi phạm UNIQUE constraint compliment |
 | `500` | `"Internal server error"` | Lỗi server |
 
 ---
@@ -544,3 +814,11 @@ Response: `204 No Content`
 - `order` / `displayOrder` xác định thứ tự hiển thị, nên đặt liên tiếp (1, 2, 3, ...)
 - Có thể tạo portfolio không có block nào (chỉ cần `"blocks": []`)
 - Block data được lưu dạng JSON tự do — schema linh hoạt, không cần migration khi thêm field mới
+
+### Compliment — Lưu ý
+
+- Chỉ role **`company`** mới tạo/sửa/xóa được compliment
+- Mỗi công ty chỉ có **tối đa 1 compliment đang hoạt động** cho mỗi portfolio
+- `complimentCount`, `approvedComplimentCount`, `averageScore` trên portfolio được **tự động tính lại** sau mỗi thao tác tạo/sửa/xóa compliment
+- Khi gọi `GET /api/portfolio` với `includeCompliments=true`, mỗi công ty chỉ thấy compliment của **chính mình** — hoàn toàn cô lập đa tenant
+- `score` là tuỳ chọn, nhận giá trị `null` hoặc số nguyên 1–5
