@@ -1,358 +1,234 @@
-Implement a Notification Service for a microservice architecture system called SkillSnap.
+You are a senior .NET backend architect designing a scalable, secure, multi-tenant system.
 
-This service must:
+I am building a Portfolio Service using:
+- ASP.NET Core Web API
+- Entity Framework Core
+- Clean Architecture (Controller → Service → Repository)
+- SQL Server
+- JWT Authentication
 
-Consume events from RabbitMQ
+I need to implement a "Compliment" feature (company evaluates portfolios) with strict multi-tenant isolation, flexible querying, and high performance.
 
-Convert events into notifications
+---
 
-Store notifications in SQL Server
+🎯 1. ENTITY DESIGN
 
-Provide REST APIs for frontend
+Create Compliment entity:
 
-Provide realtime notifications using SignalR
+- Id (int, PK)
+- PortfolioId (FK)
+- CompanyId (FK)
+- State (enum: Pending = 0, Approved = 1, Rejected = 2)
+- Content (nvarchar)
+- Score (int, optional, 1–5)
+- CreatedAt (datetime)
 
-Maintain its own SignalR Hub (do NOT reuse Chat Service)
+Add:
+- Navigation properties
+- Enum for State
+- CreatedAt default value
 
-The service must be independent from Chat Service.
+---
 
-System Architecture Context
+🎯 2. DATA CONSTRAINTS
 
-The system uses event-driven microservices.
+- Each company can only compliment a portfolio ONCE
+→ Add UNIQUE constraint (PortfolioId, CompanyId)
 
-Services communicate via RabbitMQ event bus.
+---
 
-Example services:
+🎯 3. MULTI-TENANT SECURITY (CRITICAL)
 
-Community Service
+System must ensure:
 
-Portfolio Service
+- Company ONLY sees its own compliments
+- NEVER expose compliments of other companies
 
-Connection Service
+Implement 3-layer protection:
 
-Company Service
+A. Global Query Filter (EF Core)
+- Filter Compliment by CompanyId from current user
 
-Chat Service
+B. Service-level validation
+- Prevent update/delete access to other company data
 
-Notification Service
+C. Authorization policy
+- Only role "company" can access compliment APIs
 
-Notification Service listens to events and generates notifications.
+---
 
-Architecture flow:
+🎯 4. CURRENT USER SERVICE
 
-Service → RabbitMQ → Notification Service → Database
-                                 │
-                                 ▼
-                           SignalR Hub
-                                 │
-                                 ▼
-                              Frontend
-Tech Stack
+- Create ICurrentUserService
+- Extract CompanyId from JWT claims
+- Use dependency injection (DO NOT manually parse token everywhere)
 
-Use:
+---
 
-.NET 8 Web API
-Entity Framework Core
-SQL Server
-RabbitMQ
-SignalR
-JWT Authentication
-Database Schema
+🎯 5. GLOBAL QUERY FILTER
 
-Create table:
+- Apply filter on Compliment:
 
-NOTIFICATION
+  c => c.CompanyId == currentCompanyId
 
-Columns:
+- Ensure it works automatically in all queries
+- Allow bypass using IgnoreQueryFilters() for admin use
 
-id INT PRIMARY KEY IDENTITY
-userId INT NOT NULL
-title NVARCHAR(255)
-content NVARCHAR(500)
-type NVARCHAR(50)
-objectId INT NULL
-actorId INT NULL
-actorType NVARCHAR(20)
-createdAt DATETIME
-isRead BIT
+---
 
-actorType values:
+🎯 6. API DESIGN (SINGLE FLEXIBLE ENDPOINT)
 
-USER
-COMPANY
-SYSTEM
-
-Indexes:
-
-(userId, id DESC)
-(userId, isRead)
-Frontend Notification Types
-
-The API must match these frontend types.
-
-export type NotificationType =
-  | "CONNECTION_ACCEPTED"
-  | "CONNECTION_REJECTED"
-  | "PROFILE_VIEWED"
-  | "JOB_INVITATION"
-  | "PORTFOLIO_APPROVED"
-  | "SYSTEM_ANNOUNCEMENT"
-  | "COMMUNITY_POST_REPORTED"
-  | "PORTFOLIO_REPORTED"
-  | "POST_LIKED"
-  | "POST_COMMENTED"
-  | "POST_COMMENT_REPLIED"
-  | "POST_SHARED"
-  | "POST_MENTIONED";
-
-Notification response:
-
-UserNotification
-
-Fields:
-
-id
-userId
-title
-content
-type
-objectId
-createdAt
-isRead
-actor
-company
-API Endpoints
-Get notifications
-GET /api/notifications
+GET /api/portfolios
 
 Query params:
 
-cursor
-limit
+- page
+- pageSize
+- includeCompliments (bool)
+- complimentState (enum)
+- hasCompliment (bool)
 
-Return:
+---
 
-{
- items: UserNotification[],
- nextCursor: number
-}
+🎯 7. BUSINESS LOGIC
 
-Use cursor pagination.
+IMPORTANT: ALL compliment logic MUST use companyId
 
-Query pattern:
+A. hasCompliment:
 
-WHERE userId = @userId
-AND id < @cursor
-ORDER BY id DESC
-LIMIT @limit
-Get unread count
-GET /api/notifications/unread-count
+- true:
+  → portfolios where EXISTS compliment by this company
 
-Response:
+- false:
+  → portfolios where NOT EXISTS compliment by this company
 
-{
- count: number
-}
-Mark notification read
-PUT /api/notifications/{id}/read
-Mark all notifications read
-PUT /api/notifications/read-all
-RabbitMQ Event Bus
+B. complimentState:
 
-Use exchange:
+→ portfolios where:
+   EXISTS compliment by this company AND state matches
 
-skillsnap.events
+C. includeCompliments:
 
-Exchange type:
+- true → include compliments in response
+- false → do NOT include compliments
 
-topic
+---
 
-Queues:
+🎯 8. QUERY IMPLEMENTATION
 
-notification.community
-notification.connection
-notification.system
+- DO NOT use Include()
+- Use projection (Select)
+- Filter at database level
 
-Routing keys:
+Examples:
 
-post.liked
-post.commented
-post.replied
-post.shared
-post.mentioned
-connection.accepted
-connection.rejected
-portfolio.approved
-job.invitation
-system.announcement
-Event Contracts
+- Filter:
+  p.Compliments.Any(c => c.CompanyId == companyId)
 
-Example events:
+- Mapping:
+  Only map compliments when includeCompliments = true
 
-PostLikedEvent
-{
- actorId: number
- postId: number
- postOwnerId: number
-}
-PostCommentedEvent
-{
- actorId: number
- postId: number
- postOwnerId: number
- commentId: number
-}
-JobInvitationEvent
-{
- companyId: number
- userId: number
- jobId: number
-}
-ConnectionAcceptedEvent
-{
- actorId: number
- userId: number
-}
-Event → Notification Mapping
+---
 
-Example:
+🎯 9. DTO DESIGN
 
-POST_LIKED
-userId = postOwnerId
-title = "Bài viết được yêu thích"
-content = "đã thích bài viết của bạn"
-type = POST_LIKED
-objectId = postId
-actorId = actorId
-actorType = USER
-POST_COMMENTED
-userId = postOwnerId
-type = POST_COMMENTED
-actorType = USER
-objectId = postId
-JOB_INVITATION
-userId = userId
-type = JOB_INVITATION
-actorType = COMPANY
-actorId = companyId
-objectId = jobId
-SignalR Realtime Notification
+PortfolioDto:
+- Id
+- Title
+- ...
+- Compliments (optional)
 
-The Notification Service must expose a SignalR Hub.
+ComplimentDto:
+- Id
+- Content
+- State
+- Score
 
-Create:
+---
 
-NotificationHub
+🎯 10. PAGINATION
 
-Endpoint:
+- Apply Skip/Take AFTER filtering
+- Return total count
 
-/hubs/notifications
+---
 
-Users connect using JWT authentication.
+🎯 11. PERFORMANCE OPTIMIZATION
 
-SignalR Group Strategy
+Indexes:
 
-When user connects:
+- IX_Compliment_Portfolio_Company (PortfolioId, CompanyId)
+- IX_Compliment_Portfolio_Company_State (PortfolioId, CompanyId, State)
 
-extract userId from JWT
-add connection to group: user_{userId}
+Avoid:
+- N+1 queries
+- Loading unnecessary data
 
-Example:
+---
 
-Groups.AddToGroupAsync(connectionId, $"user_{userId}")
-Send Realtime Notification
+🎯 12. AGGREGATE FIELDS (RECOMMENDED)
 
-After saving a notification in database:
+Add to Portfolio:
 
-Send realtime message:
+- ComplimentCount
+- ApprovedComplimentCount
+- AverageScore
 
-await hubContext
- .Clients
- .Group($"user_{userId}")
- .SendAsync("notification", notification);
+Use for fast filtering and sorting
 
-Payload must match UserNotification format.
+---
 
-Actor Resolution
+🎯 13. PERMISSION ENFORCEMENT
 
-If actorType = USER:
+- Validate CompanyId in service layer before update/delete
+- Throw ForbiddenException if mismatch
+- Ensure no data leakage across tenants
 
-Fetch data from User Service API.
+---
 
-Return:
+🎯 14. BONUS FEATURES
 
-actor: {
- id
- name
- avatar
- role: "USER"
-}
+- Scoring system (1–5 stars)
+- Sorting portfolios by:
+  + score
+  + compliment count
+- Admin mode using IgnoreQueryFilters()
 
-If actorType = COMPANY:
+---
 
-Fetch data from Company Service API.
+🎯 15. OUTPUT REQUIRED
 
-Return:
+Generate:
 
-company: {
- id
- name
- avatar
- role: "COMPANY"
-}
+- Entity classes
+- Enum
+- DbContext configuration (with global query filter)
+- Migration (indexes + unique constraint)
+- CurrentUserService
+- Repository interface + implementation
+- Service layer
+- Controller endpoints
+- DTOs
+- LINQ query implementing:
+  + includeCompliments
+  + hasCompliment
+  + complimentState
+  + pagination
 
-If actorType = SYSTEM:
+---
 
-Return no actor or company.
+🎯 16. CODE QUALITY
 
-Service Architecture
+- Clean, readable, production-ready
+- Follow SOLID principles
+- Avoid duplicated logic
+- Optimize for large-scale systems
 
-Use Clean Architecture.
+---
 
-Layers:
+🚨 IMPORTANT RULES:
 
-API
-Application
-Domain
-Infrastructure
-
-Required components:
-
-Notification entity
-NotificationRepository
-NotificationService
-NotificationController
-NotificationHub
-RabbitMQConsumer
-EventHandlers
-Expected Result
-
-The Notification Service must:
-
-Consume events from RabbitMQ
-
-Convert events into notifications
-
-Store notifications in SQL Server
-
-Provide REST API for frontend
-
-Send realtime notifications via SignalR Hub
-
-Support cursor pagination
-
-Support unread count
-
-Support mark-as-read
-
-Users must receive notifications instantly without refreshing the page.
-
-Example:
-
-User A likes post
-↓
-Notification created
-↓
-SignalR push
-↓
-User B sees notification immediately
+- ALWAYS filter Compliment by CompanyId
+- NEVER expose other companies’ data
+- DO NOT break existing Portfolio API response shape
+- DO NOT use Include() for this feature

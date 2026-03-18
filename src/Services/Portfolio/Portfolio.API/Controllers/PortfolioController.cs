@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
 using Portfolio.Application.Services;
+using Portfolio.Domain.Entities;
 
 namespace Portfolio.API.Controllers;
 
@@ -34,8 +35,27 @@ public class PortfolioController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
-        [FromQuery] string? status = null)
+        [FromQuery] string? status = null,
+        [FromQuery] bool includeCompliments = false,
+        [FromQuery] ComplimentState? complimentState = null,
+        [FromQuery] bool? hasCompliment = null)
     {
+        // Use compliment filter path when any compliment param is specified
+        if (includeCompliments || complimentState.HasValue || hasCompliment.HasValue)
+        {
+            var queryParams = new PortfolioQueryParams
+            {
+                Page = page,
+                PageSize = pageSize,
+                Status = status,
+                IncludeCompliments = includeCompliments,
+                ComplimentState = complimentState,
+                HasCompliment = hasCompliment
+            };
+            var filteredResult = await _portfolioService.GetAllWithComplimentFilterAsync(queryParams);
+            return Ok(filteredResult);
+        }
+
         var result = await _portfolioService.GetAllAsync(page, pageSize, status);
 
         foreach (var p in result.Items)

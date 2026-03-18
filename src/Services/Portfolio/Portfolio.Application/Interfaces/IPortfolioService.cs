@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Portfolio.Application.DTOs;
+using Portfolio.Domain.Entities;
 
 namespace Portfolio.Application.Interfaces;
 
@@ -13,4 +14,5 @@ public interface IPortfolioService
     Task<CreatePortfolioResponse> UpdateFullPortfolioAsync(int id, int employeeId, UpdateFullPortfolioRequest request, Dictionary<string, IFormFile> fileMap);
     Task<bool> DeleteAsync(int id, int employeeId);
     Task<CreatePortfolioResponse> CreatePortfolioAsync(CreatePortfolioRequest request, Dictionary<string, IFormFile> fileMap);
+    Task<PagedResult<PortfolioWithComplimentDto>> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams);
 }
