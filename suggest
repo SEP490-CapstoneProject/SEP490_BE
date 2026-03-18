@@ -1,3 +1,156 @@
-The updated Notification Service plan looks solid and aligns well with a scalable event-driven microservice architecture. The use of a single RabbitMQ queue with topic routing simplifies event consumption while maintaining flexibility for multiple event types. Adding retry handling with DLQ improves reliability, and integrating a dedicated SignalR Hub for realtime delivery is appropriate for a notification system. The decision to map entities to DTOs before pushing via SignalR also ensures the API responses remain consistent with the frontend contract. Using Redis for unread notification count is a good optimization to reduce database load.
+You are a senior .NET architect reviewing a production-ready Portfolio Service (Plan v3).
 
-One important note: **actor resolution should only call the UserProfile service** to retrieve user information (name, avatar, role). There is no need to call multiple services for this. The notification service should remain lightweight and avoid unnecessary cross-service dependencies. Adding a small in-memory cache for the resolved actor data (for a few minutes) would further reduce repeated service calls and improve performance.
+The system already has:
+
+- Secure multi-tenant Global Query Filter:
+    c => !c.IsDeleted && (_currentUser.IsAdmin || c.CompanyId == _currentUser.CompanyId)
+
+- Compliment feature with:
+  + transactions
+  + aggregate recalculation from DB
+  + soft delete
+  + audit fields
+
+- Single API endpoint (GET /api/portfolio)
+- Role-aware logic inside service layer
+
+---
+
+🎯 YOUR TASK
+
+Refine the plan to reach ENTERPRISE-GRADE quality by fixing 2 remaining design issues:
+
+---
+
+🚨 ISSUE 1 — MAGIC NUMBER (CompanyId = 0)
+
+Current design:
+
+    int CompanyId { get; } // 0 means no tenant
+
+This is NOT ideal because:
+
+- Magic number is unclear and unsafe
+- Risk if database accidentally contains CompanyId = 0
+- Hard to maintain and reason about
+
+---
+
+✅ REQUIRED FIX
+
+Replace magic number approach with a clean design:
+
+Option A (preferred):
+
+    bool HasCompany { get; }
+    int CompanyId { get; }
+
+Global Query Filter:
+
+    c => !c.IsDeleted &&
+         (_currentUser.IsAdmin ||
+          (_currentUser.HasCompany && c.CompanyId == _currentUser.CompanyId))
+
+---
+
+OR Option B:
+
+    int? CompanyId { get; }
+
+Filter:
+
+    c => !c.IsDeleted &&
+         (_currentUser.IsAdmin || c.CompanyId == _currentUser.CompanyId)
+
+---
+
+📌 REQUIREMENT:
+
+- Ensure EF Core can translate the filter
+- Avoid method calls that break SQL translation
+- Ensure default behavior = NO DATA instead of data leak
+
+---
+
+🚨 ISSUE 2 — ADMIN + INCLUDE NAVIGATION BUG
+
+Problem:
+
+Using:
+
+    Portfolio.Include(p => p.Compliments)
+
+Global Query Filter STILL applies → admin does NOT see full data
+
+---
+
+✅ REQUIRED FIX
+
+1. DO NOT rely on Include() for Compliments
+2. Use projection-based queries ONLY
+
+Example:
+
+    .Select(p => new PortfolioDto {
+        ...
+        Compliments = _context.Compliments
+            .IgnoreQueryFilters()
+            .Where(c => c.PortfolioId == p.Id)
+            .Select(...)
+            .ToList()
+    })
+
+---
+
+📌 REQUIREMENT:
+
+- Admin must explicitly opt-in to full data using IgnoreQueryFilters()
+- Avoid hidden filtering behavior
+- Prevent confusion in future development
+
+---
+
+🎯 ADDITIONAL HARDENING
+
+1. Ensure ALL queries follow:
+
+    - Projection (Select)
+    - No Include()
+    - No N+1
+
+2. Service must still enforce:
+
+    - Ownership validation
+    - Role-based access control
+
+3. Background jobs:
+
+    - MUST use IgnoreQueryFilters()
+    - MUST NOT rely on default filter
+
+---
+
+🎯 OUTPUT REQUIRED
+
+Provide:
+
+1. Updated ICurrentUserService design
+2. Final Global Query Filter implementation
+3. Example LINQ query:
+   - Normal user
+   - Company
+   - Admin (with IgnoreQueryFilters)
+4. Explanation of:
+   - Why magic number is dangerous
+   - Why Include() breaks admin expectations
+5. Final checklist for production readiness
+
+---
+
+🚨 FINAL GOAL
+
+- No magic numbers
+- No hidden filtering bugs
+- Explicit admin behavior
+- Fully predictable multi-tenant system
+- Enterprise-grade maintainability

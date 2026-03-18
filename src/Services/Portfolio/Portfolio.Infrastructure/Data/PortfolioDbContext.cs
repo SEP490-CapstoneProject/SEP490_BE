@@ -1,15 +1,23 @@
 using Microsoft.EntityFrameworkCore;
+using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
 
 namespace Portfolio.Infrastructure.Data;
 
 public class PortfolioDbContext : DbContext
 {
-    public PortfolioDbContext(DbContextOptions<PortfolioDbContext> options) : base(options) { }
+    private readonly ICurrentUserService _currentUser;
+
+    public PortfolioDbContext(DbContextOptions<PortfolioDbContext> options, ICurrentUserService currentUser)
+        : base(options)
+    {
+        _currentUser = currentUser;
+    }
 
     public DbSet<Portfolio.Domain.Entities.Portfolio> Portfolios { get; set; }
     public DbSet<BlockType> BlockTypes { get; set; }
     public DbSet<PortfolioBlock> PortfolioBlocks { get; set; }
+    public DbSet<Compliment> Compliments { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +33,9 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("active");
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
             e.Property(x => x.UpdatedAt).IsRequired(false);
+            e.Property(x => x.ComplimentCount).HasDefaultValue(0);
+            e.Property(x => x.ApprovedComplimentCount).HasDefaultValue(0);
+            e.Property(x => x.AverageScore).HasColumnType("decimal(3,2)").IsRequired(false);
             e.HasIndex(x => x.EmployeeId).HasDatabaseName("IX_Portfolio_EmployeeId");
         });
 
@@ -61,7 +72,6 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.IsVisible).HasDefaultValue(true);
             e.Property(x => x.DataJson).HasColumnType("nvarchar(max)").HasDefaultValue("{}");
 
-            // Composite index: load all blocks of a specific type within a portfolio, in order
             e.HasIndex(x => new { x.PortfolioId, x.BlockTypeId, x.DisplayOrder })
              .HasDatabaseName("IX_Block_Portfolio_Type_Order");
 
@@ -74,6 +84,40 @@ public class PortfolioDbContext : DbContext
              .WithMany(x => x.PortfolioBlocks)
              .HasForeignKey(x => x.BlockTypeId)
              .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Compliment
+        modelBuilder.Entity<Compliment>(e =>
+        {
+            e.ToTable("Compliment");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Content).HasColumnType("nvarchar(max)").IsRequired();
+            e.Property(x => x.State).HasDefaultValue(ComplimentState.Pending);
+            e.Property(x => x.IsDeleted).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.Property(x => x.Score).IsRequired(false);
+            e.Property(x => x.UpdatedAt).IsRequired(false);
+            e.Property(x => x.UpdatedBy).IsRequired(false);
+
+            // Filtered UNIQUE: one active compliment per company per portfolio
+            e.HasIndex(x => new { x.PortfolioId, x.CompanyId })
+             .HasDatabaseName("UX_Compliment_Portfolio_Company_Active")
+             .HasFilter("[IsDeleted] = 0")
+             .IsUnique();
+
+            e.HasIndex(x => new { x.PortfolioId, x.CompanyId, x.State })
+             .HasDatabaseName("IX_Compliment_Portfolio_Company_State");
+
+            // Global query filter: multi-tenant isolation + soft delete
+            e.HasQueryFilter(c =>
+                !c.IsDeleted &&
+                (_currentUser.IsAdmin ||
+                 (_currentUser.HasCompany && c.CompanyId == _currentUser.CompanyId)));
+
+            e.HasOne(x => x.Portfolio)
+             .WithMany(x => x.Compliments)
+             .HasForeignKey(x => x.PortfolioId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
