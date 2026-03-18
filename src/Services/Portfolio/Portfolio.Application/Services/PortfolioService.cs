@@ -249,4 +249,20 @@ public class PortfolioService : IPortfolioService
         UpdatedAt = p.UpdatedAt,
         Blocks = new List<BlockDto>()
     };
+
+    public async Task<PagedResult<PortfolioWithComplimentDto>> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams)
+    {
+        if (queryParams.Page < 1) queryParams.Page = 1;
+        if (queryParams.PageSize < 1) queryParams.PageSize = 10;
+        if (queryParams.PageSize > 100) queryParams.PageSize = 100;
+
+        var (items, total) = await _repo.GetAllWithComplimentFilterAsync(queryParams);
+        return new PagedResult<PortfolioWithComplimentDto>
+        {
+            Items = items,
+            Total = total,
+            Page = queryParams.Page,
+            PageSize = queryParams.PageSize
+        };
+    }
 }

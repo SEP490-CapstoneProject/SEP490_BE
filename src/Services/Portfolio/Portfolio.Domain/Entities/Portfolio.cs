@@ -9,5 +9,11 @@ public class Portfolio
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 
+    // Aggregate fields (recalculated from DB, never modified directly)
+    public int ComplimentCount { get; set; } = 0;
+    public int ApprovedComplimentCount { get; set; } = 0;
+    public decimal? AverageScore { get; set; }
+
     public ICollection<PortfolioBlock> Blocks { get; set; } = new List<PortfolioBlock>();
+    public ICollection<Compliment> Compliments { get; set; } = new List<Compliment>();
 }
