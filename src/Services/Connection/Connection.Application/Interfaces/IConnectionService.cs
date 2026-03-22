@@ -13,4 +13,9 @@ public interface IConnectionService
     Task<IEnumerable<Connection.Domain.Entities.Room>> GetRoomsByConnectionAsync(int connectionId);
     Task<IEnumerable<Connection.Domain.Entities.Message>> GetMessagesByRoomAsync(int roomId);
     Task<IEnumerable<Connection.Domain.Entities.Room>> GetRoomsByUserIdAsync(int userId);
+    Task<IEnumerable<Connection.Domain.Entities.Message>> GetLatestMessagesByRoomAsync(int roomId, int limit);
+    Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId);
+    // Bulk mark-by-ids removed (auto mark on join used).
+    Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId);
+    Task<Connection.Domain.Entities.Connection?> UpdateConnectionStatusAsync(int connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus status);
 }

@@ -37,6 +37,8 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
+// AutoMapper not used; mapping done manually
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

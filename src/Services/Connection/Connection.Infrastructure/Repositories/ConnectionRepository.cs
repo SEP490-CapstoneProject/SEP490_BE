@@ -76,8 +76,62 @@ public class ConnectionRepository : IConnectionRepository
         await _context.SaveChangesAsync();
     }
 
+    public async Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId)
+    {
+        // Single-query projection to get last message and unread count per room
+        var query = from r in _context.Rooms
+                    join c in _context.Connections on r.ConnectionId equals c.Id
+                    where c.UserIdFrom == userId || c.UserIdTo == userId
+                    select new
+                    {
+                        Room = r,
+                        Connection = c
+                    };
+
+        var list = await query
+            .Select(x => new Connection.Application.DTOs.RoomSummaryRaw
+            {
+                RoomId = x.Room.Id,
+                ProfileId = x.Connection.ProfileId,
+                ConnectionId = x.Connection.Id,
+                UserIdFrom = x.Connection.UserIdFrom,
+                UserIdTo = x.Connection.UserIdTo,
+                LastContent = x.Room.Messages.OrderByDescending(m => m.CreatedAt).Select(m => m.Content).FirstOrDefault(),
+                LastAt = x.Room.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.CreatedAt).FirstOrDefault(),
+                UnreadCount = x.Room.Messages.Count(m => m.Status == 0 && m.UserId != userId)
+            })
+            .ToListAsync();
+
+        return list;
+    }
+
+    public async Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId)
+    {
+        var msgs = await _context.Messages.Where(m => m.MessageRoomId == roomId && m.UserId != userId && m.Status != 1).ToListAsync();
+        var updated = new List<int>();
+        foreach (var m in msgs)
+        {
+            m.Status = 1; // READ
+            updated.Add(m.Id);
+        }
+        await _context.SaveChangesAsync();
+        return updated;
+    }
+
     public async Task<IEnumerable<Connection.Domain.Entities.Message>> GetMessagesByRoomAsync(int roomId)
     {
         return await _context.Messages.Where(m => m.MessageRoomId == roomId).ToListAsync();
+    }
+
+    public async Task<IEnumerable<Connection.Domain.Entities.Message>> GetLatestMessagesByRoomAsync(int roomId, int limit)
+    {
+        var items = await _context.Messages
+            .Where(m => m.MessageRoomId == roomId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+
+        // return in chronological order (oldest -> newest)
+        return items.OrderBy(m => m.CreatedAt).ToList();
     }
 }
