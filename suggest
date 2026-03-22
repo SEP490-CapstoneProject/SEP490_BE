@@ -1,156 +1,225 @@
-You are a senior .NET architect reviewing a production-ready Portfolio Service (Plan v3).
+# 🎯 TASK: Refine & Harden Payment Service Plan to Production-Grade
 
-The system already has:
+## 🧠 Context
 
-- Secure multi-tenant Global Query Filter:
-    c => !c.IsDeleted && (_currentUser.IsAdmin || c.CompanyId == _currentUser.CompanyId)
+You are given an existing **Payment Service implementation plan** (VNPay + MoMo + Payment History + Outbox + Idempotency).
 
-- Compliment feature with:
-  + transactions
-  + aggregate recalculation from DB
-  + soft delete
-  + audit fields
+The current plan is already solid, but it is **NOT fully production-ready**.
 
-- Single API endpoint (GET /api/portfolio)
-- Role-aware logic inside service layer
+Your task is to **refine and upgrade the plan** by fixing critical gaps in:
 
----
+* Idempotency
+* Concurrency
+* Reliability
+* Security
+* Edge cases
 
-🎯 YOUR TASK
-
-Refine the plan to reach ENTERPRISE-GRADE quality by fixing 2 remaining design issues:
+⚠️ DO NOT rewrite from scratch.
+✔ Keep existing structure
+✔ Improve and extend where needed
 
 ---
 
-🚨 ISSUE 1 — MAGIC NUMBER (CompanyId = 0)
+# 🔥 REQUIRED IMPROVEMENTS
 
-Current design:
+## 1. Fix Idempotency (CRITICAL)
 
-    int CompanyId { get; } // 0 means no tenant
+Current issue:
 
-This is NOT ideal because:
+* Using `TransactionId` is NOT enough
 
-- Magic number is unclear and unsafe
-- Risk if database accidentally contains CompanyId = 0
-- Hard to maintain and reason about
+You MUST:
 
----
+* Generate a true `eventId` from webhook data:
 
-✅ REQUIRED FIX
+  * hash(raw webhook payload)
+  * OR combination of: provider + orderCode + responseCode + timestamp
 
-Replace magic number approach with a clean design:
+* Ensure:
 
-Option A (preferred):
-
-    bool HasCompany { get; }
-    int CompanyId { get; }
-
-Global Query Filter:
-
-    c => !c.IsDeleted &&
-         (_currentUser.IsAdmin ||
-          (_currentUser.HasCompany && c.CompanyId == _currentUser.CompanyId))
+  * duplicate webhook calls are safely ignored
+  * out-of-order events are handled
 
 ---
 
-OR Option B:
+## 2. Add Processing State (CRITICAL)
 
-    int? CompanyId { get; }
+Current states:
 
-Filter:
+* Pending → Success / Failed ❌
 
-    c => !c.IsDeleted &&
-         (_currentUser.IsAdmin || c.CompanyId == _currentUser.CompanyId)
+You MUST change to:
 
----
+* Pending → Processing → Success / Failed
 
-📌 REQUIREMENT:
+Purpose:
 
-- Ensure EF Core can translate the filter
-- Avoid method calls that break SQL translation
-- Ensure default behavior = NO DATA instead of data leak
+* prevent double-processing
+* enable safe concurrent handling
 
 ---
 
-🚨 ISSUE 2 — ADMIN + INCLUDE NAVIGATION BUG
+## 3. Prevent Race Conditions (CRITICAL)
+
+Webhook may be called concurrently.
+
+You MUST:
+
+* Ensure update only when:
+
+  * Status = Pending OR Processing
+
+* Add one of:
+
+  * optimistic concurrency (RowVersion)
+  * OR conditional update (WHERE Status = Pending)
+
+---
+
+## 4. Strengthen Webhook Transaction Flow
+
+Update webhook handling to:
+
+1. Validate signature
+2. Generate eventId
+3. Check ProcessedEvents → skip if duplicate
+4. Load Payment by OrderCode
+5. Ensure not already Success
+6. Update → Processing
+7. Update → Success / Failed
+8. Save PaymentHistory (with raw payload)
+9. Insert ProcessedEvent
+10. Insert OutboxEvent
+11. Commit transaction
+
+⚠️ ALL steps must be in ONE DB transaction
+
+---
+
+## 5. Add Retry Strategy for Failures
+
+Current issue:
+
+* If webhook processing fails → data inconsistency
+
+You MUST add:
+
+* Background retry mechanism
+* Logging for failed webhook processing
+* Safe re-processing using idempotency
+
+---
+
+## 6. Improve Outbox Pattern
+
+Enhance OutboxEvents:
+
+Add fields:
+
+* RetryCount
+* NextRetryAt
+
+Implement:
+
+* exponential backoff retry
+* max retry threshold
+* dead-letter handling
+
+---
+
+## 7. Prevent Duplicate Payment Creation
 
 Problem:
 
-Using:
+* User can spam create payment
 
-    Portfolio.Include(p => p.Compliments)
+You MUST:
 
-Global Query Filter STILL applies → admin does NOT see full data
+* Check existing Pending payment for same user + plan
+* Either:
 
----
-
-✅ REQUIRED FIX
-
-1. DO NOT rely on Include() for Compliments
-2. Use projection-based queries ONLY
-
-Example:
-
-    .Select(p => new PortfolioDto {
-        ...
-        Compliments = _context.Compliments
-            .IgnoreQueryFilters()
-            .Where(c => c.PortfolioId == p.Id)
-            .Select(...)
-            .ToList()
-    })
+  * reuse existing payment
+  * OR reject duplicate request
 
 ---
 
-📌 REQUIREMENT:
+## 8. Add Return URL Handling
 
-- Admin must explicitly opt-in to full data using IgnoreQueryFilters()
-- Avoid hidden filtering behavior
-- Prevent confusion in future development
+You MUST add endpoint:
 
----
+GET /api/payments/return
 
-🎯 ADDITIONAL HARDENING
+Rules:
 
-1. Ensure ALL queries follow:
-
-    - Projection (Select)
-    - No Include()
-    - No N+1
-
-2. Service must still enforce:
-
-    - Ownership validation
-    - Role-based access control
-
-3. Background jobs:
-
-    - MUST use IgnoreQueryFilters()
-    - MUST NOT rely on default filter
+* Used ONLY for UI redirect
+* MUST NOT update payment status
+* Webhook remains source of truth
 
 ---
 
-🎯 OUTPUT REQUIRED
+## 9. Add Expiration Logic
 
-Provide:
+You MUST:
 
-1. Updated ICurrentUserService design
-2. Final Global Query Filter implementation
-3. Example LINQ query:
-   - Normal user
-   - Company
-   - Admin (with IgnoreQueryFilters)
-4. Explanation of:
-   - Why magic number is dangerous
-   - Why Include() breaks admin expectations
-5. Final checklist for production readiness
+* Add "Expired" status
+* Auto-expire Pending payments after X minutes (15–30)
 
 ---
 
-🚨 FINAL GOAL
+## 10. Basic Anti-Fraud Validation
 
-- No magic numbers
-- No hidden filtering bugs
-- Explicit admin behavior
-- Fully predictable multi-tenant system
-- Enterprise-grade maintainability
+You MUST validate:
+
+* amount matches plan price
+* currency is correct
+* provider response codes are valid
+
+---
+
+# ⚡ OPTIONAL IMPROVEMENTS (RECOMMENDED)
+
+* Add PaymentMethod (QR, ATM, CreditCard)
+* Add index: (Status, CreatedAt)
+* Improve logging (structured logs)
+* Add correlationId for tracing
+
+---
+
+# 🎯 OUTPUT REQUIREMENTS
+
+You must produce:
+
+1. Updated Payment Service Plan (refined version)
+2. Highlighted changes (what was improved)
+3. Updated webhook flow (final version)
+4. Updated data model if needed
+5. Additional fields/tables if required
+
+---
+
+# 🚨 RULES
+
+DO NOT ❌
+
+* Remove existing architecture
+* Break event-driven design
+* Move subscription logic into payment service
+
+DO ✅
+
+* Focus on reliability & correctness
+* Preserve clean architecture
+* Ensure production-readiness
+
+---
+
+# 🏁 GOAL
+
+Final output must be:
+
+> ✅ Production-grade Payment Service
+> ✅ Safe under concurrency
+> ✅ Resilient to webhook retries
+> ✅ Fully auditable and reliable
+
+---

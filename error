@@ -1,0 +1,18 @@
+2026-03-22 18:19:41.511 | Unhandled exception. System.AggregateException: Some services are not able to be constructed (Error while validating the service descriptor 'ServiceType: Microsoft.Extensions.Hosting.IHostedService Lifetime: Singleton ImplementationType: Subscription.Infrastructure.Services.SubscriptionPreloadService': Cannot consume scoped service 'Subscription.Application.Interfaces.ISubscriptionRepository' from singleton 'Microsoft.Extensions.Hosting.IHostedService'.)
+2026-03-22 18:19:41.511 |  ---> System.InvalidOperationException: Error while validating the service descriptor 'ServiceType: Microsoft.Extensions.Hosting.IHostedService Lifetime: Singleton ImplementationType: Subscription.Infrastructure.Services.SubscriptionPreloadService': Cannot consume scoped service 'Subscription.Application.Interfaces.ISubscriptionRepository' from singleton 'Microsoft.Extensions.Hosting.IHostedService'.
+2026-03-22 18:19:41.511 |  ---> System.InvalidOperationException: Cannot consume scoped service 'Subscription.Application.Interfaces.ISubscriptionRepository' from singleton 'Microsoft.Extensions.Hosting.IHostedService'.
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteValidator.VisitScopeCache(ServiceCallSite scopedCallSite, CallSiteValidatorState state)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteVisitor`2.VisitCallSite(ServiceCallSite callSite, TArgument argument)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteValidator.VisitConstructor(ConstructorCallSite constructorCallSite, CallSiteValidatorState state)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteVisitor`2.VisitCallSite(ServiceCallSite callSite, TArgument argument)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteValidator.ValidateCallSite(ServiceCallSite callSite)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceProvider.ValidateService(ServiceDescriptor descriptor)
+2026-03-22 18:19:41.511 |    --- End of inner exception stack trace ---
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceProvider.ValidateService(ServiceDescriptor descriptor)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceProvider..ctor(ICollection`1 serviceDescriptors, ServiceProviderOptions options)
+2026-03-22 18:19:41.511 |    --- End of inner exception stack trace ---
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceProvider..ctor(ICollection`1 serviceDescriptors, ServiceProviderOptions options)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(IServiceCollection services, ServiceProviderOptions options)
+2026-03-22 18:19:41.511 |    at Microsoft.Extensions.Hosting.HostApplicationBuilder.Build()
+2026-03-22 18:19:41.511 |    at Microsoft.AspNetCore.Builder.WebApplicationBuilder.Build()
+2026-03-22 18:19:41.511 |    at Program.<Main>$(String[] args) in /src/Services/Subscription/Subscription.API/Program.cs:line 86

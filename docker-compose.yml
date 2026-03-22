@@ -19,21 +19,6 @@ services:
       retries: 10
       start_period: 30s
 
-  # API Gateway
-  # apigateway:
-  #   build:
-  #     context: .
-  #     dockerfile: src/ApiGateway/Dockerfile
-  #   container_name: apigateway
-  #   ports:
-  #     - "5000:80"
-  #   environment:
-  #     - ASPNETCORE_ENVIRONMENT=Development
-  #   depends_on:
-  #     - auth-service
-  #   networks:
-  #     - recruitment-network
-
   # Auth Service
   auth-service:
     build:
@@ -111,24 +96,6 @@ services:
       - recruitment-network
     restart: on-failure
 
-  # Job & Hiring Service
-  jobhiring-service:
-    build:
-      context: .
-      dockerfile: src/Services/JobHiring/Dockerfile
-    container_name: jobhiring-service
-    ports:
-      - "5005:80"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=JobHiringServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    networks:
-      - recruitment-network
-    restart: on-failure
-
   # Connection & Chat Service
   connection-service:
     build:
@@ -172,48 +139,24 @@ services:
       dockerfile: src/Services/Subscription/Dockerfile
     container_name: subscription-service
     ports:
-      - "5008:80"
+      - "5008:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=SubscriptionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
+      - JwtSettings__Issuer=SkillSnapAuth
+      - JwtSettings__Audience=SkillSnapUsers
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+      - Redis__ConnectionString=redis:6379
     depends_on:
       sqlserver:
         condition: service_healthy
-    networks:
-      - recruitment-network
-    restart: on-failure
-
-  # Advertisement Service
-  advertisement-service:
-    build:
-      context: .
-      dockerfile: src/Services/Advertisement/Dockerfile
-    container_name: advertisement-service
-    ports:
-      - "5009:80"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AdvertisementServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-    depends_on:
-      sqlserver:
+      rabbitmq:
         condition: service_healthy
-    networks:
-      - recruitment-network
-    restart: on-failure
-
-  # Moderation Service
-  moderation-service:
-    build:
-      context: .
-      dockerfile: src/Services/Moderation/Dockerfile
-    container_name: moderation-service
-    ports:
-      - "5010:80"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ModerationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-    depends_on:
-      sqlserver:
+      redis:
         condition: service_healthy
     networks:
       - recruitment-network
@@ -267,6 +210,34 @@ services:
       - recruitment-network
     restart: on-failure
 
+  # Application Service
+  application-service:
+    build:
+      context: .
+      dockerfile: src/Services/Application/Dockerfile
+    container_name: application-service
+    ports:
+      - "5013:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ApplicationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
+      - JwtSettings__Issuer=SkillSnapAuth
+      - JwtSettings__Audience=SkillSnapUsers
+      - ServiceUrls__UserProfileService=http://userprofile-service:8080
+      - ServiceUrls__SubscriptionService=http://subscription-service:8080
+      - Redis__ConnectionString=redis:6379
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      userprofile-service:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -301,20 +272,56 @@ services:
   api-gateway:
     build:
       context: .
-      dockerfile: src/ApiGateway/Dockerfile.runtime
+      dockerfile: src/ApiGateway/Dockerfile
     container_name: api-gateway
     ports:
-      - "5000:8080" # HTTP
-      - "7000:8081" # HTTPS
+      - "5000:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:8081;http://+:8080
-      - ASPNETCORE_Kestrel__Certificates__Default__Password=YourSecurePassword123!
-      - ASPNETCORE_Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
-    volumes:
-      - ${USERPROFILE}/.aspnet/https:/https:ro
     depends_on:
       - auth-service
+      - userprofile-service
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Payment Service
+  payment-service:
+    build:
+      context: .
+      dockerfile: src/Services/Payment/Dockerfile
+    container_name: payment-service
+    ports:
+      - "5014:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__PaymentDb=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - Jwt__Secret=your-256-bit-secret-key-here-must-be-at-least-32-characters-long
+      - Jwt__Issuer=skillsnap-api
+      - Jwt__Audience=skillsnap-client
+      - VNPay__TmnCode=YOUR_VNPAY_TMN_CODE
+      - VNPay__HashSecret=YOUR_VNPAY_HASH_SECRET
+      - VNPay__BaseUrl=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+      - VNPay__ReturnUrl=http://localhost:5014/api/payments/return/vnpay
+      - VNPay__IpnUrl=http://localhost:5014/api/payments/webhook/vnpay
+      - MoMo__PartnerCode=YOUR_MOMO_PARTNER_CODE
+      - MoMo__AccessKey=YOUR_MOMO_ACCESS_KEY
+      - MoMo__SecretKey=YOUR_MOMO_SECRET_KEY
+      - MoMo__Endpoint=https://test-payment.momo.vn/v2/gateway/api/create
+      - MoMo__ReturnUrl=http://localhost:5014/api/payments/return/momo
+      - MoMo__IpnUrl=http://localhost:5014/api/payments/webhook/momo
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+      - Services__SubscriptionService=http://subscription-service:8080
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      subscription-service:
+        condition: service_started
     networks:
       - recruitment-network
     restart: on-failure
