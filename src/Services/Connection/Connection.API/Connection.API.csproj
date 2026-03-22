@@ -10,6 +10,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
+  <!-- AutoMapper removed to avoid test runtime issues; mapping done manually -->
   <ItemGroup>
     <ProjectReference Include="..\Connection.Application\Connection.Application.csproj" />
     <ProjectReference Include="..\Connection.Infrastructure\Connection.Infrastructure.csproj" />

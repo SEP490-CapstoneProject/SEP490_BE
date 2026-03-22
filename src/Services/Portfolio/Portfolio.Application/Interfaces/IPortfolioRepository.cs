@@ -1,3 +1,4 @@
+using Portfolio.Application.DTOs;
 using Portfolio.Domain.Entities;
 
 namespace Portfolio.Application.Interfaces;
@@ -14,4 +15,5 @@ public interface IPortfolioRepository
     void AddAsync(Portfolio.Domain.Entities.Portfolio portfolio);
     Task CommitAsync();
     Task<Dictionary<string, BlockType>> GetBlockTypesAsync();
+    Task<(List<PortfolioWithComplimentDto> Items, int Total)> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams);
 }

@@ -1,6 +1,1 @@
-﻿namespace Notification.Application;
-
-public class Class1
-{
-
-}
+// Application layer placeholder

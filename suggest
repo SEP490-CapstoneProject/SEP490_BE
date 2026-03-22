@@ -1,0 +1,225 @@
+# 🎯 TASK: Refine & Harden Payment Service Plan to Production-Grade
+
+## 🧠 Context
+
+You are given an existing **Payment Service implementation plan** (VNPay + MoMo + Payment History + Outbox + Idempotency).
+
+The current plan is already solid, but it is **NOT fully production-ready**.
+
+Your task is to **refine and upgrade the plan** by fixing critical gaps in:
+
+* Idempotency
+* Concurrency
+* Reliability
+* Security
+* Edge cases
+
+⚠️ DO NOT rewrite from scratch.
+✔ Keep existing structure
+✔ Improve and extend where needed
+
+---
+
+# 🔥 REQUIRED IMPROVEMENTS
+
+## 1. Fix Idempotency (CRITICAL)
+
+Current issue:
+
+* Using `TransactionId` is NOT enough
+
+You MUST:
+
+* Generate a true `eventId` from webhook data:
+
+  * hash(raw webhook payload)
+  * OR combination of: provider + orderCode + responseCode + timestamp
+
+* Ensure:
+
+  * duplicate webhook calls are safely ignored
+  * out-of-order events are handled
+
+---
+
+## 2. Add Processing State (CRITICAL)
+
+Current states:
+
+* Pending → Success / Failed ❌
+
+You MUST change to:
+
+* Pending → Processing → Success / Failed
+
+Purpose:
+
+* prevent double-processing
+* enable safe concurrent handling
+
+---
+
+## 3. Prevent Race Conditions (CRITICAL)
+
+Webhook may be called concurrently.
+
+You MUST:
+
+* Ensure update only when:
+
+  * Status = Pending OR Processing
+
+* Add one of:
+
+  * optimistic concurrency (RowVersion)
+  * OR conditional update (WHERE Status = Pending)
+
+---
+
+## 4. Strengthen Webhook Transaction Flow
+
+Update webhook handling to:
+
+1. Validate signature
+2. Generate eventId
+3. Check ProcessedEvents → skip if duplicate
+4. Load Payment by OrderCode
+5. Ensure not already Success
+6. Update → Processing
+7. Update → Success / Failed
+8. Save PaymentHistory (with raw payload)
+9. Insert ProcessedEvent
+10. Insert OutboxEvent
+11. Commit transaction
+
+⚠️ ALL steps must be in ONE DB transaction
+
+---
+
+## 5. Add Retry Strategy for Failures
+
+Current issue:
+
+* If webhook processing fails → data inconsistency
+
+You MUST add:
+
+* Background retry mechanism
+* Logging for failed webhook processing
+* Safe re-processing using idempotency
+
+---
+
+## 6. Improve Outbox Pattern
+
+Enhance OutboxEvents:
+
+Add fields:
+
+* RetryCount
+* NextRetryAt
+
+Implement:
+
+* exponential backoff retry
+* max retry threshold
+* dead-letter handling
+
+---
+
+## 7. Prevent Duplicate Payment Creation
+
+Problem:
+
+* User can spam create payment
+
+You MUST:
+
+* Check existing Pending payment for same user + plan
+* Either:
+
+  * reuse existing payment
+  * OR reject duplicate request
+
+---
+
+## 8. Add Return URL Handling
+
+You MUST add endpoint:
+
+GET /api/payments/return
+
+Rules:
+
+* Used ONLY for UI redirect
+* MUST NOT update payment status
+* Webhook remains source of truth
+
+---
+
+## 9. Add Expiration Logic
+
+You MUST:
+
+* Add "Expired" status
+* Auto-expire Pending payments after X minutes (15–30)
+
+---
+
+## 10. Basic Anti-Fraud Validation
+
+You MUST validate:
+
+* amount matches plan price
+* currency is correct
+* provider response codes are valid
+
+---
+
+# ⚡ OPTIONAL IMPROVEMENTS (RECOMMENDED)
+
+* Add PaymentMethod (QR, ATM, CreditCard)
+* Add index: (Status, CreatedAt)
+* Improve logging (structured logs)
+* Add correlationId for tracing
+
+---
+
+# 🎯 OUTPUT REQUIREMENTS
+
+You must produce:
+
+1. Updated Payment Service Plan (refined version)
+2. Highlighted changes (what was improved)
+3. Updated webhook flow (final version)
+4. Updated data model if needed
+5. Additional fields/tables if required
+
+---
+
+# 🚨 RULES
+
+DO NOT ❌
+
+* Remove existing architecture
+* Break event-driven design
+* Move subscription logic into payment service
+
+DO ✅
+
+* Focus on reliability & correctness
+* Preserve clean architecture
+* Ensure production-readiness
+
+---
+
+# 🏁 GOAL
+
+Final output must be:
+
+> ✅ Production-grade Payment Service
+> ✅ Safe under concurrency
+> ✅ Resilient to webhook retries
+> ✅ Fully auditable and reliable
+
+---
