@@ -1,234 +1,252 @@
-You are a senior .NET backend architect designing a scalable, secure, multi-tenant system.
+# 🎯 TASK: Implement Payment Service (VNPay + MoMo + Payment History)
 
-I am building a Portfolio Service using:
-- ASP.NET Core Web API
-- Entity Framework Core
-- Clean Architecture (Controller → Service → Repository)
-- SQL Server
-- JWT Authentication
+## 🧠 Context
 
-I need to implement a "Compliment" feature (company evaluates portfolios) with strict multi-tenant isolation, flexible querying, and high performance.
+You are building a **Payment Service** for a microservices system (Skillsnap platform).
 
----
+This service handles:
 
-🎯 1. ENTITY DESIGN
+* Payment processing (VNPay, MoMo)
+* Webhook handling
+* Payment history storage
+* Event publishing to Subscription Service
 
-Create Compliment entity:
-
-- Id (int, PK)
-- PortfolioId (FK)
-- CompanyId (FK)
-- State (enum: Pending = 0, Approved = 1, Rejected = 2)
-- Content (nvarchar)
-- Score (int, optional, 1–5)
-- CreatedAt (datetime)
-
-Add:
-- Navigation properties
-- Enum for State
-- CreatedAt default value
+⚠️ DO NOT implement subscription or entitlement logic here.
 
 ---
 
-🎯 2. DATA CONSTRAINTS
+# 🏗️ Architecture
 
-- Each company can only compliment a portfolio ONCE
-→ Add UNIQUE constraint (PortfolioId, CompanyId)
+Flow:
 
----
+1. Client → Payment Service (create payment)
+2. Payment Service → VNPay/MoMo (redirect URL)
+3. User completes payment
+4. VNPay/MoMo → webhook → Payment Service
+5. Payment Service:
 
-🎯 3. MULTI-TENANT SECURITY (CRITICAL)
-
-System must ensure:
-
-- Company ONLY sees its own compliments
-- NEVER expose compliments of other companies
-
-Implement 3-layer protection:
-
-A. Global Query Filter (EF Core)
-- Filter Compliment by CompanyId from current user
-
-B. Service-level validation
-- Prevent update/delete access to other company data
-
-C. Authorization policy
-- Only role "company" can access compliment APIs
+   * verify signature
+   * update payment status
+   * save history
+   * publish `payment.succeeded` event
+6. Subscription Service consumes event
 
 ---
 
-🎯 4. CURRENT USER SERVICE
+# 📦 Data Model
 
-- Create ICurrentUserService
-- Extract CompanyId from JWT claims
-- Use dependency injection (DO NOT manually parse token everywhere)
+## Payment
 
----
-
-🎯 5. GLOBAL QUERY FILTER
-
-- Apply filter on Compliment:
-
-  c => c.CompanyId == currentCompanyId
-
-- Ensure it works automatically in all queries
-- Allow bypass using IgnoreQueryFilters() for admin use
-
----
-
-🎯 6. API DESIGN (SINGLE FLEXIBLE ENDPOINT)
-
-GET /api/portfolios
-
-Query params:
-
-- page
-- pageSize
-- includeCompliments (bool)
-- complimentState (enum)
-- hasCompliment (bool)
+* Id (GUID)
+* UserId (int)
+* PlanId (int)
+* Amount (decimal)
+* Currency (string, default "VND")
+* Provider (VNPAY | MOMO)
+* Status (Pending, Success, Failed, Cancelled)
+* PaymentUrl (string)
+* TransactionId (string, from provider)
+* OrderCode (string, internal)
+* CreatedAt (datetime)
+* PaidAt (datetime?)
 
 ---
 
-🎯 7. BUSINESS LOGIC
+## PaymentHistory (MUST HAVE)
 
-IMPORTANT: ALL compliment logic MUST use companyId
-
-A. hasCompliment:
-
-- true:
-  → portfolios where EXISTS compliment by this company
-
-- false:
-  → portfolios where NOT EXISTS compliment by this company
-
-B. complimentState:
-
-→ portfolios where:
-   EXISTS compliment by this company AND state matches
-
-C. includeCompliments:
-
-- true → include compliments in response
-- false → do NOT include compliments
+* Id (GUID)
+* PaymentId (FK)
+* OldStatus (string)
+* NewStatus (string)
+* Action (Created, WebhookReceived, Success, Failed)
+* RawData (JSON string from provider)
+* CreatedAt (datetime)
 
 ---
 
-🎯 8. QUERY IMPLEMENTATION
+## ProcessedEvent (Idempotency)
 
-- DO NOT use Include()
-- Use projection (Select)
-- Filter at database level
-
-Examples:
-
-- Filter:
-  p.Compliments.Any(c => c.CompanyId == companyId)
-
-- Mapping:
-  Only map compliments when includeCompliments = true
+* EventId (string, PK)
+* ProcessedAt (datetime)
 
 ---
 
-🎯 9. DTO DESIGN
+# 🔌 Provider Abstraction
 
-PortfolioDto:
-- Id
-- Title
-- ...
-- Compliments (optional)
+Create interface:
 
-ComplimentDto:
-- Id
-- Content
-- State
-- Score
+```csharp
+public interface IPaymentProvider
+{
+    Task<string> CreatePaymentAsync(Payment payment);
+    Task<PaymentResult> HandleWebhookAsync(IQueryCollection query);
+}
+```
 
----
+Implement:
 
-🎯 10. PAGINATION
-
-- Apply Skip/Take AFTER filtering
-- Return total count
+* VnPayProvider
+* MoMoProvider
 
 ---
 
-🎯 11. PERFORMANCE OPTIMIZATION
+# ⚡ API Endpoints
 
-Indexes:
+## Create Payment
 
-- IX_Compliment_Portfolio_Company (PortfolioId, CompanyId)
-- IX_Compliment_Portfolio_Company_State (PortfolioId, CompanyId, State)
+POST /api/payments/create
 
-Avoid:
-- N+1 queries
-- Loading unnecessary data
+Request:
+{
+"planId": 2,
+"provider": "VNPAY"
+}
 
----
+Response:
+{
+"paymentUrl": "https://..."
+}
 
-🎯 12. AGGREGATE FIELDS (RECOMMENDED)
+Rules:
 
-Add to Portfolio:
-
-- ComplimentCount
-- ApprovedComplimentCount
-- AverageScore
-
-Use for fast filtering and sorting
-
----
-
-🎯 13. PERMISSION ENFORCEMENT
-
-- Validate CompanyId in service layer before update/delete
-- Throw ForbiddenException if mismatch
-- Ensure no data leakage across tenants
+* Get price from DB (NOT from client)
+* Create Payment (status = Pending)
+* Return provider payment URL
 
 ---
 
-🎯 14. BONUS FEATURES
+## Webhook Endpoints
 
-- Scoring system (1–5 stars)
-- Sorting portfolios by:
-  + score
-  + compliment count
-- Admin mode using IgnoreQueryFilters()
+POST /api/payments/webhook/vnpay
+POST /api/payments/webhook/momo
 
 ---
 
-🎯 15. OUTPUT REQUIRED
+# 🔁 Webhook Processing (CRITICAL)
 
-Generate:
+Steps:
 
-- Entity classes
-- Enum
-- DbContext configuration (with global query filter)
-- Migration (indexes + unique constraint)
-- CurrentUserService
-- Repository interface + implementation
-- Service layer
-- Controller endpoints
-- DTOs
-- LINQ query implementing:
-  + includeCompliments
-  + hasCompliment
-  + complimentState
-  + pagination
+1. Validate signature (MANDATORY)
+
+   * VNPay: hash secret key
+   * MoMo: HMAC SHA256
+
+2. Idempotency check:
+
+   * If eventId already processed → return
+
+3. Find Payment by OrderCode
+
+4. Update status:
+
+   * Pending → Success / Failed
+
+5. Save PaymentHistory:
+
+   * store raw webhook payload
+
+6. Publish event:
+
+   * payment.succeeded (only when success)
 
 ---
 
-🎯 16. CODE QUALITY
+# 📡 Event Contract
 
-- Clean, readable, production-ready
-- Follow SOLID principles
-- Avoid duplicated logic
-- Optimize for large-scale systems
+Publish:
+
+{
+"eventType": "payment.succeeded",
+"eventId": "evt_unique",
+"userId": 123,
+"planId": 2,
+"paymentId": "guid",
+"amount": 99000,
+"provider": "VNPAY",
+"timestamp": "..."
+}
 
 ---
 
-🚨 IMPORTANT RULES:
+# 📊 Payment History APIs
 
-- ALWAYS filter Compliment by CompanyId
-- NEVER expose other companies’ data
-- DO NOT break existing Portfolio API response shape
-- DO NOT use Include() for this feature
+## User
+
+GET /api/payments/my-history
+
+Return:
+
+* planName
+* amount
+* status
+* provider
+* paidAt
+
+---
+
+## Admin
+
+GET /api/admin/payments
+
+Support filters:
+
+* userId
+* status
+* date range
+
+---
+
+# ⚠️ Critical Rules
+
+DO NOT ❌
+
+* Trust client price
+* Skip signature validation
+* Skip idempotency
+* Ignore webhook retries
+* Skip saving raw webhook data
+* Directly activate subscription (use event)
+
+DO ✅
+
+* Always verify provider signature
+* Always use DB price
+* Store full payment history
+* Publish event via outbox pattern
+* Handle duplicate webhook calls safely
+
+---
+
+# 🚀 Implementation Phases
+
+Phase 1:
+
+* Entities + DB + migration
+
+Phase 2:
+
+* VNPay integration
+
+Phase 3:
+
+* MoMo integration
+
+Phase 4:
+
+* Webhook + history + idempotency
+
+Phase 5:
+
+* Event publishing (RabbitMQ + Outbox)
+
+---
+
+# 🎯 Expected Outcome
+
+* Fully working Payment Service
+* VNPay + MoMo supported
+* Reliable webhook handling
+* Complete payment history
+* Integrated with Subscription Service via events
+
+---
