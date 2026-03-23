@@ -1,7 +1,9 @@
 using Company.Application.Clients;
 using Company.Application.Interfaces;
 using Company.Application.Services;
+using Company.Infrastructure.Azure;
 using Company.Infrastructure.Clients;
+using Company.Infrastructure.Configuration;
 using Company.Infrastructure.Data;
 using Company.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,6 +12,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddAzureKeyVault();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

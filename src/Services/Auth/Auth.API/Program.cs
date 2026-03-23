@@ -1,6 +1,8 @@
 using Auth.Application.Interfaces;
 using Auth.Application.Services;
+using Auth.Infrastructure.Azure;
 using Auth.Infrastructure.Clients;
+using Auth.Infrastructure.Configuration;
 using Auth.Infrastructure.Data;
 using Auth.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -11,6 +13,9 @@ using RecruitmentPlatform.Common;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // Add services to the container
 builder.Services.AddControllers();
