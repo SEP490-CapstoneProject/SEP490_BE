@@ -66,6 +66,7 @@ public class OutboxProcessorService : BackgroundService
                     root.GetProperty("paymentId").GetGuid(),
                     root.GetProperty("userId").GetInt32(),
                     root.GetProperty("planId").GetInt32(),
+                    root.GetProperty("subscriptionId").GetInt32(),  // Added!
                     root.GetProperty("amount").GetDecimal(),
                     root.GetProperty("provider").GetString() ?? ""
                 );

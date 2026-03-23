@@ -163,6 +163,7 @@ public class WebhookHandler : IWebhookHandler
                         paymentId = payment.Id,
                         userId = payment.UserId,
                         planId = payment.PlanId,
+                        subscriptionId = payment.SubscriptionId,  // Added!
                         amount = payment.Amount,
                         provider = payment.Provider.ToString(),
                         timestamp = DateTime.UtcNow

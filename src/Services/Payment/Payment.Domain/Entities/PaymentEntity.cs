@@ -7,6 +7,7 @@ public class PaymentEntity
     public Guid Id { get; set; }
     public int UserId { get; set; }
     public int PlanId { get; set; }
+    public int SubscriptionId { get; set; }  // Links to Subscription Service
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "VND";
     public PaymentProvider Provider { get; set; }

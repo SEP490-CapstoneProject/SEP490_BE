@@ -56,6 +56,15 @@ public class SubscriptionService : ISubscriptionService
             throw new InvalidOperationException("User already has an active subscription. Use upgrade instead.");
         }
 
+        // Check for existing pending subscription for same plan
+        var pendingSubscription = await _subscriptionRepository.GetPendingByUserAndPlanAsync(userId, request.PlanId);
+        if (pendingSubscription != null)
+        {
+            _logger.LogInformation("Returning existing pending subscription {SubscriptionId} for user {UserId}", 
+                pendingSubscription.Id, userId);
+            return MapToSubscriptionDto(pendingSubscription, plan.Name);
+        }
+
         var subscription = new UserSubscription
         {
             UserId = userId,
@@ -70,12 +79,11 @@ public class SubscriptionService : ISubscriptionService
         };
 
         subscription = await _subscriptionRepository.CreateAsync(subscription);
-        _logger.LogInformation("Created subscription {SubscriptionId} for user {UserId}, plan {PlanId}", 
+        _logger.LogInformation("Created subscription {SubscriptionId} for user {UserId}, plan {PlanId}. Awaiting payment.", 
             subscription.Id, userId, request.PlanId);
 
-        // In production: Call Payment Service here
-        // For MVP: simulate immediate payment success
-        await ActivateSubscriptionAsync(subscription.Id, $"mock_payment_{subscription.Id}");
+        // NOTE: No longer auto-activating! User must call Payment Service with this SubscriptionId
+        // Payment Service webhook will send event to activate this subscription
 
         return MapToSubscriptionDto(subscription, plan.Name);
     }

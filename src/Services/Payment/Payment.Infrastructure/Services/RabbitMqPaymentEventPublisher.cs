@@ -19,7 +19,7 @@ public class RabbitMqPaymentEventPublisher : IPaymentEventPublisher
         _logger = logger;
     }
 
-    public async Task PublishPaymentSucceededAsync(Guid paymentId, int userId, int planId, decimal amount, string provider)
+    public async Task PublishPaymentSucceededAsync(Guid paymentId, int userId, int planId, int subscriptionId, decimal amount, string provider)
     {
         var paymentEvent = new PaymentSucceededEvent
         {
@@ -27,6 +27,7 @@ public class RabbitMqPaymentEventPublisher : IPaymentEventPublisher
             PaymentId = paymentId,
             UserId = userId,
             PlanId = planId,
+            SubscriptionId = subscriptionId,  // Added!
             Amount = amount,
             Provider = provider,
             Timestamp = DateTime.UtcNow
