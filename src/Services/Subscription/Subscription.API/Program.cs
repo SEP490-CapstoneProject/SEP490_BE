@@ -58,7 +58,10 @@ builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
 // Add Services
 builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
 builder.Services.AddScoped<IRabbitMQPublisher, RabbitMQPublisher>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<AnalyticsService>();
 
 // Add Metrics
 builder.Services.AddSingleton<SubscriptionMetrics>();
@@ -86,7 +89,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+// Add Authorization Policies
+// Role-based policies to control access to endpoints
+// AdminOnly: Requires user to have "Admin" role in JWT token
+// UserOnly: Requires user to have "User" role in JWT token
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => 
+        policy.RequireRole("Admin"));
+    
+    options.AddPolicy("UserOnly", policy => 
+        policy.RequireRole("User"));
+});
 
 var app = builder.Build();
 

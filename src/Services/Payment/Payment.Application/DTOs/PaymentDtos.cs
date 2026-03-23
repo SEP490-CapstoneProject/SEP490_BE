@@ -5,6 +5,7 @@ namespace Payment.Application.DTOs;
 public class CreatePaymentRequest
 {
     public int PlanId { get; set; }
+    public int SubscriptionId { get; set; }  // Required: ID of pending subscription
     public PaymentProvider Provider { get; set; }
 }
 
@@ -20,6 +21,7 @@ public class PaymentDto
     public Guid Id { get; set; }
     public int UserId { get; set; }
     public int PlanId { get; set; }
+    public int SubscriptionId { get; set; }
     public string? PlanName { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "VND";

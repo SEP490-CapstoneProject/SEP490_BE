@@ -61,6 +61,7 @@ public class PaymentService : IPaymentService
             Id = Guid.NewGuid(),
             UserId = userId,
             PlanId = request.PlanId,
+            SubscriptionId = request.SubscriptionId,  // Store subscription reference
             Amount = planInfo.Value.price,
             Currency = "VND",
             Provider = request.Provider,
@@ -144,6 +145,7 @@ public class PaymentService : IPaymentService
             Id = payment.Id,
             UserId = payment.UserId,
             PlanId = payment.PlanId,
+            SubscriptionId = payment.SubscriptionId,
             Amount = payment.Amount,
             Currency = payment.Currency,
             Provider = payment.Provider.ToString(),
