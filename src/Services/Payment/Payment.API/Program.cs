@@ -5,6 +5,8 @@ using Microsoft.OpenApi.Models;
 using Payment.Application.Interfaces;
 using Payment.Application.Services;
 using Payment.Domain.Interfaces;
+using Payment.Infrastructure.Azure;
+using Payment.Infrastructure.Configuration;
 using Payment.Infrastructure.Data;
 using Payment.Infrastructure.Providers.MoMo;
 using Payment.Infrastructure.Providers.VNPay;
@@ -14,6 +16,9 @@ using RabbitMQ.Client;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault (works in Azure with Managed Identity, skips if not configured)
+builder.Configuration.AddAzureKeyVault();
 
 // Database
 builder.Services.AddDbContext<PaymentDbContext>(options =>
@@ -62,6 +67,19 @@ builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublis
 // Background Services
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<PaymentExpirationService>();
+
+// Validate required secrets in Production
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Configuration.ValidateRequiredSecrets(
+        "Jwt:Secret",
+        "VNPay:TmnCode",
+        "VNPay:HashSecret",
+        "MoMo:PartnerCode",
+        "MoMo:AccessKey",
+        "MoMo:SecretKey"
+    );
+}
 
 // JWT Authentication
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");

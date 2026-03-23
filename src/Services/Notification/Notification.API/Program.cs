@@ -7,12 +7,16 @@ using Notification.API.Hubs;
 using Notification.API.Services;
 using Notification.Application.Interfaces;
 using Notification.Application.Services;
+using Notification.Infrastructure.Azure;
 using Notification.Infrastructure.Clients;
+using Notification.Infrastructure.Configuration;
 using Notification.Infrastructure.Data;
 using Notification.Infrastructure.Messaging;
 using Notification.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddAzureKeyVault();
 
 var jwtKey = builder.Configuration["JwtSettings:SecretKey"] ?? "default-secret-key-32-characters!";
 var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "SkillSnapAuth";

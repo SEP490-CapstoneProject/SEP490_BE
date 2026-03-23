@@ -8,12 +8,17 @@ using Subscription.API.Middleware;
 using Subscription.Application.Interfaces;
 using Subscription.Application.Metrics;
 using Subscription.Application.Services;
+using Subscription.Infrastructure.Azure;
+using Subscription.Infrastructure.Configuration;
 using Subscription.Infrastructure.Data;
 using Subscription.Infrastructure.Messaging;
 using Subscription.Infrastructure.Repositories;
 using Subscription.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // Add services
 builder.Services.AddControllers();
