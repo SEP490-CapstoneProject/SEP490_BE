@@ -5,11 +5,16 @@ using Community.Application.Services;
 using Community.Infrastructure.Clients;
 using Community.Infrastructure.Data;
 using Community.Infrastructure.Repositories;
+using Community.Infrastructure.Azure;
+using Community.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // Add services
 builder.Services.AddControllers();

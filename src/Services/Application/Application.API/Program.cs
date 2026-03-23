@@ -1,6 +1,8 @@
 using Application.Application.Interfaces;
 using Application.Application.Services;
+using Application.Infrastructure.Azure;
 using Application.Infrastructure.Clients;
+using Application.Infrastructure.Configuration;
 using Application.Infrastructure.Data;
 using Application.Infrastructure.Repositories;
 using Application.Infrastructure.Services;
@@ -13,6 +15,9 @@ using StackExchange.Redis;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
