@@ -1,0 +1,41 @@
+### Interview API examples
+
+POST http://localhost:5080/api/interview
+Content-Type: application/json
+
+{
+  "applicationId": 1,
+  "date": "2026-04-01",
+  "time": "09:00:00",
+  "round": 1,
+  "type": "Phone",
+  "platform": "Zoom",
+  "link": "https://zoom.us/..",
+  "building": "HQ",
+  "room": "101",
+  "status": "SCHEDULED",
+  "interviewerName": "John Doe"
+}
+
+GET http://localhost:5080/api/interview
+
+GET http://localhost:5080/api/interview/1
+
+PUT http://localhost:5080/api/interview/1
+Content-Type: application/json
+
+{
+  "applicationId": 1,
+  "date": "2026-04-02",
+  "time": "10:00:00",
+  "round": 1,
+  "type": "Onsite",
+  "platform": "",
+  "link": "",
+  "building": "HQ",
+  "room": "102",
+  "status": "RESCHEDULED",
+  "interviewerName": "John Doe"
+}
+
+DELETE http://localhost:5080/api/interview/1
