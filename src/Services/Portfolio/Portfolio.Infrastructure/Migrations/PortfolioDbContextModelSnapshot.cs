@@ -35,12 +35,12 @@ namespace Portfolio.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<bool>("IsMultiple")
+                    b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
-                    b.Property<bool>("IsActive")
+                    b.Property<bool>("IsMultiple")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
@@ -57,72 +57,130 @@ namespace Portfolio.Infrastructure.Migrations
                         {
                             Id = 1,
                             Code = "INTRO",
-                            IsMultiple = false,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = false
                         },
                         new
                         {
                             Id = 2,
                             Code = "SKILL",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 3,
                             Code = "EDUCATION",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 4,
                             Code = "DIPLOMA",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 5,
                             Code = "EXPERIMENT",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 6,
                             Code = "PROJECT",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 7,
                             Code = "AWARD",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 8,
                             Code = "ACTIVITIES",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 9,
                             Code = "OTHERINFO",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         },
                         new
                         {
                             Id = 10,
                             Code = "REFERENCE",
-                            IsMultiple = true,
-                            IsActive = true
+                            IsActive = true,
+                            IsMultiple = true
                         });
+                });
+
+            modelBuilder.Entity("Portfolio.Domain.Entities.Compliment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PortfolioId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<int>("State")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PortfolioId", "CompanyId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Compliment_Portfolio_Company_Active")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PortfolioId", "CompanyId", "State")
+                        .HasDatabaseName("IX_Compliment_Portfolio_Company_State");
+
+                    b.ToTable("Compliment", (string)null);
                 });
 
             modelBuilder.Entity("Portfolio.Domain.Entities.Portfolio", b =>
@@ -132,6 +190,19 @@ namespace Portfolio.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApprovedComplimentCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<decimal?>("AverageScore")
+                        .HasColumnType("decimal(3,2)");
+
+                    b.Property<int>("ComplimentCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -207,6 +278,17 @@ namespace Portfolio.Infrastructure.Migrations
                     b.ToTable("PortfolioBlock", (string)null);
                 });
 
+            modelBuilder.Entity("Portfolio.Domain.Entities.Compliment", b =>
+                {
+                    b.HasOne("Portfolio.Domain.Entities.Portfolio", "Portfolio")
+                        .WithMany("Compliments")
+                        .HasForeignKey("PortfolioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Portfolio");
+                });
+
             modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioBlock", b =>
                 {
                     b.HasOne("Portfolio.Domain.Entities.BlockType", "BlockType")
@@ -234,6 +316,8 @@ namespace Portfolio.Infrastructure.Migrations
             modelBuilder.Entity("Portfolio.Domain.Entities.Portfolio", b =>
                 {
                     b.Navigation("Blocks");
+
+                    b.Navigation("Compliments");
                 });
 #pragma warning restore 612, 618
         }

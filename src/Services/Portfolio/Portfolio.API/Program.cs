@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Portfolio.Infrastructure.Data;
+using Portfolio.Infrastructure.Azure;
+using Portfolio.Infrastructure.Configuration;
 using Portfolio.Application.Interfaces;
 using Portfolio.Application.Services;
 using Portfolio.Infrastructure.Repositories;
@@ -11,6 +13,9 @@ using Portfolio.Infrastructure.Services;
 using Portfolio.Application.BlockHandlers;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // Add MVC + Swagger
 builder.Services.AddControllers();
@@ -78,18 +83,25 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CompanyOnly", policy => policy.RequireRole("company"));
+});
 
 // Repositories
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPortfolioRepository, PortfolioRepository>();
 builder.Services.AddScoped<IBlockRepository, BlockRepository>();
 builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
+builder.Services.AddScoped<IComplimentRepository, ComplimentRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<IBlockService, BlockService>();
 builder.Services.AddScoped<BlockService>(); // concrete registration for PortfolioController
 builder.Services.AddScoped<IBlockTypeService, BlockTypeService>();
+builder.Services.AddScoped<IComplimentService, ComplimentService>();
 
 // Block Handlers
 builder.Services.AddScoped<IBlockHandler, IntroBlockHandler>();

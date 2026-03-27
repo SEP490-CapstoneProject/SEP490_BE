@@ -6,8 +6,13 @@ using UserProfile.Application.Interfaces;
 using UserProfile.Application.Services;
 using UserProfile.Infrastructure.Data;
 using UserProfile.Infrastructure.Repositories;
+using UserProfile.Infrastructure.Azure;
+using UserProfile.Infrastructure.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault (works in Azure with Managed Identity, skips if not configured)
+builder.Configuration.AddAzureKeyVault();
 
 // Add services
 builder.Services.AddControllers();
