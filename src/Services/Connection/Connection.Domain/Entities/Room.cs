@@ -6,7 +6,7 @@ public class Room : BaseEntity
 {
     public int ConnectionId { get; set; }
     public DateTime CreatedAt { get; set; }
-    public DateTime LastMessAt { get; set; }
+    public DateTime? LastMessAt { get; set; }
 
     // Navigation properties
     public virtual Connection? Connection { get; set; }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Community.Application.DTOs;
 using Community.Application.Interfaces;
 using Community.Domain.Entities;
 using Community.Infrastructure.Data;
@@ -14,7 +15,58 @@ public class CommunityRepository : ICommunityRepository
         _context = context;
     }
 
-    // CommunityPost operations
+    // ─── Feed (N+1-free, cursor-based) ───────────────────────────────────────
+
+    public async Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize)
+    {
+        IQueryable<CommunityPost> query = _context.CommunityPosts
+            .Where(p => p.Status == 1)
+            .Include(p => p.Media);
+
+        if (cursor.HasValue)
+            query = query.Where(p => p.Id < cursor.Value);
+
+        return await query
+            .OrderByDescending(p => p.Id)
+            .Take(pageSize)
+            .ToListAsync();
+    }
+
+    public async Task<FeedCountsResult> GetFeedCountsAsync(List<int> postIds, int? currentUserId)
+    {
+        // All 3 queries run in parallel
+        var commentTask = _context.Comments
+            .Where(c => postIds.Contains(c.CommunityPostId))
+            .GroupBy(c => c.CommunityPostId)
+            .Select(g => new { PostId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var favoriteTask = currentUserId.HasValue
+            ? _context.CommunityPostFavorites
+                .Where(f => f.UserId == currentUserId.Value && postIds.Contains(f.CommunityPostId))
+                .Select(f => f.CommunityPostId)
+                .ToListAsync()
+            : Task.FromResult(new List<int>());
+
+        var saveTask = currentUserId.HasValue
+            ? _context.CommunityPostSaves
+                .Where(s => s.UserId == currentUserId.Value && postIds.Contains(s.CommunityPostId))
+                .Select(s => s.CommunityPostId)
+                .ToListAsync()
+            : Task.FromResult(new List<int>());
+
+        await Task.WhenAll(commentTask, favoriteTask, saveTask);
+
+        return new FeedCountsResult
+        {
+            CommentCounts = commentTask.Result.ToDictionary(x => x.PostId, x => x.Count),
+            FavoritedPostIds = new HashSet<int>(favoriteTask.Result),
+            SavedPostIds = new HashSet<int>(saveTask.Result)
+        };
+    }
+
+    // ─── CommunityPost operations ─────────────────────────────────────────────
+
     public async Task<CommunityPost?> GetPostByIdAsync(int id)
     {
         return await _context.CommunityPosts
@@ -64,7 +116,8 @@ public class CommunityRepository : ICommunityRepository
         }
     }
 
-    // Save/Favorite operations
+    // ─── Save/Favorite operations ─────────────────────────────────────────────
+
     public async Task<bool> SavePostAsync(int postId, int userId)
     {
         var existing = await _context.CommunityPostSaves
@@ -106,12 +159,8 @@ public class CommunityRepository : ICommunityRepository
             UserId = userId
         });
 
-        // Increment favorite count
         var post = await _context.CommunityPosts.FindAsync(postId);
-        if (post != null)
-        {
-            post.FavoriteCount++;
-        }
+        if (post != null) post.FavoriteCount++;
 
         await _context.SaveChangesAsync();
         return true;
@@ -126,12 +175,8 @@ public class CommunityRepository : ICommunityRepository
 
         _context.CommunityPostFavorites.Remove(favorite);
 
-        // Decrement favorite count
         var post = await _context.CommunityPosts.FindAsync(postId);
-        if (post != null && post.FavoriteCount > 0)
-        {
-            post.FavoriteCount--;
-        }
+        if (post != null && post.FavoriteCount > 0) post.FavoriteCount--;
 
         await _context.SaveChangesAsync();
         return true;
@@ -157,7 +202,8 @@ public class CommunityRepository : ICommunityRepository
             .ToListAsync();
     }
 
-    // Comment operations
+    // ─── Comment operations ───────────────────────────────────────────────────
+
     public async Task<Comment> AddCommentAsync(Comment comment)
     {
         _context.Comments.Add(comment);
@@ -169,9 +215,24 @@ public class CommunityRepository : ICommunityRepository
     {
         return await _context.Comments
             .Where(c => c.CommunityPostId == postId)
-            .Include(c => c.Replies)
-            .OrderByDescending(c => c.CreatedAt)
+            .OrderBy(c => c.CreatedAt)
             .ToListAsync();
+    }
+
+    public async Task<IEnumerable<ReplyComment>> GetRepliesByCommentIdsAsync(List<int> commentIds)
+    {
+        return await _context.ReplyComments
+            .Where(r => commentIds.Contains(r.CommentId))
+            .OrderBy(r => r.CreatedAt)
+            .ToListAsync();
+    }
+
+    public async Task<int?> GetCommentOwnerAsync(int commentId)
+    {
+        return await _context.Comments
+            .Where(c => c.Id == commentId)
+            .Select(c => (int?)c.UserId)
+            .FirstOrDefaultAsync();
     }
 
     public async Task DeleteCommentAsync(int id)
@@ -184,7 +245,8 @@ public class CommunityRepository : ICommunityRepository
         }
     }
 
-    // Reply operations
+    // ─── Reply operations ─────────────────────────────────────────────────────
+
     public async Task<ReplyComment> AddReplyAsync(ReplyComment reply)
     {
         _context.ReplyComments.Add(reply);
@@ -200,6 +262,14 @@ public class CommunityRepository : ICommunityRepository
             .ToListAsync();
     }
 
+    public async Task<int?> GetReplyOwnerAsync(int replyId)
+    {
+        return await _context.ReplyComments
+            .Where(r => r.Id == replyId)
+            .Select(r => (int?)r.UserId)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task DeleteReplyAsync(int id)
     {
         var reply = await _context.ReplyComments.FindAsync(id);
@@ -210,7 +280,8 @@ public class CommunityRepository : ICommunityRepository
         }
     }
 
-    // Media operations
+    // ─── Media operations ─────────────────────────────────────────────────────
+
     public async Task<CommunityPostMedia> AddMediaAsync(CommunityPostMedia media)
     {
         _context.CommunityPostMedia.Add(media);

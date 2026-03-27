@@ -1,5 +1,7 @@
 using Media.API.Models;
 using Media.API.Services;
+using Media.API.Azure;
+using Media.API.Configuration;
 using DotNetEnv;
 
 // Load environment variables from .env.local
@@ -10,6 +12,9 @@ if (File.Exists(envPath))
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // Configure Kestrel to allow large file uploads (150MB)
 builder.WebHost.ConfigureKestrel(serverOptions =>

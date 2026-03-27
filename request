@@ -1,363 +1,252 @@
-You are a senior .NET architect.
-Refactor an existing ASP.NET Core Portfolio microservice to support dynamic block storage using JSON instead of many relational tables.
+# 🎯 TASK: Implement Payment Service (VNPay + MoMo + Payment History)
 
-The current system has many tables like:
+## 🧠 Context
 
-Intro
+You are building a **Payment Service** for a microservices system (Skillsnap platform).
 
-Skill
+This service handles:
 
-Education
+* Payment processing (VNPay, MoMo)
+* Webhook handling
+* Payment history storage
+* Event publishing to Subscription Service
 
-Diploma
+⚠️ DO NOT implement subscription or entitlement logic here.
 
-Experience
+---
 
-Project
-
-Award
-
-Activities
-
-OtherInfo
-
-Reference
-
-Each block type currently has its own table.
-
-We want to replace all these tables with a single flexible JSON storage model that:
-
-Allows adding new block types without DB schema changes
-
-Works well with AI processing later
-
-Supports vector search in the future
-
-Keeps current API behavior
-
-TARGET ARCHITECTURE
-
-Instead of multiple content tables, we will store all block data inside PortfolioBlock.DataJson.
-
-New structure:
-
-Portfolio
- └── PortfolioBlock
-        └── DataJson (JSON)
-NEW DATABASE SCHEMA
-
-Keep:
-
-Portfolio
-BlockType
-PortfolioBlock
-
-Remove these tables:
-
-Intro
-Skill
-Education
-Diploma
-Experience
-Project
-ProjectLink
-Award
-Activities
-OtherInfo
-Reference
-Portfolio Table
-Portfolio
----------
-Id
-EmployeeId
-Name
-Status
-CreatedAt
-UpdatedAt
-BlockType Table
-BlockType
----------
-Id
-Code
-IsMultiple
-
-Example data:
-
-INTRO
-SKILL
-EDUCATION
-DIPLOMA
-EXPERIMENT
-PROJECT
-AWARD
-ACTIVITIES
-OTHERINFO
-REFERENCE
-PortfolioBlock Table
-PortfolioBlock
----------------
-Id
-PortfolioId
-BlockTypeId
-Variant
-DisplayOrder
-IsVisible
-DataJson NVARCHAR(MAX)
-
-Important:
-
-DataJson stores the entire block data
-
-Example stored JSON for SKILL:
-
-[
-  { "name": "React" },
-  { "name": "TypeScript" }
-]
-
-Example INTRO:
-
-{
-  "avatar": "...",
-  "name": "John Doe",
-  "studyField": "Frontend Developer",
-  "email": "...",
-  "phone": "..."
-}
-
-Example PROJECT:
-
-[
- {
-   "name": "Banking App",
-   "image": "...",
-   "role": "Frontend",
-   "technology": "React Native",
-   "links":[
-     { "type":"github","link":"..." }
-   ]
- }
-]
-DB CONTEXT CHANGES
-
-Modify PortfolioDbContext.
-
-Remove DbSets:
-
-Intro
-Skill
-Education
-Diploma
-Experience
-Project
-ProjectLink
-Award
-Activities
-OtherInfo
-Reference
-
-Add property:
-
-modelBuilder.Entity<PortfolioBlock>()
-    .Property(x => x.DataJson)
-    .HasColumnType("NVARCHAR(MAX)");
-ENTITY CHANGE
-
-Update PortfolioBlock.
-
-Old:
-
-public Intro? Intro {get;set;}
-public ICollection<Skill> Skills
-...
-
-Remove all navigation collections.
-
-New entity:
-
-public class PortfolioBlock
-{
-    public int Id { get; set; }
-
-    public int PortfolioId { get; set; }
-
-    public int BlockTypeId { get; set; }
-
-    public string Variant { get; set; } = string.Empty;
-
-    public int DisplayOrder { get; set; }
-
-    public bool IsVisible { get; set; } = true;
-
-    public string DataJson { get; set; } = "{}";
-
-    public Portfolio Portfolio { get; set; } = null!;
-
-    public BlockType BlockType { get; set; } = null!;
-}
-API REQUEST FORMAT
-
-Controller still receives:
-
-multipart/form-data
-
-Fields:
-
-portfolioJson
-files[]
-
-Example JSON:
-
-{
-  "userId":2,
-  "name":"My Portfolio",
-  "blocks":[
-    {
-      "type":"INTRO",
-      "variant":"INTROONE",
-      "order":1,
-      "data":{
-        "avatarKey":"avatar_main",
-        "name":"John"
-      }
-    },
-    {
-      "type":"SKILL",
-      "variant":"SKILLONE",
-      "order":2,
-      "data":[
-        { "name":"React"},
-        { "name":"Node"}
-      ]
-    }
-  ]
-}
-FILE UPLOAD HANDLING
-
-Files are sent as:
-
-files[avatar_main]
-files[project_img1]
-
-Controller builds dictionary:
-
-Dictionary<string,IFormFile> fileMap
-
-Handlers read key from JSON:
-
-avatarKey
-imageKey
-
-Upload using existing IMediaService.
-
-Replace key with returned URL inside JSON.
-
-SERVICE IMPLEMENTATION
-
-Keep BlockHandler pattern.
-
-Handlers no longer create database entities.
-
-Handlers now:
-
-1 Deserialize JsonElement
-2 Upload files if needed
-3 Replace keys with URLs
-4 Serialize back to JSON
-5 Assign to block.DataJson
-
-Example:
-
-block.DataJson = JsonSerializer.Serialize(processedData);
-TRANSACTION RULE
-
-PortfolioService must use:
-
-TransactionScope
+# 🏗️ Architecture
 
 Flow:
 
-1 Begin transaction
-2 Create Portfolio
-3 For each block
-4   Validate block type
-5   Call handler
-6 SaveChangesAsync()
-7 Complete transaction
+1. Client → Payment Service (create payment)
+2. Payment Service → VNPay/MoMo (redirect URL)
+3. User completes payment
+4. VNPay/MoMo → webhook → Payment Service
+5. Payment Service:
 
-Only ONE SaveChangesAsync() allowed.
+   * verify signature
+   * update payment status
+   * save history
+   * publish `payment.succeeded` event
+6. Subscription Service consumes event
 
-API RESPONSE
+---
 
-Return created portfolio.
+# 📦 Data Model
 
-Example:
+## Payment
+
+* Id (GUID)
+* UserId (int)
+* PlanId (int)
+* Amount (decimal)
+* Currency (string, default "VND")
+* Provider (VNPAY | MOMO)
+* Status (Pending, Success, Failed, Cancelled)
+* PaymentUrl (string)
+* TransactionId (string, from provider)
+* OrderCode (string, internal)
+* CreatedAt (datetime)
+* PaidAt (datetime?)
+
+---
+
+## PaymentHistory (MUST HAVE)
+
+* Id (GUID)
+* PaymentId (FK)
+* OldStatus (string)
+* NewStatus (string)
+* Action (Created, WebhookReceived, Success, Failed)
+* RawData (JSON string from provider)
+* CreatedAt (datetime)
+
+---
+
+## ProcessedEvent (Idempotency)
+
+* EventId (string, PK)
+* ProcessedAt (datetime)
+
+---
+
+# 🔌 Provider Abstraction
+
+Create interface:
+
+```csharp
+public interface IPaymentProvider
+{
+    Task<string> CreatePaymentAsync(Payment payment);
+    Task<PaymentResult> HandleWebhookAsync(IQueryCollection query);
+}
+```
+
+Implement:
+
+* VnPayProvider
+* MoMoProvider
+
+---
+
+# ⚡ API Endpoints
+
+## Create Payment
+
+POST /api/payments/create
+
+Request:
+{
+"planId": 2,
+"provider": "VNPAY"
+}
+
+Response:
+{
+"paymentUrl": "https://..."
+}
+
+Rules:
+
+* Get price from DB (NOT from client)
+* Create Payment (status = Pending)
+* Return provider payment URL
+
+---
+
+## Webhook Endpoints
+
+POST /api/payments/webhook/vnpay
+POST /api/payments/webhook/momo
+
+---
+
+# 🔁 Webhook Processing (CRITICAL)
+
+Steps:
+
+1. Validate signature (MANDATORY)
+
+   * VNPay: hash secret key
+   * MoMo: HMAC SHA256
+
+2. Idempotency check:
+
+   * If eventId already processed → return
+
+3. Find Payment by OrderCode
+
+4. Update status:
+
+   * Pending → Success / Failed
+
+5. Save PaymentHistory:
+
+   * store raw webhook payload
+
+6. Publish event:
+
+   * payment.succeeded (only when success)
+
+---
+
+# 📡 Event Contract
+
+Publish:
 
 {
-  "id": 12,
-  "name": "My Portfolio",
-  "blocks":[
-    {
-      "type":"INTRO",
-      "variant":"INTROONE",
-      "order":1,
-      "data":{...}
-    }
-  ]
+"eventType": "payment.succeeded",
+"eventId": "evt_unique",
+"userId": 123,
+"planId": 2,
+"paymentId": "guid",
+"amount": 99000,
+"provider": "VNPAY",
+"timestamp": "..."
 }
-PREPARE FOR AI + VECTOR SEARCH
 
-Design DataJson to be AI friendly.
+---
 
-Later we will:
+# 📊 Payment History APIs
 
-Extract text:
+## User
 
-skills
-projects
-experience
-education
+GET /api/payments/my-history
 
-Generate embedding.
+Return:
 
-Store in:
+* planName
+* amount
+* status
+* provider
+* paidAt
 
-PortfolioEmbedding
+---
 
-Example future table:
+## Admin
 
-PortfolioEmbedding
--------------------
-Id
-PortfolioId
-Vector
+GET /api/admin/payments
 
-Compatible with:
+Support filters:
 
-Postgres pgvector
-Azure AI Search
-ElasticSearch
-CODE QUALITY REQUIREMENTS
+* userId
+* status
+* date range
 
-Follow:
+---
 
-Clean Architecture
-SOLID
-Single SaveChanges
-Handler Pattern
-Async code
+# ⚠️ Critical Rules
 
-Avoid:
+DO NOT ❌
 
-switch-case by block type
-multiple SaveChanges
-direct DbContext usage in controller
-FINAL GOAL
+* Trust client price
+* Skip signature validation
+* Skip idempotency
+* Ignore webhook retries
+* Skip saving raw webhook data
+* Directly activate subscription (use event)
 
-The new system must allow:
+DO ✅
 
-✔ Add new block types without DB migration
-✔ Store flexible portfolio structures
-✔ Support AI portfolio analysis
-✔ Support future vector search
-✔ Maintain current API behavior
+* Always verify provider signature
+* Always use DB price
+* Store full payment history
+* Publish event via outbox pattern
+* Handle duplicate webhook calls safely
+
+---
+
+# 🚀 Implementation Phases
+
+Phase 1:
+
+* Entities + DB + migration
+
+Phase 2:
+
+* VNPay integration
+
+Phase 3:
+
+* MoMo integration
+
+Phase 4:
+
+* Webhook + history + idempotency
+
+Phase 5:
+
+* Event publishing (RabbitMQ + Outbox)
+
+---
+
+# 🎯 Expected Outcome
+
+* Fully working Payment Service
+* VNPay + MoMo supported
+* Reliable webhook handling
+* Complete payment history
+* Integrated with Subscription Service via events
+
+---

@@ -13,6 +13,13 @@ public class ConnectionService : IConnectionService
 
     public async Task<Connection.Domain.Entities.Connection> CreateConnectionAsync(Connection.Domain.Entities.Connection conn)
     {
+        // Sanitize input: server sets timestamps and initial status, ignore any nested rooms/messages from client
+        conn.Id = 0; // ensure EF will insert
+        conn.Rooms = new List<Connection.Domain.Entities.Room>();
+        conn.CreateAt = DateTime.UtcNow;
+        conn.ConnectionAt = null;
+        conn.Status = RecruitmentPlatform.Contracts.Enums.ConnectionStatus.PENDING.ToString();
+
         return await _repo.CreateAsync(conn);
     }
 
@@ -38,6 +45,16 @@ public class ConnectionService : IConnectionService
 
     public async Task<Connection.Domain.Entities.Message> CreateMessageAsync(Connection.Domain.Entities.Message message)
     {
+        // Sanitize input: use only MessageRoomId (room id) and ignore any nested Room object
+        message.Id = 0;
+        message.Room = null;
+        message.CreatedAt = DateTime.UtcNow;
+        // ensure default status (UNREAD = 0) if not provided
+        if (message.Status != 1 && message.Status != 2)
+        {
+            message.Status = 0;
+        }
+
         var created = await _repo.CreateMessageAsync(message);
         // update room last message time
         var room = await _repo.GetRoomByIdAsync(created.MessageRoomId);
@@ -67,5 +84,47 @@ public class ConnectionService : IConnectionService
     public async Task<IEnumerable<Connection.Domain.Entities.Room>> GetRoomsByUserIdAsync(int userId)
     {
         return await _repo.GetRoomsByUserIdAsync(userId);
+    }
+
+    public async Task<IEnumerable<Connection.Domain.Entities.Message>> GetLatestMessagesByRoomAsync(int roomId, int limit)
+    {
+        return await _repo.GetLatestMessagesByRoomAsync(roomId, limit);
+    }
+
+    public async Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId)
+    {
+        return await _repo.GetRoomSummariesByUserIdAsync(userId);
+    }
+
+    public async Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId)
+    {
+        return await _repo.MarkRoomMessagesAsReadAsync(roomId, userId);
+    }
+
+    public async Task<Connection.Domain.Entities.Connection?> UpdateConnectionStatusAsync(int connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus status)
+    {
+        var conn = await _repo.GetByIdAsync(connectionId);
+        if (conn == null) return null;
+
+        conn.Status = status.ToString();
+        if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED)
+        {
+            conn.ConnectionAt = DateTime.UtcNow;
+            // create room if not exists for this connection
+            var rooms = await _repo.GetRoomsByConnectionAsync(conn.Id);
+            if (rooms == null || !rooms.Any())
+            {
+                var room = new Connection.Domain.Entities.Room
+                {
+                    ConnectionId = conn.Id,
+                    CreatedAt = DateTime.UtcNow,
+                    LastMessAt = null
+                };
+                await _repo.CreateRoomAsync(room);
+            }
+        }
+
+        await _repo.UpdateAsync(conn);
+        return conn;
     }
 }

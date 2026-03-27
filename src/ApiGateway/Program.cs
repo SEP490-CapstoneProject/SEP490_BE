@@ -6,12 +6,9 @@ builder.Services.AddReverseProxy()
 
 // Add Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// Configure HTTPS redirection
-builder.Services.AddHttpsRedirection(options =>
+builder.Services.AddSwaggerGen(c =>
 {
-    options.HttpsPort = 7000;
+    c.SwaggerDoc("v1", new() { Title = "SkillSnap API Gateway", Version = "v1" });
 });
 
 // Add CORS
@@ -28,31 +25,35 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure pipeline
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "API Gateway v1");
-        
-        // Add Swagger endpoints for each microservice
-        c.SwaggerEndpoint("http://localhost:5001/swagger/v1/swagger.json", "Auth Service");
-        // Uncomment as services are implemented:
-        // c.SwaggerEndpoint("http://localhost:5002/swagger/v1/swagger.json", "UserProfile Service");
-        // c.SwaggerEndpoint("http://localhost:5003/swagger/v1/swagger.json", "Portfolio Service");
-        // c.SwaggerEndpoint("http://localhost:5004/swagger/v1/swagger.json", "Company Service");
-        // c.SwaggerEndpoint("http://localhost:5005/swagger/v1/swagger.json", "JobHiring Service");
-        // c.SwaggerEndpoint("http://localhost:5006/swagger/v1/swagger.json", "Connection Service");
-        // c.SwaggerEndpoint("http://localhost:5007/swagger/v1/swagger.json", "Community Service");
-        // c.SwaggerEndpoint("http://localhost:5008/swagger/v1/swagger.json", "Subscription Service");
-        // c.SwaggerEndpoint("http://localhost:5009/swagger/v1/swagger.json", "Advertisement Service");
-        // c.SwaggerEndpoint("http://localhost:5010/swagger/v1/swagger.json", "Moderation Service");
-        // c.SwaggerEndpoint("http://localhost:5011/swagger/v1/swagger.json", "Notification Service");
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "API Gateway v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowAll");
-app.UseHttpsRedirection();
+
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "api-gateway" }));
+
+// Service discovery endpoint
+app.MapGet("/services", () => Results.Ok(new
+{
+    services = new[]
+    {
+        new { name = "auth", port = 5001, path = "/api/auth" },
+        new { name = "userprofile", port = 5002, path = "/api/userprofile" },
+        new { name = "portfolio", port = 5003, path = "/api/portfolio" },
+        new { name = "company", port = 5004, path = "/api/company" },
+        new { name = "connection", port = 5006, path = "/api/connection" },
+        new { name = "community", port = 5007, path = "/api/community" },
+        new { name = "subscription", port = 5008, path = "/api/subscription" },
+        new { name = "notification", port = 5011, path = "/api/notifications" },
+        new { name = "media", port = 5012, path = "/api/media" },
+        new { name = "application", port = 5013, path = "/api/applications" }
+    }
+}));
 
 // Map YARP reverse proxy
 app.MapReverseProxy();

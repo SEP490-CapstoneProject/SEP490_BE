@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <!-- AutoMapper removed; manual mapping used to avoid transitive runtime issues in test host -->
 
   <ItemGroup>
     <ProjectReference Include="..\Connection.Domain\Connection.Domain.csproj" />
