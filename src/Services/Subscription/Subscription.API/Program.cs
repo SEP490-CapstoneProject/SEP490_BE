@@ -54,13 +54,36 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 // Add RabbitMQ
 builder.Services.AddSingleton<IConnection>(sp =>
 {
+    var host = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost";
+    var port = builder.Configuration.GetValue<int?>("RabbitMQ:Port") ?? 5672;
+    var username = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest";
+    var password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest";
+    var virtualHost = builder.Configuration.GetValue<string>("RabbitMQ:VirtualHost") ?? "/";
+    var useSsl = builder.Configuration.GetValue<bool>("RabbitMQ:UseSsl");
+
+    if (!useSsl && port == 5671)
+    {
+        useSsl = true;
+    }
+
     var factory = new ConnectionFactory
     {
-        HostName = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost",
-        Port = builder.Configuration.GetValue<int>("RabbitMQ:Port", 5672),
-        UserName = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest",
-        Password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest"
+        HostName = host,
+        Port = port,
+        UserName = username,
+        Password = password,
+        VirtualHost = virtualHost
     };
+
+    if (useSsl)
+    {
+        factory.Ssl = new SslOption
+        {
+            Enabled = true,
+            ServerName = host
+        };
+    }
+
     return factory.CreateConnection();
 });
 
@@ -73,7 +96,10 @@ builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
 // Add Services
 builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
 builder.Services.AddScoped<IRabbitMQPublisher, RabbitMQPublisher>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<AnalyticsService>();
 
 // Add Metrics
 builder.Services.AddSingleton<SubscriptionMetrics>();
@@ -101,7 +127,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+// Add Authorization Policies
+// Role-based policies to control access to endpoints
+// AdminOnly: Requires user to have "Admin" role in JWT token
+// UserOnly: Requires user to have "User" role in JWT token
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => 
+        policy.RequireRole("Admin"));
+    
+    options.AddPolicy("UserOnly", policy => 
+        policy.RequireRole("User"));
+});
 
 var app = builder.Build();
 
@@ -116,7 +153,10 @@ app.UseFeatureAuthorization();
 
 app.MapControllers();
 
-// Health check endpoint
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SubscriptionDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();

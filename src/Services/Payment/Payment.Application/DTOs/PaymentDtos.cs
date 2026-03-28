@@ -2,10 +2,22 @@ using Payment.Domain.Enums;
 
 namespace Payment.Application.DTOs;
 
+/// <summary>
+/// Request to create payment. Provider is always PayOS (no selection needed).
+/// </summary>
 public class CreatePaymentRequest
 {
+    /// <summary>
+    /// Plan ID to subscribe to
+    /// </summary>
     public int PlanId { get; set; }
-    public PaymentProvider Provider { get; set; }
+    
+    /// <summary>
+    /// ID of pending subscription (must be created first)
+    /// </summary>
+    public int SubscriptionId { get; set; }
+    
+    // Provider field removed - always PayOS
 }
 
 public class CreatePaymentResponse
@@ -20,6 +32,7 @@ public class PaymentDto
     public Guid Id { get; set; }
     public int UserId { get; set; }
     public int PlanId { get; set; }
+    public int SubscriptionId { get; set; }
     public string? PlanName { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "VND";

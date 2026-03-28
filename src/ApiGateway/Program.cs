@@ -1,4 +1,39 @@
+using ApiGateway.Azure;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
+
+// Override reverse proxy cluster addresses from ServiceUrls if provided
+var serviceUrls = builder.Configuration.GetSection("ServiceUrls")
+    .Get<Dictionary<string, string>>() ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+void SetCluster(string clusterId, string serviceKey)
+{
+    if (serviceUrls.TryGetValue(serviceKey, out var url) && !string.IsNullOrWhiteSpace(url))
+    {
+        overrides[$"ReverseProxy:Clusters:{clusterId}:Destinations:destination1:Address"] = url;
+    }
+}
+
+SetCluster("auth-cluster", "AuthService");
+SetCluster("userprofile-cluster", "UserProfileService");
+SetCluster("portfolio-cluster", "PortfolioService");
+SetCluster("company-cluster", "CompanyService");
+SetCluster("connection-cluster", "ConnectionService");
+SetCluster("community-cluster", "CommunityService");
+SetCluster("subscription-cluster", "SubscriptionService");
+SetCluster("notification-cluster", "NotificationService");
+SetCluster("media-cluster", "MediaService");
+SetCluster("application-cluster", "ApplicationService");
+SetCluster("payment-cluster", "PaymentService");
+
+if (overrides.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(overrides);
+}
 
 // Add YARP reverse proxy
 builder.Services.AddReverseProxy()

@@ -11,8 +11,14 @@ namespace Company.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(@"
+                IF SCHEMA_ID(N'companysvc') IS NULL
+                    EXEC(N'CREATE SCHEMA [companysvc]');
+            ");
+
             migrationBuilder.CreateTable(
                 name: "COMPANY",
+                schema: "companysvc",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "int", nullable: false)
@@ -27,6 +33,7 @@ namespace Company.Infrastructure.Migrations
 
             migrationBuilder.CreateTable(
                 name: "COMPANY_POST",
+                schema: "companysvc",
                 columns: table => new
                 {
                     postId = table.Column<int>(type: "int", nullable: false)
@@ -52,6 +59,7 @@ namespace Company.Infrastructure.Migrations
                     table.ForeignKey(
                         name: "FK_CompanyPost_Company",
                         column: x => x.companyId,
+                        principalSchema: "companysvc",
                         principalTable: "COMPANY",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
@@ -59,6 +67,7 @@ namespace Company.Infrastructure.Migrations
 
             migrationBuilder.CreateTable(
                 name: "COMPANY_POST_MEDIA",
+                schema: "companysvc",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "int", nullable: false)
@@ -74,6 +83,7 @@ namespace Company.Infrastructure.Migrations
                     table.ForeignKey(
                         name: "FK_PostMedia_Post",
                         column: x => x.companyPostId,
+                        principalSchema: "companysvc",
                         principalTable: "COMPANY_POST",
                         principalColumn: "postId",
                         onDelete: ReferentialAction.Cascade);
@@ -81,6 +91,7 @@ namespace Company.Infrastructure.Migrations
 
             migrationBuilder.CreateTable(
                 name: "COMPANY_POST_SAVE",
+                schema: "companysvc",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "int", nullable: false)
@@ -94,6 +105,7 @@ namespace Company.Infrastructure.Migrations
                     table.ForeignKey(
                         name: "FK_PostSave_Post",
                         column: x => x.companyPostId,
+                        principalSchema: "companysvc",
                         principalTable: "COMPANY_POST",
                         principalColumn: "postId",
                         onDelete: ReferentialAction.Cascade);
@@ -101,26 +113,31 @@ namespace Company.Infrastructure.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "IX_Post_CompanyId",
+                schema: "companysvc",
                 table: "COMPANY_POST",
                 column: "companyId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Post_Status_CreateAt_PostId",
+                schema: "companysvc",
                 table: "COMPANY_POST",
                 columns: new[] { "status", "createAt", "postId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_PostMedia_PostId",
+                schema: "companysvc",
                 table: "COMPANY_POST_MEDIA",
                 column: "companyPostId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_COMPANY_POST_SAVE_companyPostId",
+                schema: "companysvc",
                 table: "COMPANY_POST_SAVE",
                 column: "companyPostId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_PostSave_User_Post",
+                schema: "companysvc",
                 table: "COMPANY_POST_SAVE",
                 columns: new[] { "userId", "companyPostId" },
                 unique: true);
@@ -130,16 +147,20 @@ namespace Company.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "COMPANY_POST_MEDIA");
+                name: "COMPANY_POST_MEDIA",
+                schema: "companysvc");
 
             migrationBuilder.DropTable(
-                name: "COMPANY_POST_SAVE");
+                name: "COMPANY_POST_SAVE",
+                schema: "companysvc");
 
             migrationBuilder.DropTable(
-                name: "COMPANY_POST");
+                name: "COMPANY_POST",
+                schema: "companysvc");
 
             migrationBuilder.DropTable(
-                name: "COMPANY");
+                name: "COMPANY",
+                schema: "companysvc");
         }
     }
 }

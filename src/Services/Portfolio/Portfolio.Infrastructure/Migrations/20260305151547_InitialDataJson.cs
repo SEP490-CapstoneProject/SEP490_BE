@@ -80,6 +80,8 @@ namespace Portfolio.Infrastructure.Migrations
 
             // ── Seed BlockType ────────────────────────────────────────────────
             migrationBuilder.Sql(@"
+                SET IDENTITY_INSERT [BlockType] ON;
+                
                 IF NOT EXISTS (SELECT 1 FROM [BlockType] WHERE [Id] = 1)
                     INSERT INTO [BlockType] ([Id], [Code], [IsMultiple]) VALUES (1, N'INTRO', 0);
                 IF NOT EXISTS (SELECT 1 FROM [BlockType] WHERE [Id] = 2)
@@ -100,6 +102,8 @@ namespace Portfolio.Infrastructure.Migrations
                     INSERT INTO [BlockType] ([Id], [Code], [IsMultiple]) VALUES (9, N'OTHERINFO', 1);
                 IF NOT EXISTS (SELECT 1 FROM [BlockType] WHERE [Id] = 10)
                     INSERT INTO [BlockType] ([Id], [Code], [IsMultiple]) VALUES (10, N'REFERENCE', 1);
+                
+                SET IDENTITY_INSERT [BlockType] OFF;
             ");
 
             // ── Indexes ───────────────────────────────────────────────────────

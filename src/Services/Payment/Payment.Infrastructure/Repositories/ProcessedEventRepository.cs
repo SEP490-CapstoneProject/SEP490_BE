@@ -14,29 +14,22 @@ public class ProcessedEventRepository : IProcessedEventRepository
         _context = context;
     }
 
-    public async Task<bool> IsProcessedAsync(string eventId)
+    public async Task<bool> IsProcessedByHashAsync(string eventHash)
     {
         return await _context.ProcessedEvents
-            .AnyAsync(e => e.EventId == eventId);
+            .AnyAsync(e => e.EventHash == eventHash);
     }
 
-    public async Task<bool> IsProcessedByHashAsync(string rawHash)
+    public async Task<bool> IsProcessedByOrderCodeAsync(string orderCode)
     {
         return await _context.ProcessedEvents
-            .AnyAsync(e => e.RawHash == rawHash);
+            .AnyAsync(e => e.OrderCode == orderCode);
     }
 
-    public async Task<ProcessedEvent> MarkAsProcessedAsync(ProcessedEvent processedEvent)
+    public async Task CreateAsync(ProcessedEvent entity)
     {
-        _context.ProcessedEvents.Add(processedEvent);
+        _context.ProcessedEvents.Add(entity);
         await _context.SaveChangesAsync();
-        return processedEvent;
-    }
-
-    public async Task<ProcessedEvent?> GetByEventIdAsync(string eventId)
-    {
-        return await _context.ProcessedEvents
-            .FirstOrDefaultAsync(e => e.EventId == eventId);
     }
 
     public async Task DeleteOlderThanAsync(DateTime threshold)

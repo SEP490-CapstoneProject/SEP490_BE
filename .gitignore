@@ -28,6 +28,8 @@ bld/
 .env.local
 *.env.local
 *.user
+appsettings.Production.json
+**/appsettings.Production.json
 *.userprefs
 
 ## Visual Studio
