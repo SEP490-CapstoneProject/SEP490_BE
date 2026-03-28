@@ -4,6 +4,7 @@ using Payment.Application.Interfaces;
 using Payment.Domain.Entities;
 using Payment.Domain.Enums;
 using Payment.Domain.Interfaces;
+using System.Text.Json;
 
 namespace Payment.Application.Services;
 
@@ -11,26 +12,19 @@ public class PaymentService : IPaymentService
 {
     private readonly IPaymentRepository _paymentRepository;
     private readonly IPlanPriceProvider _planPriceProvider;
-    private readonly Dictionary<PaymentProvider, IPaymentProvider> _paymentProviders;
+    private readonly IPaymentProvider _paymentProvider;  // ✅ Single provider (PayOS)
     private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
         IPlanPriceProvider planPriceProvider,
-        IEnumerable<IPaymentProvider> paymentProviders,
+        IPaymentProvider paymentProvider,  // ✅ Inject single provider
         ILogger<PaymentService> logger)
     {
         _paymentRepository = paymentRepository;
         _planPriceProvider = planPriceProvider;
+        _paymentProvider = paymentProvider;
         _logger = logger;
-
-        // Map providers by index (VNPay first, MoMo second in DI registration)
-        var providerList = paymentProviders.ToList();
-        _paymentProviders = new Dictionary<PaymentProvider, IPaymentProvider>();
-        if (providerList.Count >= 1)
-            _paymentProviders[PaymentProvider.VNPay] = providerList[0];
-        if (providerList.Count >= 2)
-            _paymentProviders[PaymentProvider.MoMo] = providerList[1];
     }
 
     public async Task<CreatePaymentResponse> CreatePaymentAsync(int userId, CreatePaymentRequest request)
@@ -64,23 +58,28 @@ public class PaymentService : IPaymentService
             SubscriptionId = request.SubscriptionId,  // Store subscription reference
             Amount = planInfo.Value.price,
             Currency = "VND",
-            Provider = request.Provider,
+            Provider = PaymentProvider.PayOS,  // ✅ Always PayOS
             Status = PaymentStatus.Pending,
-            OrderCode = GenerateOrderCode(),
+            OrderCode = GenerateOrderCode().ToString(),  // Convert long to string
             ExpiresAt = DateTime.UtcNow.AddMinutes(15),
             CreatedAt = DateTime.UtcNow
         };
 
-        // 4. Get provider and create payment URL
-        if (!_paymentProviders.TryGetValue(request.Provider, out var provider))
-            throw new InvalidOperationException($"Provider {request.Provider} not supported");
+        // 4. Create payment via PayOS provider
+        var result = await _paymentProvider.CreatePaymentAsync(payment);
+        
+        // 5. Update payment with provider result
+        payment.PaymentUrl = result.CheckoutUrl;
+        payment.Metadata = JsonSerializer.Serialize(new 
+        { 
+            PaymentLinkId = result.PaymentLinkId,
+            Provider = "PayOS"
+        });
 
-        payment.PaymentUrl = await provider.CreatePaymentUrlAsync(payment);
-
-        // 5. Save to DB
+        // 6. Save to DB
         await _paymentRepository.CreateAsync(payment);
 
-        _logger.LogInformation("Created payment {PaymentId} for user {UserId}, plan {PlanId}, amount {Amount}", 
+        _logger.LogInformation("Created PayOS payment {PaymentId} for user {UserId}, plan {PlanId}, amount {Amount}", 
             payment.Id, userId, request.PlanId, payment.Amount);
 
         return new CreatePaymentResponse
@@ -157,8 +156,16 @@ public class PaymentService : IPaymentService
         };
     }
 
-    private static string GenerateOrderCode()
+    /// <summary>
+    /// Generates collision-safe order code using timestamp + random.
+    /// Format: Unix timestamp milliseconds + random 4 digits
+    /// Result: 15-16 digit unique number for PayOS.
+    /// </summary>
+    private static long GenerateOrderCode()
     {
-        return $"ORD{DateTime.UtcNow:yyyyMMddHHmmss}{new Random().Next(1000, 9999)}";
+        var timestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var random = Random.Shared.Next(1000, 9999);
+        
+        return timestampMs * 10000 + random;
     }
 }

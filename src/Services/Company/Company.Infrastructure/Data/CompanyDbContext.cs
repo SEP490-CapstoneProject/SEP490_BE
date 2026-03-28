@@ -16,9 +16,11 @@ public class CompanyDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.HasDefaultSchema("companysvc");
+
         modelBuilder.Entity<CompanyPost>(entity =>
         {
-            entity.ToTable("COMPANY_POST");
+            entity.ToTable("COMPANY_POST", "companysvc");
             entity.HasKey(e => e.PostId);
             entity.Property(e => e.PostId).HasColumnName("postId");
             entity.Property(e => e.CompanyId).HasColumnName("companyId").IsRequired();
@@ -53,7 +55,7 @@ public class CompanyDbContext : DbContext
 
         modelBuilder.Entity<CompanyPostMedia>(entity =>
         {
-            entity.ToTable("COMPANY_POST_MEDIA");
+            entity.ToTable("COMPANY_POST_MEDIA", "companysvc");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CompanyPostId).HasColumnName("companyPostId").IsRequired();
@@ -73,7 +75,7 @@ public class CompanyDbContext : DbContext
 
         modelBuilder.Entity<CompanyPostSave>(entity =>
         {
-            entity.ToTable("COMPANY_POST_SAVE");
+            entity.ToTable("COMPANY_POST_SAVE", "companysvc");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CompanyPostId).HasColumnName("companyPostId").IsRequired();
@@ -92,7 +94,7 @@ public class CompanyDbContext : DbContext
 
         modelBuilder.Entity<CompanyEntity>(entity =>
         {
-            entity.ToTable("COMPANY");
+            entity.ToTable("COMPANY", "companysvc");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
