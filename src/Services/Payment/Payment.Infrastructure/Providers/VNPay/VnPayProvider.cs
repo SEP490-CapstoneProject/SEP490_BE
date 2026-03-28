@@ -1,11 +1,15 @@
 using Microsoft.Extensions.Options;
 using Payment.Application.DTOs;
-using Payment.Application.Interfaces;
 using Payment.Domain.Entities;
 
 namespace Payment.Infrastructure.Providers.VNPay;
 
-public class VnPayProvider : IPaymentProvider
+/// <summary>
+/// LEGACY: VNPay provider - no longer in active use
+/// Kept for reference and potential rollback
+/// </summary>
+[Obsolete("Migrated to PayOS. Use PayOSProvider instead.")]
+public class VnPayProvider
 {
     private readonly VnPaySettings _settings;
 

@@ -4,9 +4,8 @@ namespace Payment.Domain.Interfaces;
 
 public interface IProcessedEventRepository
 {
-    Task<bool> IsProcessedAsync(string eventId);
-    Task<bool> IsProcessedByHashAsync(string rawHash);
-    Task<ProcessedEvent> MarkAsProcessedAsync(ProcessedEvent processedEvent);
-    Task<ProcessedEvent?> GetByEventIdAsync(string eventId);
+    Task<bool> IsProcessedByHashAsync(string eventHash);
+    Task<bool> IsProcessedByOrderCodeAsync(string orderCode);
+    Task CreateAsync(ProcessedEvent entity);
     Task DeleteOlderThanAsync(DateTime threshold);
 }

@@ -150,12 +150,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// Pipeline
-if (app.Environment.IsDevelopment())
+// Pipeline - Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Portfolio API V1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowAll");
 app.UseAuthentication();
