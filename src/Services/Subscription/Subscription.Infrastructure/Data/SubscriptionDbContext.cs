@@ -14,6 +14,7 @@ public class SubscriptionDbContext : DbContext
     public DbSet<UserSubscription> Subscriptions { get; set; }
     public DbSet<ProcessedEvent> ProcessedEvents { get; set; }
     public DbSet<OutboxEvent> OutboxEvents { get; set; }
+    public DbSet<AdminAuditLog> AdminAuditLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -91,6 +92,18 @@ public class SubscriptionDbContext : DbContext
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => new { e.Status, e.CreatedAt });
+        });
+
+        // AdminAuditLog configuration
+        modelBuilder.Entity<AdminAuditLog>(entity =>
+        {
+            entity.ToTable("AdminAuditLogs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.EntityType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.AdminUserId, e.CreatedAt });
+            entity.HasIndex(e => new { e.EntityType, e.EntityId });
         });
 
         // Seed Plans

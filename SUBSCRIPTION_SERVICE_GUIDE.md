@@ -87,13 +87,13 @@ CREATE TABLE Subscriptions (
 
 ## API Endpoints
 
-### Plans
+### Plans (Public)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/api/plans` | List all active plans | ❌ |
 | GET | `/api/plans/{id}` | Get plan details with features | ❌ |
 
-### Subscriptions
+### Subscriptions (User)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | POST | `/api/subscriptions/subscribe` | Subscribe to a plan | ✅ |
@@ -101,6 +101,39 @@ CREATE TABLE Subscriptions (
 | GET | `/api/subscriptions/me` | Get my subscription | ✅ |
 | POST | `/api/subscriptions/{id}/cancel` | Cancel subscription | ✅ |
 | GET | `/api/subscriptions/entitlements/{userId}` | Get user entitlements (for other services) | Internal |
+
+### Admin - Plan Management
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/admin/plans` | Create new plan | Admin |
+| PUT | `/api/admin/plans/{id}` | Update plan | Admin |
+| DELETE | `/api/admin/plans/{id}` | Delete plan (no active subs) | Admin |
+| PATCH | `/api/admin/plans/{id}/toggle-active` | Toggle plan active status | Admin |
+
+### Admin - Plan Features
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/admin/plans/{id}/features` | Add feature to plan | Admin |
+| PUT | `/api/admin/plans/{id}/features/{featureId}` | Update feature | Admin |
+| DELETE | `/api/admin/plans/{id}/features/{featureId}` | Delete feature | Admin |
+
+### Admin - Subscription Management
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/admin/subscriptions` | List all with filters | Admin |
+| GET | `/api/admin/subscriptions/{id}` | Subscription details | Admin |
+| GET | `/api/admin/users/{userId}/subscriptions` | User's subscription history | Admin |
+| POST | `/api/admin/subscriptions/{id}/cancel` | Admin cancel with reason | Admin |
+| POST | `/api/admin/subscriptions/{id}/extend` | Extend by months | Admin |
+| POST | `/api/admin/subscriptions/{id}/refund` | Issue refund | Admin |
+
+### Admin - Analytics
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/admin/analytics/overview` | MRR, ARR, churn, totals | Admin |
+| GET | `/api/admin/analytics/revenue` | Revenue by plan, daily breakdown | Admin |
+| GET | `/api/admin/analytics/subscriptions-by-plan` | Counts per plan status | Admin |
+| GET | `/api/admin/analytics/churn` | Churn rate analysis | Admin |
 
 ### Health Checks
 | Method | Endpoint | Description |
@@ -321,6 +354,177 @@ curl http://localhost:5008/api/subscriptions/entitlements/1
 curl http://localhost:5008/api/subscriptions/me \
   -H "Authorization: Bearer <token>"
 ```
+
+### Test Admin Plan Management
+```bash
+# Create new plan
+curl -X POST http://localhost:5008/api/admin/plans \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Enterprise",
+    "description": "Enterprise plan for companies",
+    "price": 49.99,
+    "billingCycle": 1
+  }'
+
+# Update plan
+curl -X PUT http://localhost:5008/api/admin/plans/4 \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"price": 59.99}'
+
+# Toggle plan active
+curl -X PATCH http://localhost:5008/api/admin/plans/4/toggle-active \
+  -H "Authorization: Bearer <admin-token>"
+
+# Delete plan (fails if has active subscriptions)
+curl -X DELETE http://localhost:5008/api/admin/plans/4 \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+### Test Admin Feature Management
+```bash
+# Add feature to plan
+curl -X POST http://localhost:5008/api/admin/plans/2/features \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "featureKey": "PRIORITY_SUPPORT",
+    "featureName": "Priority Support",
+    "value": "true",
+    "type": 1
+  }'
+
+# Update feature
+curl -X PUT http://localhost:5008/api/admin/plans/2/features/16 \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"value": "false"}'
+
+# Delete feature
+curl -X DELETE http://localhost:5008/api/admin/plans/2/features/16 \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+### Test Admin Subscription Management
+```bash
+# List subscriptions with filters
+curl "http://localhost:5008/api/admin/subscriptions?status=Active&pageSize=10" \
+  -H "Authorization: Bearer <admin-token>"
+
+# Get subscription details
+curl http://localhost:5008/api/admin/subscriptions/1 \
+  -H "Authorization: Bearer <admin-token>"
+
+# Get user's subscription history
+curl http://localhost:5008/api/admin/users/1/subscriptions \
+  -H "Authorization: Bearer <admin-token>"
+
+# Admin cancel subscription
+curl -X POST http://localhost:5008/api/admin/subscriptions/1/cancel \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "User requested cancellation", "issueRefund": true}'
+
+# Extend subscription
+curl -X POST http://localhost:5008/api/admin/subscriptions/1/extend \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"months": 3}'
+
+# Issue refund
+curl -X POST http://localhost:5008/api/admin/subscriptions/1/refund \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Service issue compensation"}'
+```
+
+### Test Admin Analytics
+```bash
+# Analytics overview (MRR, ARR, churn)
+curl "http://localhost:5008/api/admin/analytics/overview" \
+  -H "Authorization: Bearer <admin-token>"
+
+# Revenue analytics with date range
+curl "http://localhost:5008/api/admin/analytics/revenue?startDate=2026-01-01&endDate=2026-03-31" \
+  -H "Authorization: Bearer <admin-token>"
+
+# Subscriptions by plan
+curl http://localhost:5008/api/admin/analytics/subscriptions-by-plan \
+  -H "Authorization: Bearer <admin-token>"
+
+# Churn rate
+curl "http://localhost:5008/api/admin/analytics/churn?startDate=2026-01-01&endDate=2026-03-31" \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+## Admin API Request/Response Examples
+
+### Create Plan Feature Request
+```json
+{
+  "featureKey": "MAX_JOBS_VIEW",
+  "featureName": "Max Job Views Per Day",
+  "value": "100",
+  "type": 2  // 1=Boolean, 2=Number, 3=Text
+}
+```
+
+### Subscription Filter Query Parameters
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `userId` | int | Filter by user ID |
+| `planId` | int | Filter by plan ID |
+| `status` | string | Active, Pending, Expired, Cancelled |
+| `startDate` | datetime | Subscriptions starting after |
+| `endDate` | datetime | Subscriptions ending before |
+| `pageNumber` | int | Page number (default: 1) |
+| `pageSize` | int | Items per page (default: 10) |
+
+### Analytics Overview Response
+```json
+{
+  "totalUsers": 1250,
+  "activeSubscriptions": 890,
+  "totalRevenue": 45000.00,
+  "churnRate": 3.5,
+  "mrr": 8500.00,
+  "arr": 102000.00,
+  "generatedAt": "2026-03-23T14:00:00Z"
+}
+```
+
+### Revenue Analytics Response
+```json
+{
+  "totalRevenue": 25000.00,
+  "revenueByPlan": {
+    "Pro": 15000.00,
+    "Premium": 10000.00
+  },
+  "dailyRevenue": [
+    {"date": "2026-03-01", "revenue": 850.00},
+    {"date": "2026-03-02", "revenue": 920.00}
+  ],
+  "startDate": "2026-03-01",
+  "endDate": "2026-03-31"
+}
+```
+
+## Admin Audit Logging
+
+All admin actions are logged to `AdminAuditLogs` table:
+
+| Column | Description |
+|--------|-------------|
+| `AdminUserId` | ID of admin performing action |
+| `Action` | Create, Update, Delete, ToggleActive, AdminCancel, Extend, Refund, etc. |
+| `EntityType` | Plan, Subscription, PlanFeature |
+| `EntityId` | ID of affected entity |
+| `OldValues` | JSON of values before change |
+| `NewValues` | JSON of values after change |
+| `CreatedAt` | Timestamp of action |
 
 ## Metrics
 

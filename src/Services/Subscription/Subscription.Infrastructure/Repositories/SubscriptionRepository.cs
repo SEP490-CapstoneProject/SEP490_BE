@@ -33,6 +33,17 @@ public class SubscriptionRepository : ISubscriptionRepository
             .FirstOrDefaultAsync();
     }
 
+    public async Task<UserSubscription?> GetPendingByUserAndPlanAsync(int userId, int planId)
+    {
+        return await _context.Subscriptions
+            .Include(s => s.Plan)
+            .Where(s => s.UserId == userId && 
+                       s.PlanId == planId && 
+                       s.Status == SubscriptionStatus.Pending)
+            .OrderByDescending(s => s.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IEnumerable<UserSubscription>> GetByUserIdAsync(int userId)
     {
         return await _context.Subscriptions

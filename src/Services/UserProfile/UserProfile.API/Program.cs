@@ -85,7 +85,8 @@ builder.Services.AddAuthorization();
 // Add HttpClient for Media Service
 builder.Services.AddHttpClient("MediaService", client =>
 {
-    client.BaseAddress = new Uri("http://media-service:8080");
+    var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
+    client.BaseAddress = new Uri(mediaServiceUrl);
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
@@ -115,12 +116,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// Configure pipeline
-if (app.Environment.IsDevelopment())
+// Configure pipeline - Enable Swagger in all environments for API documentation
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserProfile API V1");
+    c.RoutePrefix = "swagger"; // Access at /swagger
+});
 
 app.UseCors("AllowAll");
 app.UseAuthentication();

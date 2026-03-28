@@ -22,6 +22,8 @@ namespace Company.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasDefaultSchema("companysvc");
+
             modelBuilder.Entity("Company.Domain.Entities.CompanyEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -43,7 +45,7 @@ namespace Company.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("COMPANY", (string)null);
+                    b.ToTable("COMPANY", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPost", b =>
@@ -129,7 +131,7 @@ namespace Company.Infrastructure.Migrations
                     b.HasIndex("Status", "CreatedAt", "PostId")
                         .HasDatabaseName("IX_Post_Status_CreateAt_PostId");
 
-                    b.ToTable("COMPANY_POST", (string)null);
+                    b.ToTable("COMPANY_POST", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPostMedia", b =>
@@ -165,7 +167,7 @@ namespace Company.Infrastructure.Migrations
                     b.HasIndex("CompanyPostId")
                         .HasDatabaseName("IX_PostMedia_PostId");
 
-                    b.ToTable("COMPANY_POST_MEDIA", (string)null);
+                    b.ToTable("COMPANY_POST_MEDIA", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPostSave", b =>
@@ -193,7 +195,7 @@ namespace Company.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_PostSave_User_Post");
 
-                    b.ToTable("COMPANY_POST_SAVE", (string)null);
+                    b.ToTable("COMPANY_POST_SAVE", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPost", b =>

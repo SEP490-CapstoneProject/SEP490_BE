@@ -1,225 +1,193 @@
-# 🎯 TASK: Refine & Harden Payment Service Plan to Production-Grade
+You are a senior fintech backend architect.
 
-## 🧠 Context
+I have already created a **PayOS migration plan (production-grade)** for a Payment Service that uses:
 
-You are given an existing **Payment Service implementation plan** (VNPay + MoMo + Payment History + Outbox + Idempotency).
+* .NET (Clean Architecture)
+* RabbitMQ (event-driven)
+* Subscription Service consuming `payment.succeeded`
+* Redis for entitlements
 
-The current plan is already solid, but it is **NOT fully production-ready**.
-
-Your task is to **refine and upgrade the plan** by fixing critical gaps in:
-
-* Idempotency
-* Concurrency
-* Reliability
-* Security
-* Edge cases
-
-⚠️ DO NOT rewrite from scratch.
-✔ Keep existing structure
-✔ Improve and extend where needed
+The plan is GOOD but NOT PERFECT. Your task is to **REFINE and UPGRADE it to true fintech-grade (10/10 production readiness)**.
 
 ---
 
-# 🔥 REQUIRED IMPROVEMENTS
+## 🎯 Your Goal
 
-## 1. Fix Idempotency (CRITICAL)
+Refactor the plan to ensure:
 
-Current issue:
-
-* Using `TransactionId` is NOT enough
-
-You MUST:
-
-* Generate a true `eventId` from webhook data:
-
-  * hash(raw webhook payload)
-  * OR combination of: provider + orderCode + responseCode + timestamp
-
-* Ensure:
-
-  * duplicate webhook calls are safely ignored
-  * out-of-order events are handled
+* Maximum **reliability**
+* Strong **security**
+* Full **observability**
+* Robust **failure handling**
+* No race conditions
+* No payment inconsistency
 
 ---
 
-## 2. Add Processing State (CRITICAL)
+## 🔴 MUST ADD (CRITICAL IMPROVEMENTS)
 
-Current states:
+### 1. Payment Verification Step (MANDATORY)
 
-* Pending → Success / Failed ❌
+After webhook validation:
 
-You MUST change to:
+* Call PayOS API (`GET payment-requests/{orderCode}`)
+* Re-verify:
 
-* Pending → Processing → Success / Failed
+  * amount
+  * status
+  * transaction integrity
 
-Purpose:
+This is required to prevent:
 
-* prevent double-processing
-* enable safe concurrent handling
-
----
-
-## 3. Prevent Race Conditions (CRITICAL)
-
-Webhook may be called concurrently.
-
-You MUST:
-
-* Ensure update only when:
-
-  * Status = Pending OR Processing
-
-* Add one of:
-
-  * optimistic concurrency (RowVersion)
-  * OR conditional update (WHERE Status = Pending)
+* spoofed webhook
+* inconsistent states
 
 ---
 
-## 4. Strengthen Webhook Transaction Flow
+### 2. Concurrency Control (MANDATORY)
 
-Update webhook handling to:
+Prevent double processing when:
 
-1. Validate signature
-2. Generate eventId
-3. Check ProcessedEvents → skip if duplicate
-4. Load Payment by OrderCode
-5. Ensure not already Success
-6. Update → Processing
-7. Update → Success / Failed
-8. Save PaymentHistory (with raw payload)
-9. Insert ProcessedEvent
-10. Insert OutboxEvent
-11. Commit transaction
+* multiple webhooks arrive
+* multiple service instances run
 
-⚠️ ALL steps must be in ONE DB transaction
+You MUST include:
 
----
+Option A:
 
-## 5. Add Retry Strategy for Failures
+* DB conditional update (Pending → Processing)
 
-Current issue:
+Option B:
 
-* If webhook processing fails → data inconsistency
+* Distributed lock (Redis)
 
-You MUST add:
-
-* Background retry mechanism
-* Logging for failed webhook processing
-* Safe re-processing using idempotency
+Explain trade-offs and choose one.
 
 ---
 
-## 6. Improve Outbox Pattern
+### 3. Idempotency & Replay Protection
 
-Enhance OutboxEvents:
+Ensure:
 
-Add fields:
-
-* RetryCount
-* NextRetryAt
-
-Implement:
-
-* exponential backoff retry
-* max retry threshold
-* dead-letter handling
+* Webhook processed ONLY ONCE
+* Use `ProcessedEvents` table (or equivalent)
+* Enforce UNIQUE constraint on eventId/orderCode
 
 ---
 
-## 7. Prevent Duplicate Payment Creation
+### 4. Dead Letter Queue (DLQ)
 
-Problem:
+Extend RabbitMQ flow:
 
-* User can spam create payment
+payment.succeeded
+→ retry (3 times)
+→ DLQ (payment.failed.processing)
 
-You MUST:
+Explain:
 
-* Check existing Pending payment for same user + plan
-* Either:
-
-  * reuse existing payment
-  * OR reject duplicate request
-
----
-
-## 8. Add Return URL Handling
-
-You MUST add endpoint:
-
-GET /api/payments/return
-
-Rules:
-
-* Used ONLY for UI redirect
-* MUST NOT update payment status
-* Webhook remains source of truth
+* retry strategy
+* backoff
+* monitoring DLQ
 
 ---
 
-## 9. Add Expiration Logic
+### 5. Reconciliation Job (CRITICAL)
 
-You MUST:
+Design a background job:
 
-* Add "Expired" status
-* Auto-expire Pending payments after X minutes (15–30)
+* Runs every 5–10 minutes
+* Finds:
 
----
+  * Pending payments too long
+  * Processing stuck payments
+* Calls PayOS API to reconcile state
 
-## 10. Basic Anti-Fraud Validation
-
-You MUST validate:
-
-* amount matches plan price
-* currency is correct
-* provider response codes are valid
+This is REQUIRED in real payment systems.
 
 ---
 
-# ⚡ OPTIONAL IMPROVEMENTS (RECOMMENDED)
+### 6. Observability (Production Logging)
 
-* Add PaymentMethod (QR, ATM, CreditCard)
-* Add index: (Status, CreatedAt)
-* Improve logging (structured logs)
-* Add correlationId for tracing
+Add structured logging:
 
----
+* correlationId (paymentId)
+* orderCode
+* webhook raw body (masked)
+* signature validation result
+* processing duration
+* error details
 
-# 🎯 OUTPUT REQUIREMENTS
+Also suggest:
 
-You must produce:
-
-1. Updated Payment Service Plan (refined version)
-2. Highlighted changes (what was improved)
-3. Updated webhook flow (final version)
-4. Updated data model if needed
-5. Additional fields/tables if required
+* metrics (success rate, webhook latency)
+* alerting conditions
 
 ---
 
-# 🚨 RULES
+### 7. Failure Handling Strategy
 
-DO NOT ❌
+Define behavior for:
 
-* Remove existing architecture
-* Break event-driven design
-* Move subscription logic into payment service
+* PayOS API timeout
+* webhook validation failure
+* DB update failure
+* event publish failure
 
-DO ✅
+Include:
 
-* Focus on reliability & correctness
-* Preserve clean architecture
-* Ensure production-readiness
+* retry policy
+* fallback logic
+
+---
+
+## 🟡 IMPROVE EXISTING DESIGN
+
+You must also refine:
+
+* Payment state machine (ensure no invalid transitions)
+* Feature flag usage (safe rollout)
+* Migration strategy (no data corruption)
+* API design consistency
+* Folder structure if needed
 
 ---
 
-# 🏁 GOAL
+## 🧱 Output Requirements
 
-Final output must be:
+Return a **FULLY REWRITTEN plan** with:
 
-> ✅ Production-grade Payment Service
-> ✅ Safe under concurrency
-> ✅ Resilient to webhook retries
-> ✅ Fully auditable and reliable
+1. Updated architecture
+2. Improved flow diagrams (text-based)
+3. Enhanced migration strategy
+4. New components:
+
+   * verification step
+   * reconciliation job
+   * DLQ
+   * concurrency guard
+5. Code snippets where necessary
+6. Clear reasoning for each improvement
 
 ---
+
+## 🚫 Constraints
+
+* Do NOT simplify the system
+* Do NOT remove event-driven design
+* Do NOT break Subscription Service integration
+* Keep it scalable and production-grade
+
+---
+
+## 💡 Context
+
+This is a real system expected to handle:
+
+* concurrent payments
+* unreliable network
+* webhook retries
+* distributed services
+
+---
+
+Now upgrade the plan to a true fintech-grade architecture.

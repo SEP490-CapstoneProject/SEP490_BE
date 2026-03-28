@@ -8,14 +8,23 @@ using Payment.Domain.Interfaces;
 using Payment.Infrastructure.Azure;
 using Payment.Infrastructure.Configuration;
 using Payment.Infrastructure.Data;
-using Payment.Infrastructure.Providers.MoMo;
-using Payment.Infrastructure.Providers.VNPay;
+using Payment.Infrastructure.Providers.PayOS;
 using Payment.Infrastructure.Repositories;
 using Payment.Infrastructure.Services;
+using Polly;
+using Polly.Extensions.Http;
 using RabbitMQ.Client;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Structured Logging Configuration
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(options =>
+{
+    options.FormatterName = "json";
+});
+builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
 
 // Add Azure Key Vault (works in Azure with Managed Identity, skips if not configured)
 builder.Configuration.AddAzureKeyVault();
@@ -32,13 +41,24 @@ builder.Services.AddScoped<IOutboxEventRepository, OutboxEventRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
-builder.Services.AddScoped<IWebhookHandler, WebhookHandler>();
+builder.Services.AddScoped<IWebhookService, WebhookService>();
+builder.Services.AddScoped<IPaymentVerificationService, PaymentVerificationService>();
 
-// Payment Providers
-builder.Services.Configure<VnPaySettings>(builder.Configuration.GetSection("VNPay"));
-builder.Services.Configure<MoMoSettings>(builder.Configuration.GetSection("MoMo"));
-builder.Services.AddScoped<IPaymentProvider, VnPayProvider>();
-builder.Services.AddHttpClient<IPaymentProvider, MoMoProvider>();
+// PayOS Provider (single provider, no more VNPay/MoMo)
+builder.Services.Configure<PayOSSettings>(builder.Configuration.GetSection("PayOS"));
+builder.Services.AddScoped<IPaymentProvider, PayOSProvider>();
+
+// PayOS HttpClient with Polly resilience policies
+builder.Services.AddHttpClient<PayOSHttpClient>(client =>
+{
+    var baseUrl = builder.Configuration["PayOS:BaseUrl"] ?? "https://api-merchant.payos.vn";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+})
+.AddPolicyHandler(GetRetryPolicy())
+.AddPolicyHandler(GetCircuitBreakerPolicy())
+.AddPolicyHandler(GetTimeoutPolicy());
 
 // Plan Price Provider (HTTP client to Subscription Service)
 builder.Services.AddHttpClient<IPlanPriceProvider, HttpPlanPriceProvider>(client =>
@@ -64,20 +84,24 @@ builder.Services.AddSingleton<IConnection>(sp =>
 
 builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublisher>();
 
+// Metrics & Alerting
+builder.Services.AddSingleton<IPaymentMetricsService, PaymentMetricsService>();
+builder.Services.AddSingleton<IAlertingService, AlertingService>();
+
 // Background Services
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<PaymentExpirationService>();
+builder.Services.AddHostedService<ReconciliationService>();
+builder.Services.AddHostedService<DLQMonitoringService>();
 
 // Validate required secrets in Production
 if (!builder.Environment.IsDevelopment())
 {
     builder.Configuration.ValidateRequiredSecrets(
         "Jwt:Secret",
-        "VNPay:TmnCode",
-        "VNPay:HashSecret",
-        "MoMo:PartnerCode",
-        "MoMo:AccessKey",
-        "MoMo:SecretKey"
+        "PayOS:ClientId",
+        "PayOS:ApiKey",
+        "PayOS:ChecksumKey"
     );
 }
 
@@ -110,8 +134,8 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Payment Service API",
-        Version = "v1",
-        Description = "Production-grade payment service with VNPay and MoMo integration"
+        Version = "v2",
+        Description = "Production-grade payment service with PayOS integration (fintech-grade)"
     });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -155,15 +179,13 @@ using (var scope = app.Services.CreateScope())
     dbContext.Database.Migrate();
 }
 
-// Configure HTTP pipeline
-if (app.Environment.IsDevelopment())
+// Configure HTTP pipeline - Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Payment Service API V1");
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Payment Service API V2");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors();
 app.UseAuthentication();
@@ -171,3 +193,40 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Polly Policies
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        .WaitAndRetryAsync(
+            retryCount: 3,
+            sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetry: (outcome, timespan, retryCount, context) =>
+            {
+                Console.WriteLine($"PayOS API retry {retryCount} after {timespan.TotalSeconds}s");
+            });
+}
+
+static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .CircuitBreakerAsync(
+            handledEventsAllowedBeforeBreaking: 5,
+            durationOfBreak: TimeSpan.FromSeconds(30),
+            onBreak: (outcome, duration) =>
+            {
+                Console.WriteLine($"PayOS API circuit breaker OPEN for {duration.TotalSeconds}s");
+            },
+            onReset: () =>
+            {
+                Console.WriteLine("PayOS API circuit breaker RESET");
+            });
+}
+
+static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
+{
+    return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(10));
+}
