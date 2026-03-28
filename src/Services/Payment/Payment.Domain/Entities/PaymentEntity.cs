@@ -15,7 +15,18 @@ public class PaymentEntity
     public string? PaymentUrl { get; set; }
     public string? TransactionId { get; set; }
     public string OrderCode { get; set; } = null!;
-    public int RowVersion { get; set; } = 0;
+    
+    /// <summary>
+    /// Optimistic concurrency control token. Updated automatically by EF Core on each save.
+    /// Used to prevent race conditions when multiple webhooks arrive simultaneously.
+    /// </summary>
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    
+    /// <summary>
+    /// Additional metadata (e.g., PayOS PaymentLinkId, provider-specific data)
+    /// </summary>
+    public string? Metadata { get; set; }
+    
     public DateTime? ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

@@ -111,27 +111,56 @@ public class PaymentRepository : IPaymentRepository
     public async Task<bool> UpdateStatusConditionalAsync(
         Guid paymentId, 
         PaymentStatus newStatus, 
-        int expectedRowVersion, 
-        string? transactionId = null, 
-        DateTime? paidAt = null)
+        byte[] expectedRowVersion)
     {
-        var rowsAffected = await _context.Database.ExecuteSqlRawAsync(
-            @"UPDATE Payments 
-              SET Status = {0}, 
-                  UpdatedAt = GETUTCDATE(), 
-                  RowVersion = RowVersion + 1,
-                  TransactionId = COALESCE({1}, TransactionId),
-                  PaidAt = COALESCE({2}, PaidAt)
-              WHERE Id = {3} 
-                AND Status IN (0, 1) 
-                AND RowVersion = {4}",
-            (int)newStatus,
-            (object?)transactionId ?? DBNull.Value,
-            (object?)paidAt ?? DBNull.Value,
-            paymentId,
-            expectedRowVersion);
+        var payment = await _context.Payments
+            .FirstOrDefaultAsync(p => p.Id == paymentId);
 
-        return rowsAffected > 0;
+        if (payment == null) return false;
+
+        // Check RowVersion for optimistic concurrency
+        if (!payment.RowVersion.SequenceEqual(expectedRowVersion))
+        {
+            return false; // Another process updated it
+        }
+
+        payment.Status = newStatus;
+        payment.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false; // Race condition
+        }
+    }
+
+    public async Task UpdateAsync(PaymentEntity payment)
+    {
+        _context.Payments.Update(payment);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateStatusAsync(Guid paymentId, PaymentStatus newStatus)
+    {
+        var payment = await _context.Payments.FindAsync(paymentId);
+        if (payment != null)
+        {
+            payment.Status = newStatus;
+            payment.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    public async Task<List<PaymentEntity>> GetStuckPaymentsAsync(int minAgeMinutes, PaymentStatus[] statuses)
+    {
+        var threshold = DateTime.UtcNow.AddMinutes(-minAgeMinutes);
+        return await _context.Payments
+            .Where(p => statuses.Contains(p.Status) && p.CreatedAt < threshold)
+            .ToListAsync();
     }
 
     public async Task<List<PaymentEntity>> GetExpiredPendingPaymentsAsync(DateTime threshold)
@@ -150,7 +179,35 @@ public class PaymentRepository : IPaymentRepository
             .Where(p => paymentIds.Contains(p.Id))
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(p => p.Status, newStatus)
-                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow)
-                .SetProperty(p => p.RowVersion, p => p.RowVersion + 1));
+                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
     }
+
+    public async Task<System.Data.IDbTransaction> BeginTransactionAsync(System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted)
+    {
+        var transaction = await _context.Database.BeginTransactionAsync();
+        return new TransactionWrapper(transaction);
+    }
+}
+
+/// <summary>
+/// Wrapper for EF Core transaction to implement IDbTransaction
+/// </summary>
+internal class TransactionWrapper : System.Data.IDbTransaction
+{
+    private readonly Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction _transaction;
+    
+    public TransactionWrapper(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
+    {
+        _transaction = transaction;
+    }
+    
+    public System.Data.IDbConnection? Connection => null;
+    public System.Data.IsolationLevel IsolationLevel => System.Data.IsolationLevel.ReadCommitted;
+    
+    public void Commit() => _transaction.Commit();
+    public void Rollback() => _transaction.Rollback();
+    public void Dispose() => _transaction.Dispose();
+    
+    public async Task CommitAsync() => await _transaction.CommitAsync();
+    public async Task RollbackAsync() => await _transaction.RollbackAsync();
 }

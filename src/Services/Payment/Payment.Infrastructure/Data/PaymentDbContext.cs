@@ -48,9 +48,12 @@ public class PaymentDbContext : DbContext
                 .HasMaxLength(50)
                 .IsRequired();
 
+            // ✅ RowVersion for optimistic concurrency (EF Core manages this)
             entity.Property(e => e.RowVersion)
-                .IsRequired()
-                .HasDefaultValue(0);
+                .IsRowVersion();
+
+            entity.Property(e => e.Metadata)
+                .HasMaxLength(2000);
 
             entity.Property(e => e.ExpiresAt);
             entity.Property(e => e.CreatedAt).IsRequired();
@@ -117,7 +120,7 @@ public class PaymentDbContext : DbContext
         modelBuilder.Entity<ProcessedEvent>(entity =>
         {
             entity.ToTable("ProcessedEvents");
-            entity.HasKey(e => e.EventId);
+            entity.HasKey(e => e.Id);
 
             entity.Property(e => e.EventId)
                 .HasMaxLength(100)
@@ -127,10 +130,32 @@ public class PaymentDbContext : DbContext
                 .HasMaxLength(100)
                 .IsRequired();
 
-            entity.Property(e => e.RawHash)
-                .HasMaxLength(64);
+            entity.Property(e => e.EventHash)
+                .HasMaxLength(64)
+                .IsRequired();
+
+            entity.Property(e => e.OrderCode)
+                .HasMaxLength(50)
+                .IsRequired();
 
             entity.Property(e => e.ProcessedAt).IsRequired();
+
+            entity.Property(e => e.CorrelationId)
+                .HasMaxLength(100);
+
+            // ✅ UNIQUE INDEX on EventHash (primary idempotency check)
+            entity.HasIndex(e => e.EventHash)
+                .IsUnique()
+                .HasDatabaseName("UX_ProcessedEvents_EventHash");
+
+            // ✅ UNIQUE INDEX on OrderCode (secondary idempotency check)
+            entity.HasIndex(e => e.OrderCode)
+                .IsUnique()
+                .HasDatabaseName("UX_ProcessedEvents_OrderCode");
+
+            // Index for cleanup queries
+            entity.HasIndex(e => e.ProcessedAt)
+                .HasDatabaseName("IX_ProcessedEvents_ProcessedAt");
         });
 
         // OutboxEvent Configuration

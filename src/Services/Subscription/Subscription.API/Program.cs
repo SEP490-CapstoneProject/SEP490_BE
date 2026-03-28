@@ -39,13 +39,36 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 // Add RabbitMQ
 builder.Services.AddSingleton<IConnection>(sp =>
 {
+    var host = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost";
+    var port = builder.Configuration.GetValue<int?>("RabbitMQ:Port") ?? 5672;
+    var username = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest";
+    var password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest";
+    var virtualHost = builder.Configuration.GetValue<string>("RabbitMQ:VirtualHost") ?? "/";
+    var useSsl = builder.Configuration.GetValue<bool>("RabbitMQ:UseSsl");
+
+    if (!useSsl && port == 5671)
+    {
+        useSsl = true;
+    }
+
     var factory = new ConnectionFactory
     {
-        HostName = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost",
-        Port = builder.Configuration.GetValue<int>("RabbitMQ:Port", 5672),
-        UserName = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest",
-        Password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest"
+        HostName = host,
+        Port = port,
+        UserName = username,
+        Password = password,
+        VirtualHost = virtualHost
     };
+
+    if (useSsl)
+    {
+        factory.Ssl = new SslOption
+        {
+            Enabled = true,
+            ServerName = host
+        };
+    }
+
     return factory.CreateConnection();
 });
 
@@ -114,7 +137,10 @@ app.UseFeatureAuthorization();
 
 app.MapControllers();
 
-// Health check endpoint
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SubscriptionDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();

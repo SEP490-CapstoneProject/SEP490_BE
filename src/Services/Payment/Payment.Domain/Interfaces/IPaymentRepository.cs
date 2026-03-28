@@ -1,5 +1,6 @@
 using Payment.Domain.Entities;
 using Payment.Domain.Enums;
+using System.Data;
 
 namespace Payment.Domain.Interfaces;
 
@@ -12,7 +13,17 @@ public interface IPaymentRepository
     Task<List<PaymentEntity>> GetAllAsync(int? userId = null, PaymentStatus? status = null, DateTime? fromDate = null, DateTime? toDate = null, int page = 1, int pageSize = 20);
     Task<int> GetTotalCountAsync(int? userId = null, PaymentStatus? status = null, DateTime? fromDate = null, DateTime? toDate = null);
     Task<PaymentEntity> CreateAsync(PaymentEntity payment);
-    Task<bool> UpdateStatusConditionalAsync(Guid paymentId, PaymentStatus newStatus, int expectedRowVersion, string? transactionId = null, DateTime? paidAt = null);
+    
+    // Concurrency control methods
+    Task<bool> UpdateStatusConditionalAsync(Guid paymentId, PaymentStatus newStatus, byte[] expectedRowVersion);
+    Task UpdateAsync(PaymentEntity payment);
+    Task UpdateStatusAsync(Guid paymentId, PaymentStatus newStatus);
+    
+    // Reconciliation methods
+    Task<List<PaymentEntity>> GetStuckPaymentsAsync(int minAgeMinutes, PaymentStatus[] statuses);
     Task<List<PaymentEntity>> GetExpiredPendingPaymentsAsync(DateTime threshold);
     Task BulkUpdateStatusAsync(List<Guid> paymentIds, PaymentStatus newStatus);
+    
+    // Transaction support
+    Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
 }

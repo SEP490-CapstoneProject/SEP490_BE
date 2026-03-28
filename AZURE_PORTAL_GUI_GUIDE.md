@@ -197,14 +197,14 @@
 
 **Secret 1: SQL Connection String**
 ```
-Name:   SqlConnectionString
+Name:   ConnectionStrings--DefaultConnection
 Value:  Server=tcp:skillsnap-sql-server.database.windows.net,1433;Initial Catalog=skillsnap-db;User ID=sqladmin;Password=YourStrong@Passw0rd123;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
 ```
 Click **"Create"**
 
 **Secret 2: JWT Secret**
 ```
-Name:   JwtSecret
+Name:   JwtSettings--Secret
 Value:  your-super-secret-jwt-key-must-be-at-least-32-characters-long-for-security
 ```
 Click **"Create"**
@@ -265,9 +265,37 @@ Value:  [Lấy từ Cloudinary Dashboard]
 ```
 Click **"Create"**
 
+**Secret 11: Redis Connection String**
+```
+Name:   Redis--ConnectionString
+Value:  [Lấy từ Azure Redis - Primary connection string]
+```
+Click **"Create"**
+
+**Secret 12: PayOS Client ID**
+```
+Name:   PayOS--ClientId
+Value:  [Lấy từ PayOS Dashboard]
+```
+Click **"Create"**
+
+**Secret 13: PayOS API Key**
+```
+Name:   PayOS--ApiKey
+Value:  [Lấy từ PayOS Dashboard]
+```
+Click **"Create"**
+
+**Secret 14: PayOS Checksum Key**
+```
+Name:   PayOS--ChecksumKey
+Value:  [Lấy từ PayOS Dashboard]
+```
+Click **"Create"**
+
 ✅ **Hoàn thành!** Tất cả secrets đã được lưu an toàn.
 
-> **Lưu ý**: Tên secret dùng `--` thay vì `:` vì Azure Key Vault không cho phép dấu `:`
+> **Lưu ý**: Tên secret dùng `--` thay vì `:` vì Azure Key Vault không cho phép dấu `:`. Azure SDK sẽ tự động convert `--` → `:` khi load vào Configuration.
 
 ---
 
