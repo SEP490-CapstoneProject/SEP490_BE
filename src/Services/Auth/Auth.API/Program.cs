@@ -102,12 +102,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+// Configure the HTTP request pipeline - Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Auth API V1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowAll");
 app.UseAuthentication();

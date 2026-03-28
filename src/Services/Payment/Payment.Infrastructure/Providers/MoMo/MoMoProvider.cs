@@ -3,12 +3,16 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Payment.Application.DTOs;
-using Payment.Application.Interfaces;
 using Payment.Domain.Entities;
 
 namespace Payment.Infrastructure.Providers.MoMo;
 
-public class MoMoProvider : IPaymentProvider
+/// <summary>
+/// LEGACY: MoMo provider - no longer in active use
+/// Kept for reference and potential rollback
+/// </summary>
+[Obsolete("Migrated to PayOS. Use PayOSProvider instead.")]
+public class MoMoProvider
 {
     private readonly MoMoSettings _settings;
     private readonly HttpClient _httpClient;
