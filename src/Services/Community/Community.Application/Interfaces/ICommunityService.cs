@@ -15,7 +15,7 @@ public interface ICommunityService
     Task<CommunityPost?> GetPostByIdAsync(int id);
     Task<IEnumerable<CommunityPost>> GetAllPostsAsync();
     Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId);
-    Task<CommunityPost> CreatePostAsync(CreatePostRequest request, int userId, Dictionary<string, IFormFile> fileMap);
+    Task<CommunityPostDto> CreatePostAsync(CreatePostRequest request, int userId, Dictionary<string, IFormFile> fileMap);
     Task UpdatePostAsync(CommunityPost post);
     Task DeletePostAsync(int id);
 

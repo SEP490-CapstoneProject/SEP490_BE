@@ -42,26 +42,44 @@ public class CompanyController : ControllerBase
     }
 
     /// <summary>
-    /// Batch get company profiles by userIds (service-to-service)
+    /// Batch get company profiles by company ids or user ids (service-to-service)
     /// </summary>
     [HttpGet("batch")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetBatch([FromQuery] string userIds)
+    public async Task<IActionResult> GetBatch([FromQuery] string? userIds, [FromQuery] string? ids)
     {
-        if (string.IsNullOrWhiteSpace(userIds)) return Ok(new List<object>());
-
-        var ids = userIds.Split(',')
-            .Select(s => int.TryParse(s.Trim(), out var id) ? (int?)id : null)
-            .Where(id => id.HasValue)
-            .Select(id => id!.Value)
-            .Distinct()
-            .ToList();
-
-        if (ids.Count == 0) return Ok(new List<object>());
-
         var all = await _service.GetAllAsync();
-        var result = all.Where(c => ids.Contains(c.UserId)).ToList();
-        return Ok(result);
+        if (!string.IsNullOrWhiteSpace(ids))
+        {
+            var companyIds = ids.Split(',')
+                .Select(s => int.TryParse(s.Trim(), out var id) ? (int?)id : null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            if (companyIds.Count == 0) return Ok(new List<object>());
+
+            var result = all.Where(c => companyIds.Contains(c.Id)).ToList();
+            return Ok(result);
+        }
+
+        if (!string.IsNullOrWhiteSpace(userIds))
+        {
+            var userIdList = userIds.Split(',')
+                .Select(s => int.TryParse(s.Trim(), out var id) ? (int?)id : null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            if (userIdList.Count == 0) return Ok(new List<object>());
+
+            var result = all.Where(c => userIdList.Contains(c.UserId)).ToList();
+            return Ok(result);
+        }
+
+        return Ok(new List<object>());
     }
 
     /// <summary>

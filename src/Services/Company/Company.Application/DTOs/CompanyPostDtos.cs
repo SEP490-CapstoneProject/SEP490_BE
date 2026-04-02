@@ -1,7 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace Company.Application.DTOs;
 
 public class CompanyPostFeedDto
 {
+    [JsonIgnore]
+    public int CompanyId { get; set; }
     public int PostId { get; set; }
     public string Position { get; set; } = "";
     public string? CompanyName { get; set; }

@@ -38,11 +38,7 @@ public class CompanyDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasColumnName("createAt").HasDefaultValueSql("GETDATE()");
             entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue(1);
 
-            entity.HasOne(e => e.Company)
-                .WithMany(c => c.Posts)
-                .HasForeignKey(e => e.CompanyId)
-                .HasConstraintName("FK_CompanyPost_Company")
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.Ignore(e => e.Company);
 
             // Feed sort index: status + createAt DESC + postId DESC
             entity.HasIndex(e => new { e.Status, e.CreatedAt, e.PostId })
@@ -57,7 +53,7 @@ public class CompanyDbContext : DbContext
         {
             entity.ToTable("COMPANY_POST_MEDIA", "companysvc");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
             entity.Property(e => e.CompanyPostId).HasColumnName("companyPostId").IsRequired();
             entity.Property(e => e.Type).HasColumnName("type").HasMaxLength(50);
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
@@ -77,7 +73,7 @@ public class CompanyDbContext : DbContext
         {
             entity.ToTable("COMPANY_POST_SAVE", "companysvc");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
             entity.Property(e => e.CompanyPostId).HasColumnName("companyPostId").IsRequired();
             entity.Property(e => e.UserId).HasColumnName("userId").IsRequired();
 
@@ -99,6 +95,7 @@ public class CompanyDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
             entity.Property(e => e.AvatarUrl).HasColumnName("avatarUrl").HasMaxLength(500);
+            entity.Ignore(e => e.Posts);
         });
     }
 }
