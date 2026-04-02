@@ -57,12 +57,20 @@ builder.Services.AddDbContext<CompanyDbContext>(options =>
 
 builder.Services.AddScoped<ICompanyPostRepository, CompanyPostRepository>();
 builder.Services.AddScoped<ICompanyPostService, CompanyPostService>();
+builder.Services.AddScoped<ICompanyCacheRepository, CompanyCacheRepository>();
 
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
 builder.Services.AddHttpClient<IMediaUploadClient, MediaUploadClient>(client =>
 {
     client.BaseAddress = new Uri(mediaServiceUrl);
     client.Timeout = TimeSpan.FromMinutes(5);
+});
+
+var userProfileServiceUrl = builder.Configuration["ServiceUrls:UserProfileService"] ?? "http://userprofile-service:8080";
+builder.Services.AddHttpClient<ICompanyProfileClient, UserProfileCompanyClient>(client =>
+{
+    client.BaseAddress = new Uri(userProfileServiceUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 var jwtSecret = builder.Configuration["JwtSettings:Secret"];

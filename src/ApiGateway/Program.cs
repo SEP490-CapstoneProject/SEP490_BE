@@ -80,7 +80,7 @@ app.MapGet("/services", () => Results.Ok(new
         new { name = "auth", port = 5001, path = "/api/auth" },
         new { name = "userprofile", port = 5002, path = "/api/userprofile" },
         new { name = "portfolio", port = 5003, path = "/api/portfolio" },
-        new { name = "company", port = 5004, path = "/api/company" },
+        new { name = "company", port = 5004, path = "/api/company-posts" },
         new { name = "connection", port = 5006, path = "/api/connection" },
         new { name = "community", port = 5007, path = "/api/community" },
         new { name = "subscription", port = 5008, path = "/api/subscription" },

@@ -10,30 +10,63 @@ namespace Company.Application.Services;
 public class CompanyPostService : ICompanyPostService
 {
     private readonly ICompanyPostRepository _repository;
+    private readonly ICompanyCacheRepository _companyCacheRepository;
+    private readonly ICompanyProfileClient _companyProfileClient;
     private readonly IMediaUploadClient _mediaUploadClient;
     private readonly ILogger<CompanyPostService> _logger;
 
     public CompanyPostService(
         ICompanyPostRepository repository,
+        ICompanyCacheRepository companyCacheRepository,
+        ICompanyProfileClient companyProfileClient,
         IMediaUploadClient mediaUploadClient,
         ILogger<CompanyPostService> logger)
     {
         _repository = repository;
+        _companyCacheRepository = companyCacheRepository;
+        _companyProfileClient = companyProfileClient;
         _mediaUploadClient = mediaUploadClient;
         _logger = logger;
     }
 
-    public Task<CursorPagedResult<CompanyPostFeedDto>> GetPostFeedAsync(DateTime? cursor, int limit, int? userId)
-        => _repository.GetPostFeedAsync(cursor, limit, userId);
+    public async Task<CursorPagedResult<CompanyPostFeedDto>> GetPostFeedAsync(DateTime? cursor, int limit, int? userId)
+    {
+        var result = await _repository.GetPostFeedAsync(cursor, limit, userId);
+        await EnrichCompanyCacheAsync(result.Items);
+        return result;
+    }
 
-    public Task<CursorPagedResult<CompanyPostFeedDto>> GetPostsByCompanyAsync(int companyId, DateTime? cursor, int limit, int? userId)
-        => _repository.GetPostsByCompanyAsync(companyId, cursor, limit, userId);
+    public async Task<CursorPagedResult<CompanyPostFeedDto>> GetPostsByCompanyAsync(int companyId, DateTime? cursor, int limit, int? userId)
+    {
+        var result = await _repository.GetPostsByCompanyAsync(companyId, cursor, limit, userId);
+        await EnrichCompanyCacheAsync(result.Items);
+        return result;
+    }
 
-    public Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId)
-        => _repository.GetPostDetailAsync(postId, userId);
+    public async Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId)
+    {
+        var detail = await _repository.GetPostDetailAsync(postId, userId);
+        if (detail == null) return null;
+
+        await EnrichCompanyCacheAsync(detail);
+        return detail;
+    }
 
     public async Task<CompanyPostDetailDto> CreatePostAsync(CreatePostRequest request, int companyId, Dictionary<string, IFormFile> fileMap)
     {
+        var profile = await _companyProfileClient.GetCompanyAsync(companyId);
+        if (profile == null)
+        {
+            throw new InvalidOperationException("Company profile not found.");
+        }
+
+        await _companyCacheRepository.UpsertAsync(new CompanyEntity
+        {
+            Id = profile.Id,
+            Name = profile.CompanyName,
+            AvatarUrl = profile.Avatar
+        });
+
         var post = new CompanyPost
         {
             CompanyId = companyId,
@@ -94,6 +127,11 @@ public class CompanyPostService : ICompanyPostService
         }
 
         var detail = await _repository.GetPostDetailAsync(created.PostId, companyId);
+        if (detail != null)
+        {
+            detail.CompanyName = profile.CompanyName;
+            detail.CompanyAvatar = profile.Avatar;
+        }
         return detail!;
     }
 
@@ -139,5 +177,55 @@ public class CompanyPostService : ICompanyPostService
 
     public Task UnsavePostAsync(int postId, int userId)
         => _repository.UnsavePostAsync(userId, postId);
+
+    private async Task EnrichCompanyCacheAsync(List<CompanyPostFeedDto> items)
+    {
+        var missingIds = items
+            .Where(i => i.CompanyId > 0 && (string.IsNullOrEmpty(i.CompanyName) || string.IsNullOrEmpty(i.CompanyAvatar)))
+            .Select(i => i.CompanyId)
+            .Distinct()
+            .ToList();
+
+        if (missingIds.Count == 0) return;
+
+        var profiles = await _companyProfileClient.GetCompaniesAsync(missingIds);
+        if (profiles.Count == 0) return;
+
+        await _companyCacheRepository.UpsertRangeAsync(profiles.Select(p => new CompanyEntity
+        {
+            Id = p.Id,
+            Name = p.CompanyName,
+            AvatarUrl = p.Avatar
+        }));
+
+        var lookup = profiles.ToDictionary(p => p.Id);
+        foreach (var item in items)
+        {
+            if (lookup.TryGetValue(item.CompanyId, out var profile))
+            {
+                item.CompanyName = profile.CompanyName;
+                item.CompanyAvatar = profile.Avatar;
+            }
+        }
+    }
+
+    private async Task EnrichCompanyCacheAsync(CompanyPostDetailDto detail)
+    {
+        if (detail.CompanyId <= 0) return;
+        if (!string.IsNullOrEmpty(detail.CompanyName) || !string.IsNullOrEmpty(detail.CompanyAvatar)) return;
+
+        var profile = await _companyProfileClient.GetCompanyAsync(detail.CompanyId);
+        if (profile == null) return;
+
+        await _companyCacheRepository.UpsertAsync(new CompanyEntity
+        {
+            Id = profile.Id,
+            Name = profile.CompanyName,
+            AvatarUrl = profile.Avatar
+        });
+
+        detail.CompanyName = profile.CompanyName;
+        detail.CompanyAvatar = profile.Avatar;
+    }
 }
 

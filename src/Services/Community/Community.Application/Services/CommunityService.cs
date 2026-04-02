@@ -164,7 +164,7 @@ public class CommunityService : ICommunityService
     public async Task UpdatePostAsync(CommunityPost post) => await _repository.UpdatePostAsync(post);
     public async Task DeletePostAsync(int id) => await _repository.DeletePostAsync(id);
 
-    public async Task<CommunityPost> CreatePostAsync(
+    public async Task<CommunityPostDto> CreatePostAsync(
         CreatePostRequest request,
         int userId,
         Dictionary<string, IFormFile> fileMap)
@@ -180,7 +180,12 @@ public class CommunityService : ICommunityService
 
         var created = await _repository.CreatePostAsync(post);
 
-        if (fileMap.Count == 0) return created;
+        if (fileMap.Count == 0)
+        {
+            // Return DTO immediately if no files
+            var dto = await GetPostDtoAsync(created.Id, userId);
+            return dto!;
+        }
 
         // Upload cover image if specified
         if (!string.IsNullOrWhiteSpace(request.CoverImageKey)
@@ -224,7 +229,9 @@ public class CommunityService : ICommunityService
             }
         }
 
-        return created;
+        // Return DTO with all enriched data
+        var postDto = await GetPostDtoAsync(created.Id, userId);
+        return postDto!;
     }
 
     // ─── Ownership checks ─────────────────────────────────────────────────────
