@@ -35,7 +35,7 @@ public class CompanyDbContext : DbContext
             entity.Property(e => e.RequirementsPreferred).HasColumnName("requirementsPreferred");
             entity.Property(e => e.Benefits).HasColumnName("benefits");
             entity.Property(e => e.CoverImageVideo).HasColumnName("coverImageVideo").HasMaxLength(500);
-            entity.Property(e => e.CreatedAt).HasColumnName("createAt").HasDefaultValueSql("GETDATE()");
+            entity.Property(e => e.CreatedAt).HasColumnName("createAt");
             entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue(1);
 
             entity.Ignore(e => e.Company);
