@@ -2,7 +2,9 @@ namespace Notification.Infrastructure.Messaging;
 
 public class NotificationEvent
 {
+    public string? EventId { get; set; }
     public string EventType { get; set; } = default!;
+    public int Version { get; set; } = 1;
     public string UserId { get; set; } = default!;
     public string? ActorId { get; set; }
     public string ActorType { get; set; } = "USER";

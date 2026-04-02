@@ -5,6 +5,7 @@ using Community.Application.Services;
 using Community.Infrastructure.Clients;
 using Community.Infrastructure.Data;
 using Community.Infrastructure.Repositories;
+using Community.Infrastructure.Services;
 using Community.Infrastructure.Azure;
 using Community.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -62,6 +63,7 @@ builder.Services.AddDbContext<CommunityDbContext>(options =>
 // Add DI
 builder.Services.AddScoped<ICommunityRepository, CommunityRepository>();
 builder.Services.AddScoped<ICommunityService, CommunityService>();
+builder.Services.AddScoped<ICommunityEventPublisher, RabbitMqCommunityEventPublisher>();
 
 // Add typed HttpClient for Media Service
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";

@@ -230,6 +230,11 @@ public class CommunityRepository : ICommunityRepository
             .ToListAsync();
     }
 
+    public async Task<Comment?> GetCommentByIdAsync(int commentId)
+    {
+        return await _context.Comments.FirstOrDefaultAsync(c => c.Id == commentId);
+    }
+
     public async Task<int?> GetCommentOwnerAsync(int commentId)
     {
         return await _context.Comments
