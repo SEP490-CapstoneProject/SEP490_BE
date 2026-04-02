@@ -390,3 +390,48 @@ PS D:\Capstone> az containerapp update --name company-service --resource-group C
   },
   "type": "Microsoft.App/containerApps"
 }
+
+==================== Notification Service Q&A ====================
+
+1) Bạn đang push realtime (SignalR) ở đâu?
+→ Push realtime được trigger từ **RabbitMQConsumer** (Infrastructure/Messaging) sau khi xử lý event.
+→ Consumer gọi `INotificationPushService.PushAsync(...)`.
+→ Implement thực tế là **SignalRPushService** dùng `IHubContext<NotificationHub>` để gửi:
+   `Clients.Group($"user_{userId}").SendAsync("ReceiveNotification", dto)`.
+→ Không push trực tiếp trong Controller.
+
+2) Event hiện tại đi qua gì?
+→ Event đi qua **Message Broker RabbitMQ** (không phải HTTP call trực tiếp giữa các service cho luồng tạo notification).
+→ Exchange: `skillsnap.events` (topic), queue: `notification.events`,
+   binding: `post.*`, `connection.*`, `portfolio.*`, `job.*`, `system.*`.
+
+3) Flow hiện tại là gì?
+→ Service khác publish event lên RabbitMQ
+→ Notification Service (RabbitMQConsumer) consume event
+→ Tạo `NotificationEntity` và lưu DB
+→ Invalidate cache unread count (Redis/distributed cache)
+→ Push realtime qua SignalR đến group `user_{userId}` với event `ReceiveNotification`
+→ Frontend đồng thời có thể gọi REST API `/api/notifications` để đồng bộ danh sách.
+
+4) Bạn có bao nhiêu loại notification?
+→ Hiện tại theo domain/binding key có **5 nhóm chính**:
+   - `post.*`
+   - `connection.*`
+   - `portfolio.*`
+   - `job.*`
+   - `system.*`
+→ Trường `Type` đang là string (không bị khóa bằng enum cứng trong code hiện tại).
+
+5) Notification Service hiện có lưu DB không?
+→ **Có**.
+→ Có entity `NotificationEntity`, `NotificationDbContext` có `DbSet<NotificationEntity> Notifications`,
+   map vào bảng `NOTIFICATION`.
+
+6) Frontend đang listen realtime những event nào?
+→ Trong Notification Service, server chỉ emit event SignalR: **`ReceiveNotification`**.
+→ Không thấy code frontend app trong repo này; tài liệu tích hợp hiện mô tả listen `ReceiveNotification`.
+→ Event realtime cho comment/reply/chat kiểu khác nằm ở service khác (ví dụ Connection/ChatHub), không phải NotificationHub.
+
+7) Bạn có muốn tách Realtime Service riêng không?
+→ **Chưa cần tách ở thời điểm hiện tại** (giữ chung trong Notification Service là hợp lý vì flow đang chặt với lưu notification + unread cache + push).
+→ Khi tải realtime tăng rất cao hoặc cần scale độc lập, khi đó mới nên tách.

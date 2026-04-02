@@ -189,6 +189,7 @@ public class CommunityRepository : ICommunityRepository
             .Where(s => s.UserId == userId)
             .Include(s => s.CommunityPost)
                 .ThenInclude(p => p.Media)
+            .OrderByDescending(s => s.CommunityPost.CreatedAt)
             .Select(s => s.CommunityPost)
             .ToListAsync();
     }
@@ -199,6 +200,7 @@ public class CommunityRepository : ICommunityRepository
             .Where(f => f.UserId == userId)
             .Include(f => f.CommunityPost)
                 .ThenInclude(p => p.Media)
+            .OrderByDescending(f => f.CommunityPost.CreatedAt)
             .Select(f => f.CommunityPost)
             .ToListAsync();
     }
@@ -216,7 +218,7 @@ public class CommunityRepository : ICommunityRepository
     {
         return await _context.Comments
             .Where(c => c.CommunityPostId == postId)
-            .OrderBy(c => c.CreatedAt)
+            .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
     }
 
@@ -259,7 +261,7 @@ public class CommunityRepository : ICommunityRepository
     {
         return await _context.ReplyComments
             .Where(r => r.CommentId == commentId)
-            .OrderBy(r => r.CreatedAt)
+            .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
     }
 
