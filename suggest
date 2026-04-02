@@ -1,193 +1,379 @@
-You are a senior fintech backend architect.
+# 🚀 REFACTOR PROMPT — REALTIME SERVICE (SINGLE CONNECTION) & NOTIFICATION CLEANUP
 
-I have already created a **PayOS migration plan (production-grade)** for a Payment Service that uses:
+## 🎯 Objective
 
-* .NET (Clean Architecture)
-* RabbitMQ (event-driven)
-* Subscription Service consuming `payment.succeeded`
-* Redis for entitlements
+Refactor system to:
 
-The plan is GOOD but NOT PERFECT. Your task is to **REFINE and UPGRADE it to true fintech-grade (10/10 production readiness)**.
-
----
-
-## 🎯 Your Goal
-
-Refactor the plan to ensure:
-
-* Maximum **reliability**
-* Strong **security**
-* Full **observability**
-* Robust **failure handling**
-* No race conditions
-* No payment inconsistency
+1. Extract a dedicated **Realtime Service (SignalR)**.
+2. Refactor **Notification Service** to remove realtime responsibilities.
+3. Implement **comment & reply realtime** via event-driven architecture.
+4. Use **SINGLE SignalR connection (ONE HUB ONLY)** for all realtime events.
+5. Ensure production-grade: idempotency, scalability, clean separation.
 
 ---
 
-## 🔴 MUST ADD (CRITICAL IMPROVEMENTS)
+# 🏗️ TARGET ARCHITECTURE
 
-### 1. Payment Verification Step (MANDATORY)
-
-After webhook validation:
-
-* Call PayOS API (`GET payment-requests/{orderCode}`)
-* Re-verify:
-
-  * amount
-  * status
-  * transaction integrity
-
-This is required to prevent:
-
-* spoofed webhook
-* inconsistent states
+Community Service
+↓
+RabbitMQ (skillsnap.events)
+↓
+┌─────────────────────┬──────────────────────┐
+↓                     ↓
+Realtime Service       Notification Service
+(SignalR ONLY)         (Business Logic ONLY)
 
 ---
 
-### 2. Concurrency Control (MANDATORY)
+# ⚠️ CRITICAL DESIGN DECISIONS (MUST FOLLOW)
 
-Prevent double processing when:
+## 1. SINGLE CONNECTION STRATEGY (MANDATORY)
 
-* multiple webhooks arrive
-* multiple service instances run
+* ONLY ONE HUB:
 
-You MUST include:
+  ```
+  /hubs/realtime
+  ```
 
-Option A:
+* DO NOT create multiple hubs like:
 
-* DB conditional update (Pending → Processing)
-
-Option B:
-
-* Distributed lock (Redis)
-
-Explain trade-offs and choose one.
+  * ❌ /hubs/notifications
+  * ❌ /hubs/community
 
 ---
 
-### 3. Idempotency & Replay Protection
+## 2. SINGLE HUB EVENT DESIGN
 
-Ensure:
+RealtimeHub handles ALL events:
 
-* Webhook processed ONLY ONCE
-* Use `ProcessedEvents` table (or equivalent)
-* Enforce UNIQUE constraint on eventId/orderCode
-
----
-
-### 4. Dead Letter Queue (DLQ)
-
-Extend RabbitMQ flow:
-
-payment.succeeded
-→ retry (3 times)
-→ DLQ (payment.failed.processing)
-
-Explain:
-
-* retry strategy
-* backoff
-* monitoring DLQ
+* ReceiveNotification
+* ReceiveComment
+* ReceiveReply
 
 ---
 
-### 5. Reconciliation Job (CRITICAL)
+## 3. GROUP STRATEGY
 
-Design a background job:
+* User group:
 
-* Runs every 5–10 minutes
-* Finds:
+  ```
+  user_{userId}
+  ```
 
-  * Pending payments too long
-  * Processing stuck payments
-* Calls PayOS API to reconcile state
+* Post group:
 
-This is REQUIRED in real payment systems.
-
----
-
-### 6. Observability (Production Logging)
-
-Add structured logging:
-
-* correlationId (paymentId)
-* orderCode
-* webhook raw body (masked)
-* signature validation result
-* processing duration
-* error details
-
-Also suggest:
-
-* metrics (success rate, webhook latency)
-* alerting conditions
+  ```
+  post_{postId}
+  ```
 
 ---
 
-### 7. Failure Handling Strategy
+# ✅ TASK 1 — CREATE REALTIME SERVICE
 
-Define behavior for:
+## Structure
 
-* PayOS API timeout
-* webhook validation failure
-* DB update failure
-* event publish failure
-
-Include:
-
-* retry policy
-* fallback logic
-
----
-
-## 🟡 IMPROVE EXISTING DESIGN
-
-You must also refine:
-
-* Payment state machine (ensure no invalid transitions)
-* Feature flag usage (safe rollout)
-* Migration strategy (no data corruption)
-* API design consistency
-* Folder structure if needed
+RealtimeService/
+├── Hubs/
+│    └── RealtimeHub.cs
+│
+├── Consumers/
+│    ├── CommentEventConsumer.cs
+│    ├── ReplyEventConsumer.cs
+│    ├── NotificationEventConsumer.cs
+│
+├── Services/
+│    ├── IRealtimePushService.cs
+│    ├── SignalRPushService.cs
+│
+├── Infrastructure/
+│    ├── Idempotency (Redis)
+│
+└── Program.cs
 
 ---
 
-## 🧱 Output Requirements
+# ✅ TASK 2 — IMPLEMENT REALTIME HUB
 
-Return a **FULLY REWRITTEN plan** with:
+## RealtimeHub.cs
 
-1. Updated architecture
-2. Improved flow diagrams (text-based)
-3. Enhanced migration strategy
-4. New components:
+### MUST IMPLEMENT:
 
-   * verification step
-   * reconciliation job
-   * DLQ
-   * concurrency guard
-5. Code snippets where necessary
-6. Clear reasoning for each improvement
+### 1. Auto join user group on connect
 
----
+```csharp
+public override async Task OnConnectedAsync()
+{
+    var userId = Context.UserIdentifier;
 
-## 🚫 Constraints
+    await Groups.AddToGroupAsync(
+        Context.ConnectionId,
+        $"user_{userId}"
+    );
 
-* Do NOT simplify the system
-* Do NOT remove event-driven design
-* Do NOT break Subscription Service integration
-* Keep it scalable and production-grade
+    await base.OnConnectedAsync();
+}
+```
 
 ---
 
-## 💡 Context
+### 2. Join/Leave post group
 
-This is a real system expected to handle:
+```csharp
+public async Task JoinPost(string postId)
+{
+    await Groups.AddToGroupAsync(
+        Context.ConnectionId,
+        $"post_{postId}"
+    );
+}
 
-* concurrent payments
-* unreliable network
-* webhook retries
-* distributed services
+public async Task LeavePost(string postId)
+{
+    await Groups.RemoveFromGroupAsync(
+        Context.ConnectionId,
+        $"post_{postId}"
+    );
+}
+```
 
 ---
 
-Now upgrade the plan to a true fintech-grade architecture.
+# ✅ TASK 3 — REALTIME PUSH SERVICE
+
+Implement:
+
+```csharp
+PushNotification(userId)
+PushComment(postId)
+PushReply(postId)
+```
+
+SignalR mapping:
+
+* Notification → user_{userId}
+* Comment → post_{postId}
+* Reply → post_{postId}
+
+---
+
+# ✅ TASK 4 — RABBITMQ CONSUMERS
+
+Consume directly from RabbitMQ:
+
+* post.comment.created
+* post.reply.created
+* notification.created
+
+---
+
+## Behavior
+
+### CommentCreatedEvent
+
+→ Push "ReceiveComment" → group post_{postId}
+
+### ReplyCreatedEvent
+
+→ Push "ReceiveReply" → group post_{postId}
+
+### NotificationCreatedEvent
+
+→ Push "ReceiveNotification" → group user_{userId}
+
+---
+
+# ✅ TASK 5 — IDEMPOTENCY (MANDATORY)
+
+## Use Redis
+
+Key:
+
+```
+event:{eventId}
+```
+
+TTL:
+
+```
+5–10 minutes
+```
+
+Logic:
+
+* If key exists → skip push
+* If not → process + set key
+
+---
+
+# ✅ TASK 6 — EVENT CONTRACT (MUST INCLUDE VERSION)
+
+### CommentCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "post.comment.created",
+  "version": 1,
+  "postId": "...",
+  "commentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+### ReplyCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "post.reply.created",
+  "version": 1,
+  "postId": "...",
+  "commentId": "...",
+  "parentCommentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+### NotificationCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "notification.created",
+  "version": 1,
+  "notificationId": "...",
+  "userId": "...",
+  "type": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+# ✅ TASK 7 — REFACTOR NOTIFICATION SERVICE
+
+## REMOVE COMPLETELY:
+
+* SignalR Hub
+* IHubContext usage
+* SignalRPushService
+* Any realtime push logic
+
+---
+
+## KEEP:
+
+* RabbitMQ consumer
+* Notification DB persistence
+* Unread cache
+* Business logic
+
+---
+
+## ADD:
+
+After saving notification:
+
+→ Publish `notification.created`
+
+---
+
+# ❗ RULE: NO CHAINING
+
+❌ Notification → Realtime
+✅ Both consume from RabbitMQ independently
+
+---
+
+# ✅ TASK 8 — FRONTEND INTEGRATION
+
+## SINGLE CONNECTION
+
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("/hubs/realtime", {
+    accessTokenFactory: () => token
+  })
+  .build();
+```
+
+---
+
+## Subscribe events
+
+```javascript
+connection.on("ReceiveNotification", ...)
+connection.on("ReceiveComment", ...)
+connection.on("ReceiveReply", ...)
+```
+
+---
+
+## Reconnect handling (MANDATORY)
+
+```javascript
+connection.onreconnected(() => {
+  connection.invoke("JoinPost", postId);
+});
+```
+
+---
+
+## Join group
+
+```javascript
+connection.invoke("JoinPost", postId);
+```
+
+---
+
+# ✅ TASK 9 — API GATEWAY
+
+* Enable WebSocket forwarding
+* Route:
+
+  ```
+  /hubs/realtime → Realtime Service
+  ```
+* Ensure upgrade headers work
+
+---
+
+# ✅ TASK 10 — OBSERVABILITY (MANDATORY)
+
+Log MUST include:
+
+* eventId
+* routingKey
+* userId / postId
+* connectionId
+
+---
+
+# 🎯 FINAL EXPECTATION
+
+* ONLY ONE SignalR connection
+* Notification Service has ZERO realtime logic
+* Realtime Service handles ALL realtime
+* Comment & reply realtime works
+* No duplicate push
+* Fully event-driven, scalable
+
+---
+
+# 🚀 GOAL
+
+System must be:
+
+* Scalable (thousands of connections)
+* Clean microservices architecture
+* Ready for chat / presence / live features

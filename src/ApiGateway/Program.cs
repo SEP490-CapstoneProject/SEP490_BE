@@ -26,6 +26,7 @@ SetCluster("connection-cluster", "ConnectionService");
 SetCluster("community-cluster", "CommunityService");
 SetCluster("subscription-cluster", "SubscriptionService");
 SetCluster("notification-cluster", "NotificationService");
+SetCluster("realtime-cluster", "RealtimeService");
 SetCluster("media-cluster", "MediaService");
 SetCluster("application-cluster", "ApplicationService");
 SetCluster("payment-cluster", "PaymentService");
@@ -85,6 +86,7 @@ app.MapGet("/services", () => Results.Ok(new
         new { name = "community", port = 5007, path = "/api/community" },
         new { name = "subscription", port = 5008, path = "/api/subscription" },
         new { name = "notification", port = 5011, path = "/api/notifications" },
+        new { name = "realtime", port = 5015, path = "/hubs/realtime" },
         new { name = "media", port = 5012, path = "/api/media" },
         new { name = "application", port = 5013, path = "/api/applications" }
     }

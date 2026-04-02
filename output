@@ -1,437 +1,617 @@
-PS D:\Capstone> docker build -t skillsnapregistry.azurecr.io/community-service:20260402121611 -f src/Services/Community/Dockerfile .
-[+] Building 3.9s (24/24) FINISHED                                                                 docker:desktop-linux
- => [internal] load build definition from Dockerfile                                                               0.0s
- => => transferring dockerfile: 1.42kB                                                                             0.0s
- => [internal] load metadata for mcr.microsoft.com/dotnet/sdk:8.0                                                  0.1s
- => [internal] load metadata for mcr.microsoft.com/dotnet/aspnet:8.0                                               0.1s
- => [internal] load .dockerignore                                                                                  0.0s
- => => transferring context: 271B                                                                                  0.0s
- => [build  1/13] FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45  0.0s
- => => resolve mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45cdf3d1a9  0.0s
- => [base 1/2] FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f  0.0s
- => => resolve mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f87026  0.0s
- => [internal] load build context                                                                                  3.2s
- => => transferring context: 20.16MB                                                                               3.2s
- => CACHED [base 2/2] WORKDIR /app                                                                                 0.0s
- => CACHED [final 1/2] WORKDIR /app                                                                                0.0s
- => CACHED [build  2/13] WORKDIR /src                                                                              0.0s
- => CACHED [build  3/13] COPY [src/Shared/RecruitmentPlatform.Common/RecruitmentPlatform.Common.csproj, Shared/Re  0.0s
- => CACHED [build  4/13] COPY [src/Shared/RecruitmentPlatform.Contracts/RecruitmentPlatform.Contracts.csproj, Sha  0.0s
- => CACHED [build  5/13] COPY [src/Services/Community/Community.API/Community.API.csproj, Services/Community/Comm  0.0s
- => CACHED [build  6/13] COPY [src/Services/Community/Community.Application/Community.Application.csproj, Service  0.0s
- => CACHED [build  7/13] COPY [src/Services/Community/Community.Domain/Community.Domain.csproj, Services/Communit  0.0s
- => CACHED [build  8/13] COPY [src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj, S  0.0s
- => CACHED [build  9/13] RUN dotnet restore "Services/Community/Community.API/Community.API.csproj"                0.0s
- => CACHED [build 10/13] COPY src/Shared/ Shared/                                                                  0.0s
- => CACHED [build 11/13] COPY src/Services/Community/ Services/Community/                                          0.0s
- => CACHED [build 12/13] WORKDIR /src/Services/Community/Community.API                                             0.0s
- => CACHED [build 13/13] RUN dotnet build "Community.API.csproj" -c Release -o /app/build                          0.0s
- => CACHED [publish 1/1] RUN dotnet publish "Community.API.csproj" -c Release -o /app/publish /p:UseAppHost=false  0.0s
- => CACHED [final 2/2] COPY --from=publish /app/publish .                                                          0.0s
- => exporting to image                                                                                             0.1s
- => => exporting layers                                                                                            0.0s
- => => exporting manifest sha256:389b8fb1ec5cc8bb649ba7fdb2d79a8f34efc6fa1e33bc7ac2fad8626d157316                  0.0s
- => => exporting config sha256:9bdebba548e55ccb293b5b1b50f914f8ae939f1fcfb8511f71ad8dd9ce691ff2                    0.0s
- => => exporting attestation manifest sha256:a6853e535d48c86c47a900ab018c84a5ac41085ac90edab722d58cd9f6be3833      0.0s
- => => exporting manifest list sha256:f1dd772d84fd4a6c7d59210b2cb921f97df08feea19f7e726faaf4e019a59602             0.0s
- => => naming to skillsnapregistry.azurecr.io/community-service:20260402121611                                     0.0s
- => => unpacking to skillsnapregistry.azurecr.io/community-service:20260402121611                                  0.0s
-
-View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/slmp5rcgpejgjej27h1aggnr7
-PS D:\Capstone> docker build -t skillsnapregistry.azurecr.io/company-service:20260402121611 -f src/Services/Company/Dockerfile .
-[+] Building 0.7s (24/24) FINISHED                                                                 docker:desktop-linux
- => [internal] load build definition from Dockerfile                                                               0.0s
- => => transferring dockerfile: 1.36kB                                                                             0.0s
- => [internal] load metadata for mcr.microsoft.com/dotnet/sdk:8.0                                                  0.0s
- => [internal] load metadata for mcr.microsoft.com/dotnet/aspnet:8.0                                               0.0s
- => [internal] load .dockerignore                                                                                  0.0s
- => => transferring context: 271B                                                                                  0.0s
- => [build  1/13] FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45  0.0s
- => => resolve mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45cdf3d1a9  0.0s
- => [base 1/2] FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f  0.0s
- => => resolve mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f87026  0.0s
- => [internal] load build context                                                                                  0.3s
- => => transferring context: 136.09kB                                                                              0.3s
- => CACHED [base 2/2] WORKDIR /app                                                                                 0.0s
- => CACHED [final 1/2] WORKDIR /app                                                                                0.0s
- => CACHED [build  2/13] WORKDIR /src                                                                              0.0s
- => CACHED [build  3/13] COPY [src/Shared/RecruitmentPlatform.Common/RecruitmentPlatform.Common.csproj, Shared/Re  0.0s
- => CACHED [build  4/13] COPY [src/Shared/RecruitmentPlatform.Contracts/RecruitmentPlatform.Contracts.csproj, Sha  0.0s
- => CACHED [build  5/13] COPY [src/Services/Company/Company.API/Company.API.csproj, Services/Company/Company.API/  0.0s
- => CACHED [build  6/13] COPY [src/Services/Company/Company.Application/Company.Application.csproj, Services/Comp  0.0s
- => CACHED [build  7/13] COPY [src/Services/Company/Company.Domain/Company.Domain.csproj, Services/Company/Compan  0.0s
- => CACHED [build  8/13] COPY [src/Services/Company/Company.Infrastructure/Company.Infrastructure.csproj, Service  0.0s
- => CACHED [build  9/13] RUN dotnet restore "Services/Company/Company.API/Company.API.csproj"                      0.0s
- => CACHED [build 10/13] COPY src/Shared/ Shared/                                                                  0.0s
- => CACHED [build 11/13] COPY src/Services/Company/ Services/Company/                                              0.0s
- => CACHED [build 12/13] WORKDIR /src/Services/Company/Company.API                                                 0.0s
- => CACHED [build 13/13] RUN dotnet build "Company.API.csproj" -c Release -o /app/build                            0.0s
- => CACHED [publish 1/1] RUN dotnet publish "Company.API.csproj" -c Release -o /app/publish /p:UseAppHost=false    0.0s
- => CACHED [final 2/2] COPY --from=publish /app/publish .                                                          0.0s
- => exporting to image                                                                                             0.1s
- => => exporting layers                                                                                            0.0s
- => => exporting manifest sha256:e9974614f8a1c5367251f31c690b358c8674d2a2b7660faed65f2ebe7d524f9a                  0.0s
- => => exporting config sha256:a51ad283f3f70a4326e032deaaa0f67e88906e52e26f2969f2e603eff20fd272                    0.0s
- => => exporting attestation manifest sha256:3bf9f706bcad9ea7226213fe4809585944a8d1d41282819c1b608be7002f4835      0.0s
- => => exporting manifest list sha256:badc4950a6bdc8a07d77c1285504e14841bb788425a611d5b62a805c9e5be2ac             0.0s
- => => naming to skillsnapregistry.azurecr.io/company-service:20260402121611                                       0.0s
- => => unpacking to skillsnapregistry.azurecr.io/company-service:20260402121611                                    0.0s
-
-View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xtuvimh3cduxbnjfwpiiwkz5n
-PS D:\Capstone> docker push skillsnapregistry.azurecr.io/community-service:20260402121611
-The push refers to repository [skillsnapregistry.azurecr.io/community-service]
-4f4fb700ef54: Layer already exists
-b2a8a296df19: Layer already exists
-1c3dcd1b7507: Layer already exists
-192c07e05730: Layer already exists
-7d7fb8a62944: Pushed
-bf06a24eed53: Layer already exists
-c02d17997ce3: Layer already exists
-92892aba2511: Pushed
-93cdcfd1f207: Layer already exists
-40378ac09cb5: Layer already exists
-20260402121611: digest: sha256:f1dd772d84fd4a6c7d59210b2cb921f97df08feea19f7e726faaf4e019a59602 size: 856
-PS D:\Capstone> docker push skillsnapregistry.azurecr.io/company-service:20260402121611
-The push refers to repository [skillsnapregistry.azurecr.io/company-service]
-1c3dcd1b7507: Layer already exists
-4f4fb700ef54: Layer already exists
-93cdcfd1f207: Layer already exists
-192c07e05730: Layer already exists
-bf06a24eed53: Layer already exists
-c02d17997ce3: Layer already exists
-a1a40e8dd92e: Pushed
-7865cacbfad5: Pushed
-b2a8a296df19: Layer already exists
-40378ac09cb5: Layer already exists
-20260402121611: digest: sha256:badc4950a6bdc8a07d77c1285504e14841bb788425a611d5b62a805c9e5be2ac size: 856
-PS D:\Capstone>  az containerapp update --name community-service --resource-group CapStone --image skillsnapregistry.azurecr.io/community-service:20260402121611 --cpu 0.5 --memory 1Gi
-{
-  "id": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/containerapps/community-service",
-  "identity": {
-    "principalId": "5b06569f-96c2-4d29-9a10-e92cb4afba34",
-    "tenantId": "5b6c0514-0f27-433f-87b7-021cad0435a6",
-    "type": "SystemAssigned"
-  },
-  "kind": "containerapps",
-  "location": "Southeast Asia",
-  "name": "community-service",
-  "properties": {
-    "configuration": {
-      "activeRevisionsMode": "Single",
-      "dapr": null,
-      "identitySettings": [],
-      "ingress": {
-        "additionalPortMappings": null,
-        "allowInsecure": false,
-        "clientCertificateMode": null,
-        "corsPolicy": null,
-        "customDomains": null,
-        "exposedPort": 0,
-        "external": true,
-        "fqdn": "community-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
-        "ipSecurityRestrictions": null,
-        "stickySessions": {
-          "affinity": "none"
-        },
-        "targetPort": 8080,
-        "traffic": [
-          {
-            "latestRevision": true,
-            "weight": 100
-          }
-        ],
-        "transport": "Auto"
-      },
-      "maxInactiveRevisions": 100,
-      "registries": [
-        {
-          "identity": "system-environment",
-          "passwordSecretRef": "",
-          "server": "skillsnapregistry.azurecr.io",
-          "username": ""
-        }
-      ],
-      "runtime": null,
-      "secrets": null,
-      "service": null
-    },
-    "customDomainVerificationId": "D4F8AA8C2632896F69F1921C7BB4B88E779624500B8BEBF74AF334C4E3CC7A83",
-    "delegatedIdentities": [],
-    "environmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
-    "eventStreamEndpoint": "https://southeastasia.azurecontainerapps.dev/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/containerApps/community-service/eventstream",
-    "latestReadyRevisionName": "community-service--0000004",
-    "latestRevisionFqdn": "community-service--0000005.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
-    "latestRevisionName": "community-service--0000005",
-    "managedEnvironmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
-    "outboundIpAddresses": [
-      "20.205.150.1",
-      "20.205.150.0",
-      "20.205.150.18",
-      "20.205.149.225",
-      "20.247.245.155",
-      "20.247.245.157",
-      "20.247.245.153",
-      "20.247.245.143",
-      "20.247.246.7",
-      "20.247.246.1",
-      "20.6.114.5",
-      "4.144.194.224",
-      "135.171.20.58",
-      "57.158.128.114",
-      "20.198.192.118",
-      "20.6.65.200",
-      "172.188.250.166",
-      "4.145.180.29",
-      "20.205.243.128",
-      "135.171.228.121",
-      "20.198.128.121",
-      "20.198.128.186",
-      "20.198.128.64",
-      "20.198.128.69",
-      "20.247.207.65",
-      "20.247.207.75",
-      "20.247.207.73",
-      "20.247.207.76",
-      "20.247.207.60",
-      "20.247.207.71",
-      "57.155.78.132"
-    ],
-    "provisioningState": "Succeeded",
-    "runningStatus": "Running",
-    "template": {
-      "containers": [
-        {
-          "env": [
-            {
-              "name": "ASPNETCORE_ENVIRONMENT"
-            },
-            {
-              "name": "Azure__KeyVault__Url"
-            },
-            {
-              "name": "FORCE_UPDATE"
-            }
-          ],
-          "image": "skillsnapregistry.azurecr.io/community-service:20260402121611",
-          "name": "community-service",
-          "resources": {
-            "cpu": 0.5,
-            "ephemeralStorage": "2Gi",
-            "memory": "1Gi"
-          }
-        }
-      ],
-      "initContainers": null,
-      "revisionSuffix": "",
-      "scale": {
-        "cooldownPeriod": 300,
-        "maxReplicas": 10,
-        "minReplicas": 0,
-        "pollingInterval": 30,
-        "rules": null
-      },
-      "serviceBinds": null,
-      "terminationGracePeriodSeconds": null,
-      "volumes": null
-    },
-    "workloadProfileName": "Consumption"
-  },
-  "resourceGroup": "CapStone",
-  "systemData": {
-    "createdAt": "2026-03-27T12:33:38.4107063",
-    "createdBy": "phuocthinh151204@gmail.com",
-    "createdByType": "User",
-    "lastModifiedAt": "2026-04-02T05:28:52.1063595",
-    "lastModifiedBy": "phuocthinh151204@gmail.com",
-    "lastModifiedByType": "User"
-  },
-  "type": "Microsoft.App/containerApps"
-}
-PS D:\Capstone> az containerapp update --name company-service --resource-group CapStone --image skillsnapregistry.azurecr.io/company-service:20260402121611 --cpu 0.5 --memory 1Gi
-{
-  "id": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/containerapps/company-service",
-  "identity": {
-    "principalId": "1aa9768c-4312-4fcc-98ac-a58d4075b64a",
-    "tenantId": "5b6c0514-0f27-433f-87b7-021cad0435a6",
-    "type": "SystemAssigned"
-  },
-  "kind": "containerapps",
-  "location": "Southeast Asia",
-  "name": "company-service",
-  "properties": {
-    "configuration": {
-      "activeRevisionsMode": "Single",
-      "dapr": null,
-      "identitySettings": [],
-      "ingress": {
-        "additionalPortMappings": null,
-        "allowInsecure": false,
-        "clientCertificateMode": "Ignore",
-        "corsPolicy": null,
-        "customDomains": null,
-        "exposedPort": 0,
-        "external": true,
-        "fqdn": "company-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
-        "ipSecurityRestrictions": null,
-        "stickySessions": {
-          "affinity": "none"
-        },
-        "targetPort": 8080,
-        "traffic": [
-          {
-            "latestRevision": true,
-            "weight": 100
-          }
-        ],
-        "transport": "Auto"
-      },
-      "maxInactiveRevisions": 100,
-      "registries": [
-        {
-          "identity": "system-environment",
-          "passwordSecretRef": "",
-          "server": "skillsnapregistry.azurecr.io",
-          "username": ""
-        }
-      ],
-      "runtime": null,
-      "secrets": null,
-      "service": null
-    },
-    "customDomainVerificationId": "D4F8AA8C2632896F69F1921C7BB4B88E779624500B8BEBF74AF334C4E3CC7A83",
-    "delegatedIdentities": [],
-    "environmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
-    "eventStreamEndpoint": "https://southeastasia.azurecontainerapps.dev/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/containerApps/company-service/eventstream",
-    "latestReadyRevisionName": "company-service--0000003",
-    "latestRevisionFqdn": "company-service--0000004.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
-    "latestRevisionName": "company-service--0000004",
-    "managedEnvironmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
-    "outboundIpAddresses": [
-      "20.205.150.1",
-      "20.205.150.0",
-      "20.205.150.18",
-      "20.205.149.225",
-      "20.247.245.155",
-      "20.247.245.157",
-      "20.247.245.153",
-      "20.247.245.143",
-      "20.247.246.7",
-      "20.247.246.1",
-      "20.6.114.5",
-      "4.144.194.224",
-      "135.171.20.58",
-      "57.158.128.114",
-      "20.198.192.118",
-      "20.6.65.200",
-      "172.188.250.166",
-      "4.145.180.29",
-      "20.205.243.128",
-      "135.171.228.121",
-      "20.198.128.121",
-      "20.198.128.186",
-      "20.198.128.64",
-      "20.198.128.69",
-      "20.247.207.65",
-      "20.247.207.75",
-      "20.247.207.73",
-      "20.247.207.76",
-      "20.247.207.60",
-      "20.247.207.71",
-      "57.155.78.132"
-    ],
-    "provisioningState": "Succeeded",
-    "runningStatus": "Running",
-    "template": {
-      "containers": [
-        {
-          "env": [
-            {
-              "name": "ASPNETCORE_ENVIRONMENT"
-            },
-            {
-              "name": "Azure__KeyVault__Url"
-            },
-            {
-              "name": "FORCE_UPDATE"
-            }
-          ],
-          "image": "skillsnapregistry.azurecr.io/company-service:20260402121611",
-          "name": "company-service",
-          "resources": {
-            "cpu": 0.5,
-            "ephemeralStorage": "2Gi",
-            "memory": "1Gi"
-          }
-        }
-      ],
-      "initContainers": null,
-      "revisionSuffix": "",
-      "scale": {
-        "cooldownPeriod": 300,
-        "maxReplicas": 10,
-        "minReplicas": 0,
-        "pollingInterval": 30,
-        "rules": null
-      },
-      "serviceBinds": null,
-      "terminationGracePeriodSeconds": null,
-      "volumes": null
-    },
-    "workloadProfileName": "Consumption"
-  },
-  "resourceGroup": "CapStone",
-  "systemData": {
-    "createdAt": "2026-03-27T08:19:06.2203961",
-    "createdBy": "phuocthinh151204@gmail.com",
-    "createdByType": "User",
-    "lastModifiedAt": "2026-04-02T05:29:17.0285095",
-    "lastModifiedBy": "phuocthinh151204@gmail.com",
-    "lastModifiedByType": "User"
-  },
-  "type": "Microsoft.App/containerApps"
-}
-
-==================== Notification Service Q&A ====================
-
-1) Bạn đang push realtime (SignalR) ở đâu?
-→ Push realtime được trigger từ **RabbitMQConsumer** (Infrastructure/Messaging) sau khi xử lý event.
-→ Consumer gọi `INotificationPushService.PushAsync(...)`.
-→ Implement thực tế là **SignalRPushService** dùng `IHubContext<NotificationHub>` để gửi:
-   `Clients.Group($"user_{userId}").SendAsync("ReceiveNotification", dto)`.
-→ Không push trực tiếp trong Controller.
-
-2) Event hiện tại đi qua gì?
-→ Event đi qua **Message Broker RabbitMQ** (không phải HTTP call trực tiếp giữa các service cho luồng tạo notification).
-→ Exchange: `skillsnap.events` (topic), queue: `notification.events`,
-   binding: `post.*`, `connection.*`, `portfolio.*`, `job.*`, `system.*`.
-
-3) Flow hiện tại là gì?
-→ Service khác publish event lên RabbitMQ
-→ Notification Service (RabbitMQConsumer) consume event
-→ Tạo `NotificationEntity` và lưu DB
-→ Invalidate cache unread count (Redis/distributed cache)
-→ Push realtime qua SignalR đến group `user_{userId}` với event `ReceiveNotification`
-→ Frontend đồng thời có thể gọi REST API `/api/notifications` để đồng bộ danh sách.
-
-4) Bạn có bao nhiêu loại notification?
-→ Hiện tại theo domain/binding key có **5 nhóm chính**:
-   - `post.*`
-   - `connection.*`
-   - `portfolio.*`
-   - `job.*`
-   - `system.*`
-→ Trường `Type` đang là string (không bị khóa bằng enum cứng trong code hiện tại).
-
-5) Notification Service hiện có lưu DB không?
-→ **Có**.
-→ Có entity `NotificationEntity`, `NotificationDbContext` có `DbSet<NotificationEntity> Notifications`,
-   map vào bảng `NOTIFICATION`.
-
-6) Frontend đang listen realtime những event nào?
-→ Trong Notification Service, server chỉ emit event SignalR: **`ReceiveNotification`**.
-→ Không thấy code frontend app trong repo này; tài liệu tích hợp hiện mô tả listen `ReceiveNotification`.
-→ Event realtime cho comment/reply/chat kiểu khác nằm ở service khác (ví dụ Connection/ChatHub), không phải NotificationHub.
-
-7) Bạn có muốn tách Realtime Service riêng không?
-→ **Chưa cần tách ở thời điểm hiện tại** (giữ chung trong Notification Service là hợp lý vì flow đang chặt với lưu notification + unread cache + push).
-→ Khi tải realtime tăng rất cao hoặc cần scale độc lập, khi đó mới nên tách.
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 58b9a31..780d986 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -210,6 +210,33 @@ services:
+       - recruitment-network
+     restart: on-failure
+ 
++  # Realtime Service
++  realtime-service:
++    build:
++      context: .
++      dockerfile: src/Services/Realtime/Dockerfile
++    container_name: realtime-service
++    ports:
++      - "5015:8080"
++    environment:
++      - ASPNETCORE_ENVIRONMENT=Development
++      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
++      - JwtSettings__Issuer=SkillSnapAuth
++      - JwtSettings__Audience=SkillSnapUsers
++      - RabbitMQ__HostName=rabbitmq
++      - RabbitMQ__UserName=guest
++      - RabbitMQ__Password=guest
++      - RabbitMQ__Port=5672
++      - Redis__ConnectionString=redis:6379
++    depends_on:
++      rabbitmq:
++        condition: service_healthy
++      redis:
++        condition: service_healthy
++    networks:
++      - recruitment-network
++    restart: on-failure
++
+   # Application Service
+   application-service:
+     build:
+diff --git a/src/ApiGateway/Program.cs b/src/ApiGateway/Program.cs
+index a2ae736..972574c 100644
+--- a/src/ApiGateway/Program.cs
++++ b/src/ApiGateway/Program.cs
+@@ -26,6 +26,7 @@ SetCluster("connection-cluster", "ConnectionService");
+ SetCluster("community-cluster", "CommunityService");
+ SetCluster("subscription-cluster", "SubscriptionService");
+ SetCluster("notification-cluster", "NotificationService");
++SetCluster("realtime-cluster", "RealtimeService");
+ SetCluster("media-cluster", "MediaService");
+ SetCluster("application-cluster", "ApplicationService");
+ SetCluster("payment-cluster", "PaymentService");
+@@ -85,6 +86,7 @@ app.MapGet("/services", () => Results.Ok(new
+         new { name = "community", port = 5007, path = "/api/community" },
+         new { name = "subscription", port = 5008, path = "/api/subscription" },
+         new { name = "notification", port = 5011, path = "/api/notifications" },
++        new { name = "realtime", port = 5015, path = "/hubs/realtime" },
+         new { name = "media", port = 5012, path = "/api/media" },
+         new { name = "application", port = 5013, path = "/api/applications" }
+     }
+diff --git a/src/ApiGateway/appsettings.Development.json b/src/ApiGateway/appsettings.Development.json
+index 4eb44f4..3362357 100644
+--- a/src/ApiGateway/appsettings.Development.json
++++ b/src/ApiGateway/appsettings.Development.json
+@@ -64,6 +64,13 @@
+           }
+         }
+       },
++      "realtime-cluster": {
++        "Destinations": {
++          "destination1": {
++            "Address": "http://localhost:5015"
++          }
++        }
++      },
+       "media-cluster": {
+         "Destinations": {
+           "destination1": {
+diff --git a/src/ApiGateway/appsettings.json b/src/ApiGateway/appsettings.json
+index 132a5cd..12deffb 100644
+--- a/src/ApiGateway/appsettings.json
++++ b/src/ApiGateway/appsettings.json
+@@ -16,6 +16,7 @@
+     "CommunityService": "http://community-service:8080",
+     "SubscriptionService": "http://subscription-service:8080",
+     "NotificationService": "http://notification-service:8080",
++    "RealtimeService": "http://realtime-service:8080",
+     "MediaService": "http://media-service:8080",
+     "ApplicationService": "http://application-service:8080",
+     "PaymentService": "http://payment-service:8080"
+@@ -100,10 +101,10 @@
+           "Path": "/api/notifications/{**catch-all}"
+         }
+       },
+-      "notification-hub-route": {
+-        "ClusterId": "notification-cluster",
++      "realtime-hub-route": {
++        "ClusterId": "realtime-cluster",
+         "Match": {
+-          "Path": "/hubs/notifications/{**catch-all}"
++          "Path": "/hubs/realtime/{**catch-all}"
+         }
+       },
+       "posts-route": {
+@@ -200,6 +201,13 @@
+           }
+         }
+       },
++      "realtime-cluster": {
++        "Destinations": {
++          "destination1": {
++            "Address": "http://realtime-service:8080"
++          }
++        }
++      },
+       "media-cluster": {
+         "Destinations": {
+           "destination1": {
+diff --git a/src/Services/Community/Community.API/Program.cs b/src/Services/Community/Community.API/Program.cs
+index d08742b..7f219dc 100644
+--- a/src/Services/Community/Community.API/Program.cs
++++ b/src/Services/Community/Community.API/Program.cs
+@@ -5,6 +5,7 @@ using Community.Application.Services;
+ using Community.Infrastructure.Clients;
+ using Community.Infrastructure.Data;
+ using Community.Infrastructure.Repositories;
++using Community.Infrastructure.Services;
+ using Community.Infrastructure.Azure;
+ using Community.Infrastructure.Configuration;
+ using Microsoft.AspNetCore.Authentication.JwtBearer;
+@@ -62,6 +63,7 @@ builder.Services.AddDbContext<CommunityDbContext>(options =>
+ // Add DI
+ builder.Services.AddScoped<ICommunityRepository, CommunityRepository>();
+ builder.Services.AddScoped<ICommunityService, CommunityService>();
++builder.Services.AddScoped<ICommunityEventPublisher, RabbitMqCommunityEventPublisher>();
+ 
+ // Add typed HttpClient for Media Service
+ var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
+diff --git a/src/Services/Community/Community.API/appsettings.Development.json b/src/Services/Community/Community.API/appsettings.Development.json
+index 0c208ae..d767598 100644
+--- a/src/Services/Community/Community.API/appsettings.Development.json
++++ b/src/Services/Community/Community.API/appsettings.Development.json
+@@ -4,5 +4,11 @@
+       "Default": "Information",
+       "Microsoft.AspNetCore": "Warning"
+     }
++  },
++  "RabbitMQ": {
++    "HostName": "localhost",
++    "UserName": "guest",
++    "Password": "guest",
++    "Port": "5672"
+   }
+ }
+diff --git a/src/Services/Community/Community.API/appsettings.json b/src/Services/Community/Community.API/appsettings.json
+index fe0ad34..d25afe1 100644
+--- a/src/Services/Community/Community.API/appsettings.json
++++ b/src/Services/Community/Community.API/appsettings.json
+@@ -21,5 +21,23 @@
+     "MediaService": "http://media-service:8080",
+     "UserProfileService": "http://userprofile-service:8080",
+     "PortfolioService": "http://portfolio-service:8080"
++  },
++  "RabbitMQ": {
++    "HostName": "rabbitmq",
++    "UserName": "guest",
++    "Password": "guest",
++    "Port": "5672"
++  },
++  "Realtime": {
++    "HubPath": "/hubs/realtime",
++    "Events": [
++      "ReceiveNotification",
++      "ReceiveComment",
++      "ReceiveReply"
++    ],
++    "Groups": {
++      "JoinMethod": "JoinPost",
++      "LeaveMethod": "LeavePost"
++    }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs b/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs
+index 9c0e8ff..f278cf6 100644
+--- a/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs
++++ b/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs
+@@ -29,6 +29,7 @@ public interface ICommunityRepository
+     Task<Comment> AddCommentAsync(Comment comment);
+     Task<IEnumerable<Comment>> GetCommentsByPostIdAsync(int postId);
+     Task<IEnumerable<ReplyComment>> GetRepliesByCommentIdsAsync(List<int> commentIds);
++    Task<Comment?> GetCommentByIdAsync(int commentId);
+     Task<int?> GetCommentOwnerAsync(int commentId);
+     Task DeleteCommentAsync(int id);
+     
+diff --git a/src/Services/Community/Community.Application/Services/CommunityService.cs b/src/Services/Community/Community.Application/Services/CommunityService.cs
+index 77ccec4..a871de9 100644
+--- a/src/Services/Community/Community.Application/Services/CommunityService.cs
++++ b/src/Services/Community/Community.Application/Services/CommunityService.cs
+@@ -5,6 +5,7 @@ using Community.Application.Interfaces;
+ using Community.Domain.Entities;
+ using Microsoft.AspNetCore.Http;
+ using Microsoft.Extensions.Logging;
++using RecruitmentPlatform.Contracts.Realtime;
+ 
+ namespace Community.Application.Services;
+ 
+@@ -14,6 +15,7 @@ public class CommunityService : ICommunityService
+     private readonly IUserInfoClient _userInfoClient;
+     private readonly IPortfolioPreviewClient _portfolioPreviewClient;
+     private readonly IMediaUploadClient _mediaUploadClient;
++    private readonly ICommunityEventPublisher _eventPublisher;
+     private readonly ILogger<CommunityService> _logger;
+ 
+     public CommunityService(
+@@ -21,12 +23,14 @@ public class CommunityService : ICommunityService
+         IUserInfoClient userInfoClient,
+         IPortfolioPreviewClient portfolioPreviewClient,
+         IMediaUploadClient mediaUploadClient,
++        ICommunityEventPublisher eventPublisher,
+         ILogger<CommunityService> logger)
+     {
+         _repository = repository;
+         _userInfoClient = userInfoClient;
+         _portfolioPreviewClient = portfolioPreviewClient;
+         _mediaUploadClient = mediaUploadClient;
++        _eventPublisher = eventPublisher;
+         _logger = logger;
+     }
+ 
+@@ -261,7 +265,32 @@ public class CommunityService : ICommunityService
+             Content = content,
+             CreatedAt = DateTimeHelper.GetVietnamTime()
+         };
+-        return await _repository.AddCommentAsync(comment);
++        var created = await _repository.AddCommentAsync(comment);
++
++        var post = await _repository.GetPostByIdAsync(postId);
++        if (post is not null)
++        {
++            var evt = new CommentCreatedEvent
++            {
++                EventId = Guid.NewGuid().ToString("N"),
++                EventType = "post.comment.created",
++                Version = 1,
++                PostId = postId,
++                CommentId = created.Id,
++                UserId = post.UserId.ToString(),
++                ActorId = userId.ToString(),
++                ActorType = "USER",
++                ObjectId = postId.ToString(),
++                Title = "B├¼nh luß║¡n mß╗¢i",
++                Type = "COMMUNITY",
++                Content = created.Content,
++                CreatedAt = created.CreatedAt
++            };
++
++            await _eventPublisher.PublishCommentCreatedAsync(evt);
++        }
++
++        return created;
+     }
+ 
+     public async Task<IEnumerable<Comment>> GetCommentsAsync(int postId) => await _repository.GetCommentsByPostIdAsync(postId);
+@@ -279,7 +308,34 @@ public class CommunityService : ICommunityService
+             Content = content,
+             CreatedAt = DateTimeHelper.GetVietnamTime()
+         };
+-        return await _repository.AddReplyAsync(reply);
++        var created = await _repository.AddReplyAsync(reply);
++
++        var comment = await _repository.GetCommentByIdAsync(commentId);
++        if (comment is not null)
++        {
++            var evt = new ReplyCreatedEvent
++            {
++                EventId = Guid.NewGuid().ToString("N"),
++                EventType = "post.reply.created",
++                Version = 1,
++                PostId = comment.CommunityPostId,
++                CommentId = commentId,
++                ParentCommentId = commentId,
++                UserId = comment.UserId.ToString(),
++                ActorId = userId.ToString(),
++                ActorType = "USER",
++                ObjectId = comment.CommunityPostId.ToString(),
++                Title = "Trß║ú lß╗¥i b├¼nh luß║¡n",
++                Type = "COMMUNITY",
++                ReplyToUserId = replyToUserId,
++                Content = created.Content,
++                CreatedAt = created.CreatedAt
++            };
++
++            await _eventPublisher.PublishReplyCreatedAsync(evt);
++        }
++
++        return created;
+     }
+ 
+     public async Task<IEnumerable<ReplyComment>> GetRepliesAsync(int commentId) => await _repository.GetRepliesByCommentIdAsync(commentId);
+diff --git a/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj b/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj
+index cb843b1..6d6833c 100644
+--- a/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj
++++ b/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj
+@@ -16,6 +16,7 @@
+     <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.6.0" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
++    <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0">
+       <PrivateAssets>all</PrivateAssets>
+       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+diff --git a/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs b/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs
+index 06b24e1..158c6c5 100644
+--- a/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs
++++ b/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs
+@@ -230,6 +230,11 @@ public class CommunityRepository : ICommunityRepository
+             .ToListAsync();
+     }
+ 
++    public async Task<Comment?> GetCommentByIdAsync(int commentId)
++    {
++        return await _context.Comments.FirstOrDefaultAsync(c => c.Id == commentId);
++    }
++
+     public async Task<int?> GetCommentOwnerAsync(int commentId)
+     {
+         return await _context.Comments
+diff --git a/src/Services/Notification/Notification.API/Hubs/NotificationHub.cs b/src/Services/Notification/Notification.API/Hubs/NotificationHub.cs
+deleted file mode 100644
+index 20d9d5c..0000000
+--- a/src/Services/Notification/Notification.API/Hubs/NotificationHub.cs
++++ /dev/null
+@@ -1,33 +0,0 @@
+-using System.Security.Claims;
+-using Microsoft.AspNetCore.Authorization;
+-using Microsoft.AspNetCore.SignalR;
+-
+-namespace Notification.API.Hubs;
+-
+-[Authorize]
+-public class NotificationHub : Hub
+-{
+-    public override async Task OnConnectedAsync()
+-    {
+-        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+-                  ?? Context.User?.FindFirst("sub")?.Value
+-                  ?? Context.User?.FindFirst("nameid")?.Value;
+-
+-        if (!string.IsNullOrEmpty(userId))
+-            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+-
+-        await base.OnConnectedAsync();
+-    }
+-
+-    public override async Task OnDisconnectedAsync(Exception? exception)
+-    {
+-        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+-                  ?? Context.User?.FindFirst("sub")?.Value
+-                  ?? Context.User?.FindFirst("nameid")?.Value;
+-
+-        if (!string.IsNullOrEmpty(userId))
+-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user_{userId}");
+-
+-        await base.OnDisconnectedAsync(exception);
+-    }
+-}
+diff --git a/src/Services/Notification/Notification.API/Program.cs b/src/Services/Notification/Notification.API/Program.cs
+index dee59c9..4d3f9a5 100644
+--- a/src/Services/Notification/Notification.API/Program.cs
++++ b/src/Services/Notification/Notification.API/Program.cs
+@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
+ using Microsoft.EntityFrameworkCore;
+ using Microsoft.IdentityModel.Tokens;
+ using Microsoft.OpenApi.Models;
+-using Notification.API.Hubs;
+-using Notification.API.Services;
+ using Notification.Application.Interfaces;
+ using Notification.Application.Services;
+ using Notification.Infrastructure.Azure;
+@@ -39,10 +37,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+         {
+             OnMessageReceived = context =>
+             {
+-                var accessToken = context.Request.Query["access_token"];
+-                var path = context.HttpContext.Request.Path;
+-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notifications"))
+-                    context.Token = accessToken;
+                 return Task.CompletedTask;
+             }
+         };
+@@ -87,8 +81,6 @@ else
+     builder.Services.AddDistributedMemoryCache();
+ }
+ 
+-builder.Services.AddSignalR();
+-
+ builder.Services.AddCors(options =>
+ {
+     options.AddPolicy("AllowAll", policy =>
+@@ -105,7 +97,7 @@ builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client
+ 
+ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+ builder.Services.AddScoped<INotificationService, NotificationService>();
+-builder.Services.AddScoped<INotificationPushService, SignalRPushService>();
++builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
+ 
+ builder.Services.AddHostedService<RabbitMQConsumer>();
+ 
+@@ -126,7 +118,6 @@ app.UseCors("AllowAll");
+ app.UseAuthentication();
+ app.UseAuthorization();
+ app.MapControllers();
+-app.MapHub<NotificationHub>("/hubs/notifications");
+ 
+ app.Run();
+ 
+diff --git a/src/Services/Notification/Notification.API/Services/SignalRPushService.cs b/src/Services/Notification/Notification.API/Services/SignalRPushService.cs
+deleted file mode 100644
+index 16a4566..0000000
+--- a/src/Services/Notification/Notification.API/Services/SignalRPushService.cs
++++ /dev/null
+@@ -1,16 +0,0 @@
+-using Microsoft.AspNetCore.SignalR;
+-using Notification.Application.DTOs;
+-using Notification.Application.Interfaces;
+-using Notification.API.Hubs;
+-
+-namespace Notification.API.Services;
+-
+-public class SignalRPushService : INotificationPushService
+-{
+-    private readonly IHubContext<NotificationHub> _hubContext;
+-
+-    public SignalRPushService(IHubContext<NotificationHub> hubContext) => _hubContext = hubContext;
+-
+-    public Task PushAsync(string userId, UserNotificationDto dto) =>
+-        _hubContext.Clients.Group($"user_{userId}").SendAsync("ReceiveNotification", dto);
+-}
+diff --git a/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs b/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs
+index 94ae820..236779c 100644
+--- a/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs
++++ b/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs
+@@ -39,3 +39,19 @@ public class NotificationEventDto
+     public string Type { get; set; } = default!;
+     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+ }
++
++public class NotificationCreatedEventDto
++{
++    public string EventId { get; set; } = Guid.NewGuid().ToString("N");
++    public string EventType { get; set; } = "notification.created";
++    public int Version { get; set; } = 1;
++    public int NotificationId { get; set; }
++    public string UserId { get; set; } = default!;
++    public string Title { get; set; } = default!;
++    public string Content { get; set; } = default!;
++    public string Type { get; set; } = default!;
++    public string? ObjectId { get; set; }
++    public ActorDto? Actor { get; set; }
++    public DateTime CreatedAt { get; set; }
++    public bool IsRead { get; set; }
++}
+diff --git a/src/Services/Notification/Notification.Application/Interfaces/INotificationPushService.cs b/src/Services/Notification/Notification.Application/Interfaces/INotificationPushService.cs
+deleted file mode 100644
+index 83fc08e..0000000
+--- a/src/Services/Notification/Notification.Application/Interfaces/INotificationPushService.cs
++++ /dev/null
+@@ -1,8 +0,0 @@
+-using Notification.Application.DTOs;
+-
+-namespace Notification.Application.Interfaces;
+-
+-public interface INotificationPushService
+-{
+-    Task PushAsync(string userId, UserNotificationDto dto);
+-}
+diff --git a/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs b/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs
+index bed863c..8b940d2 100644
+--- a/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs
++++ b/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs
+@@ -8,6 +8,7 @@ public interface INotificationService
+     Task<CursorPagedResult<UserNotificationDto>> GetNotificationsAsync(string userId, int? cursor, int limit);
+     Task<int> GetUnreadCountAsync(string userId);
+     Task<UserNotificationDto> CreateNotificationAsync(NotificationEntity entity);
++    Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity);
+     Task MarkAsReadAsync(int id, string userId);
+     Task MarkAllAsReadAsync(string userId);
+ }
+diff --git a/src/Services/Notification/Notification.Application/Services/NotificationService.cs b/src/Services/Notification/Notification.Application/Services/NotificationService.cs
+index 9a787ab..09c890a 100644
+--- a/src/Services/Notification/Notification.Application/Services/NotificationService.cs
++++ b/src/Services/Notification/Notification.Application/Services/NotificationService.cs
+@@ -58,24 +58,53 @@ public class NotificationService : INotificationService
+     public async Task<UserNotificationDto> CreateNotificationAsync(NotificationEntity entity)
+     {
+         var created = await _repo.CreateAsync(entity);
+-        ActorDto? actor = null;
+-        if (created.ActorId != null && created.ActorType != "SYSTEM")
+-            actor = await _actorResolver.ResolveActorAsync(created.ActorId, created.ActorType);
++        var actor = await ResolveActorAsync(created.ActorId, created.ActorType);
++        return MapToUserDto(created, actor);
++    }
+ 
+-        return new UserNotificationDto
++    public async Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity)
++    {
++        var actor = await ResolveActorAsync(entity.ActorId, entity.ActorType);
++        return new NotificationCreatedEventDto
+         {
+-            Id = created.Id,
+-            UserId = created.UserId,
+-            Title = created.Title,
+-            Content = created.Content,
+-            Type = created.Type,
+-            ObjectId = created.ObjectId,
++            NotificationId = entity.Id,
++            UserId = entity.UserId,
++            Title = entity.Title,
++            Content = entity.Content,
++            Type = entity.Type,
++            ObjectId = entity.ObjectId,
+             Actor = actor,
+-            CreatedAt = created.CreatedAt,
+-            IsRead = created.IsRead
++            CreatedAt = entity.CreatedAt,
++            IsRead = entity.IsRead
+         };
+     }
+ 
+     public Task MarkAsReadAsync(int id, string userId) => _repo.MarkAsReadAsync(id, userId);
+     public Task MarkAllAsReadAsync(string userId) => _repo.MarkAllAsReadAsync(userId);
++
++    private async Task<ActorDto?> ResolveActorAsync(string? actorId, string actorType)
++    {
++        if (actorId is null || actorType == "SYSTEM")
++        {
++            return null;
++        }
++
++        return await _actorResolver.ResolveActorAsync(actorId, actorType);
++    }
++
++    private static UserNotificationDto MapToUserDto(NotificationEntity entity, ActorDto? actor)
++    {
++        return new UserNotificationDto
++        {
++            Id = entity.Id,
++            UserId = entity.UserId,
++            Title = entity.Title,
++            Content = entity.Content,
++            Type = entity.Type,
++            ObjectId = entity.ObjectId,
++            Actor = actor,
++            CreatedAt = entity.CreatedAt,
++            IsRead = entity.IsRead
++        };
++    }
+ }
+diff --git a/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs b/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs
+index 6d17f32..6deb297 100644
+--- a/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs
++++ b/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs
+@@ -2,7 +2,9 @@ namespace Notification.Infrastructure.Messaging;
+ 
+ public class NotificationEvent
+ {
++    public string? EventId { get; set; }
+     public string EventType { get; set; } = default!;
++    public int Version { get; set; } = 1;
+     public string UserId { get; set; } = default!;
+     public string? ActorId { get; set; }
+     public string ActorType { get; set; } = "USER";
+diff --git a/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs b/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs
+index f0f01e2..94fccaa 100644
+--- a/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs
++++ b/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs
+@@ -105,7 +105,7 @@ public class RabbitMQConsumer : BackgroundService
+ 
+             using var scope = _scopeFactory.CreateScope();
+             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+-            var pushService = scope.ServiceProvider.GetRequiredService<INotificationPushService>();
++            var eventPublisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+ 
+             var entity = new NotificationEntity
+             {
+@@ -119,13 +119,18 @@ public class RabbitMQConsumer : BackgroundService
+                 CreatedAt = evt.CreatedAt == default ? DateTime.UtcNow : evt.CreatedAt
+             };
+ 
+-            var dto = await notificationService.CreateNotificationAsync(entity);
++            await notificationService.CreateNotificationAsync(entity);
++            var createdEvent = await notificationService.BuildCreatedEventAsync(entity);
++            if (!string.IsNullOrWhiteSpace(evt.EventId))
++            {
++                createdEvent.EventId = evt.EventId;
++            }
+ 
+             var cache = scope.ServiceProvider.GetService<IDistributedCache>();
+             if (cache != null)
+                 await cache.RemoveAsync($"unread:{evt.UserId}");
+ 
+-            await pushService.PushAsync(evt.UserId, dto);
++            await eventPublisher.PublishNotificationCreatedAsync(createdEvent);
+ 
+             await _channel.BasicAckAsync(ea.DeliveryTag, false);
+         }
+diff --git a/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj b/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj
+index 5e6116e..dbce9ab 100644
+--- a/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj
++++ b/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj
+@@ -23,5 +23,6 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\Notification.Application\Notification.Application.csproj" />
++    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
+   </ItemGroup>
+ </Project>

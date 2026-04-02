@@ -5,6 +5,7 @@ using Community.Application.Interfaces;
 using Community.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using RecruitmentPlatform.Contracts.Realtime;
 
 namespace Community.Application.Services;
 
@@ -14,6 +15,7 @@ public class CommunityService : ICommunityService
     private readonly IUserInfoClient _userInfoClient;
     private readonly IPortfolioPreviewClient _portfolioPreviewClient;
     private readonly IMediaUploadClient _mediaUploadClient;
+    private readonly ICommunityEventPublisher _eventPublisher;
     private readonly ILogger<CommunityService> _logger;
 
     public CommunityService(
@@ -21,12 +23,14 @@ public class CommunityService : ICommunityService
         IUserInfoClient userInfoClient,
         IPortfolioPreviewClient portfolioPreviewClient,
         IMediaUploadClient mediaUploadClient,
+        ICommunityEventPublisher eventPublisher,
         ILogger<CommunityService> logger)
     {
         _repository = repository;
         _userInfoClient = userInfoClient;
         _portfolioPreviewClient = portfolioPreviewClient;
         _mediaUploadClient = mediaUploadClient;
+        _eventPublisher = eventPublisher;
         _logger = logger;
     }
 
@@ -261,7 +265,32 @@ public class CommunityService : ICommunityService
             Content = content,
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
-        return await _repository.AddCommentAsync(comment);
+        var created = await _repository.AddCommentAsync(comment);
+
+        var post = await _repository.GetPostByIdAsync(postId);
+        if (post is not null)
+        {
+            var evt = new CommentCreatedEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.comment.created",
+                Version = 1,
+                PostId = postId,
+                CommentId = created.Id,
+                UserId = post.UserId.ToString(),
+                ActorId = userId.ToString(),
+                ActorType = "USER",
+                ObjectId = postId.ToString(),
+                Title = "Bình luận mới",
+                Type = "COMMUNITY",
+                Content = created.Content,
+                CreatedAt = created.CreatedAt
+            };
+
+            await _eventPublisher.PublishCommentCreatedAsync(evt);
+        }
+
+        return created;
     }
 
     public async Task<IEnumerable<Comment>> GetCommentsAsync(int postId) => await _repository.GetCommentsByPostIdAsync(postId);
@@ -279,7 +308,34 @@ public class CommunityService : ICommunityService
             Content = content,
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
-        return await _repository.AddReplyAsync(reply);
+        var created = await _repository.AddReplyAsync(reply);
+
+        var comment = await _repository.GetCommentByIdAsync(commentId);
+        if (comment is not null)
+        {
+            var evt = new ReplyCreatedEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.reply.created",
+                Version = 1,
+                PostId = comment.CommunityPostId,
+                CommentId = commentId,
+                ParentCommentId = commentId,
+                UserId = comment.UserId.ToString(),
+                ActorId = userId.ToString(),
+                ActorType = "USER",
+                ObjectId = comment.CommunityPostId.ToString(),
+                Title = "Trả lời bình luận",
+                Type = "COMMUNITY",
+                ReplyToUserId = replyToUserId,
+                Content = created.Content,
+                CreatedAt = created.CreatedAt
+            };
+
+            await _eventPublisher.PublishReplyCreatedAsync(evt);
+        }
+
+        return created;
     }
 
     public async Task<IEnumerable<ReplyComment>> GetRepliesAsync(int commentId) => await _repository.GetRepliesByCommentIdAsync(commentId);

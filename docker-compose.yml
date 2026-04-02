@@ -210,6 +210,33 @@ services:
       - recruitment-network
     restart: on-failure
 
+  # Realtime Service
+  realtime-service:
+    build:
+      context: .
+      dockerfile: src/Services/Realtime/Dockerfile
+    container_name: realtime-service
+    ports:
+      - "5015:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
+      - JwtSettings__Issuer=SkillSnapAuth
+      - JwtSettings__Audience=SkillSnapUsers
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - RabbitMQ__Port=5672
+      - Redis__ConnectionString=redis:6379
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
   # Application Service
   application-service:
     build:
