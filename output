@@ -1,0 +1,392 @@
+PS D:\Capstone> docker build -t skillsnapregistry.azurecr.io/community-service:20260402121611 -f src/Services/Community/Dockerfile .
+[+] Building 3.9s (24/24) FINISHED                                                                 docker:desktop-linux
+ => [internal] load build definition from Dockerfile                                                               0.0s
+ => => transferring dockerfile: 1.42kB                                                                             0.0s
+ => [internal] load metadata for mcr.microsoft.com/dotnet/sdk:8.0                                                  0.1s
+ => [internal] load metadata for mcr.microsoft.com/dotnet/aspnet:8.0                                               0.1s
+ => [internal] load .dockerignore                                                                                  0.0s
+ => => transferring context: 271B                                                                                  0.0s
+ => [build  1/13] FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45  0.0s
+ => => resolve mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45cdf3d1a9  0.0s
+ => [base 1/2] FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f  0.0s
+ => => resolve mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f87026  0.0s
+ => [internal] load build context                                                                                  3.2s
+ => => transferring context: 20.16MB                                                                               3.2s
+ => CACHED [base 2/2] WORKDIR /app                                                                                 0.0s
+ => CACHED [final 1/2] WORKDIR /app                                                                                0.0s
+ => CACHED [build  2/13] WORKDIR /src                                                                              0.0s
+ => CACHED [build  3/13] COPY [src/Shared/RecruitmentPlatform.Common/RecruitmentPlatform.Common.csproj, Shared/Re  0.0s
+ => CACHED [build  4/13] COPY [src/Shared/RecruitmentPlatform.Contracts/RecruitmentPlatform.Contracts.csproj, Sha  0.0s
+ => CACHED [build  5/13] COPY [src/Services/Community/Community.API/Community.API.csproj, Services/Community/Comm  0.0s
+ => CACHED [build  6/13] COPY [src/Services/Community/Community.Application/Community.Application.csproj, Service  0.0s
+ => CACHED [build  7/13] COPY [src/Services/Community/Community.Domain/Community.Domain.csproj, Services/Communit  0.0s
+ => CACHED [build  8/13] COPY [src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj, S  0.0s
+ => CACHED [build  9/13] RUN dotnet restore "Services/Community/Community.API/Community.API.csproj"                0.0s
+ => CACHED [build 10/13] COPY src/Shared/ Shared/                                                                  0.0s
+ => CACHED [build 11/13] COPY src/Services/Community/ Services/Community/                                          0.0s
+ => CACHED [build 12/13] WORKDIR /src/Services/Community/Community.API                                             0.0s
+ => CACHED [build 13/13] RUN dotnet build "Community.API.csproj" -c Release -o /app/build                          0.0s
+ => CACHED [publish 1/1] RUN dotnet publish "Community.API.csproj" -c Release -o /app/publish /p:UseAppHost=false  0.0s
+ => CACHED [final 2/2] COPY --from=publish /app/publish .                                                          0.0s
+ => exporting to image                                                                                             0.1s
+ => => exporting layers                                                                                            0.0s
+ => => exporting manifest sha256:389b8fb1ec5cc8bb649ba7fdb2d79a8f34efc6fa1e33bc7ac2fad8626d157316                  0.0s
+ => => exporting config sha256:9bdebba548e55ccb293b5b1b50f914f8ae939f1fcfb8511f71ad8dd9ce691ff2                    0.0s
+ => => exporting attestation manifest sha256:a6853e535d48c86c47a900ab018c84a5ac41085ac90edab722d58cd9f6be3833      0.0s
+ => => exporting manifest list sha256:f1dd772d84fd4a6c7d59210b2cb921f97df08feea19f7e726faaf4e019a59602             0.0s
+ => => naming to skillsnapregistry.azurecr.io/community-service:20260402121611                                     0.0s
+ => => unpacking to skillsnapregistry.azurecr.io/community-service:20260402121611                                  0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/slmp5rcgpejgjej27h1aggnr7
+PS D:\Capstone> docker build -t skillsnapregistry.azurecr.io/company-service:20260402121611 -f src/Services/Company/Dockerfile .
+[+] Building 0.7s (24/24) FINISHED                                                                 docker:desktop-linux
+ => [internal] load build definition from Dockerfile                                                               0.0s
+ => => transferring dockerfile: 1.36kB                                                                             0.0s
+ => [internal] load metadata for mcr.microsoft.com/dotnet/sdk:8.0                                                  0.0s
+ => [internal] load metadata for mcr.microsoft.com/dotnet/aspnet:8.0                                               0.0s
+ => [internal] load .dockerignore                                                                                  0.0s
+ => => transferring context: 271B                                                                                  0.0s
+ => [build  1/13] FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45  0.0s
+ => => resolve mcr.microsoft.com/dotnet/sdk:8.0@sha256:aa05b91be697b83229cb000b90120f0783604ad74ed92a0b45cdf3d1a9  0.0s
+ => [base 1/2] FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f  0.0s
+ => => resolve mcr.microsoft.com/dotnet/aspnet:8.0@sha256:4b8f0b08534833b39bb662fb19a65e78cb086f5ca8dd35de3f87026  0.0s
+ => [internal] load build context                                                                                  0.3s
+ => => transferring context: 136.09kB                                                                              0.3s
+ => CACHED [base 2/2] WORKDIR /app                                                                                 0.0s
+ => CACHED [final 1/2] WORKDIR /app                                                                                0.0s
+ => CACHED [build  2/13] WORKDIR /src                                                                              0.0s
+ => CACHED [build  3/13] COPY [src/Shared/RecruitmentPlatform.Common/RecruitmentPlatform.Common.csproj, Shared/Re  0.0s
+ => CACHED [build  4/13] COPY [src/Shared/RecruitmentPlatform.Contracts/RecruitmentPlatform.Contracts.csproj, Sha  0.0s
+ => CACHED [build  5/13] COPY [src/Services/Company/Company.API/Company.API.csproj, Services/Company/Company.API/  0.0s
+ => CACHED [build  6/13] COPY [src/Services/Company/Company.Application/Company.Application.csproj, Services/Comp  0.0s
+ => CACHED [build  7/13] COPY [src/Services/Company/Company.Domain/Company.Domain.csproj, Services/Company/Compan  0.0s
+ => CACHED [build  8/13] COPY [src/Services/Company/Company.Infrastructure/Company.Infrastructure.csproj, Service  0.0s
+ => CACHED [build  9/13] RUN dotnet restore "Services/Company/Company.API/Company.API.csproj"                      0.0s
+ => CACHED [build 10/13] COPY src/Shared/ Shared/                                                                  0.0s
+ => CACHED [build 11/13] COPY src/Services/Company/ Services/Company/                                              0.0s
+ => CACHED [build 12/13] WORKDIR /src/Services/Company/Company.API                                                 0.0s
+ => CACHED [build 13/13] RUN dotnet build "Company.API.csproj" -c Release -o /app/build                            0.0s
+ => CACHED [publish 1/1] RUN dotnet publish "Company.API.csproj" -c Release -o /app/publish /p:UseAppHost=false    0.0s
+ => CACHED [final 2/2] COPY --from=publish /app/publish .                                                          0.0s
+ => exporting to image                                                                                             0.1s
+ => => exporting layers                                                                                            0.0s
+ => => exporting manifest sha256:e9974614f8a1c5367251f31c690b358c8674d2a2b7660faed65f2ebe7d524f9a                  0.0s
+ => => exporting config sha256:a51ad283f3f70a4326e032deaaa0f67e88906e52e26f2969f2e603eff20fd272                    0.0s
+ => => exporting attestation manifest sha256:3bf9f706bcad9ea7226213fe4809585944a8d1d41282819c1b608be7002f4835      0.0s
+ => => exporting manifest list sha256:badc4950a6bdc8a07d77c1285504e14841bb788425a611d5b62a805c9e5be2ac             0.0s
+ => => naming to skillsnapregistry.azurecr.io/company-service:20260402121611                                       0.0s
+ => => unpacking to skillsnapregistry.azurecr.io/company-service:20260402121611                                    0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xtuvimh3cduxbnjfwpiiwkz5n
+PS D:\Capstone> docker push skillsnapregistry.azurecr.io/community-service:20260402121611
+The push refers to repository [skillsnapregistry.azurecr.io/community-service]
+4f4fb700ef54: Layer already exists
+b2a8a296df19: Layer already exists
+1c3dcd1b7507: Layer already exists
+192c07e05730: Layer already exists
+7d7fb8a62944: Pushed
+bf06a24eed53: Layer already exists
+c02d17997ce3: Layer already exists
+92892aba2511: Pushed
+93cdcfd1f207: Layer already exists
+40378ac09cb5: Layer already exists
+20260402121611: digest: sha256:f1dd772d84fd4a6c7d59210b2cb921f97df08feea19f7e726faaf4e019a59602 size: 856
+PS D:\Capstone> docker push skillsnapregistry.azurecr.io/company-service:20260402121611
+The push refers to repository [skillsnapregistry.azurecr.io/company-service]
+1c3dcd1b7507: Layer already exists
+4f4fb700ef54: Layer already exists
+93cdcfd1f207: Layer already exists
+192c07e05730: Layer already exists
+bf06a24eed53: Layer already exists
+c02d17997ce3: Layer already exists
+a1a40e8dd92e: Pushed
+7865cacbfad5: Pushed
+b2a8a296df19: Layer already exists
+40378ac09cb5: Layer already exists
+20260402121611: digest: sha256:badc4950a6bdc8a07d77c1285504e14841bb788425a611d5b62a805c9e5be2ac size: 856
+PS D:\Capstone>  az containerapp update --name community-service --resource-group CapStone --image skillsnapregistry.azurecr.io/community-service:20260402121611 --cpu 0.5 --memory 1Gi
+{
+  "id": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/containerapps/community-service",
+  "identity": {
+    "principalId": "5b06569f-96c2-4d29-9a10-e92cb4afba34",
+    "tenantId": "5b6c0514-0f27-433f-87b7-021cad0435a6",
+    "type": "SystemAssigned"
+  },
+  "kind": "containerapps",
+  "location": "Southeast Asia",
+  "name": "community-service",
+  "properties": {
+    "configuration": {
+      "activeRevisionsMode": "Single",
+      "dapr": null,
+      "identitySettings": [],
+      "ingress": {
+        "additionalPortMappings": null,
+        "allowInsecure": false,
+        "clientCertificateMode": null,
+        "corsPolicy": null,
+        "customDomains": null,
+        "exposedPort": 0,
+        "external": true,
+        "fqdn": "community-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
+        "ipSecurityRestrictions": null,
+        "stickySessions": {
+          "affinity": "none"
+        },
+        "targetPort": 8080,
+        "traffic": [
+          {
+            "latestRevision": true,
+            "weight": 100
+          }
+        ],
+        "transport": "Auto"
+      },
+      "maxInactiveRevisions": 100,
+      "registries": [
+        {
+          "identity": "system-environment",
+          "passwordSecretRef": "",
+          "server": "skillsnapregistry.azurecr.io",
+          "username": ""
+        }
+      ],
+      "runtime": null,
+      "secrets": null,
+      "service": null
+    },
+    "customDomainVerificationId": "D4F8AA8C2632896F69F1921C7BB4B88E779624500B8BEBF74AF334C4E3CC7A83",
+    "delegatedIdentities": [],
+    "environmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
+    "eventStreamEndpoint": "https://southeastasia.azurecontainerapps.dev/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/containerApps/community-service/eventstream",
+    "latestReadyRevisionName": "community-service--0000004",
+    "latestRevisionFqdn": "community-service--0000005.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
+    "latestRevisionName": "community-service--0000005",
+    "managedEnvironmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
+    "outboundIpAddresses": [
+      "20.205.150.1",
+      "20.205.150.0",
+      "20.205.150.18",
+      "20.205.149.225",
+      "20.247.245.155",
+      "20.247.245.157",
+      "20.247.245.153",
+      "20.247.245.143",
+      "20.247.246.7",
+      "20.247.246.1",
+      "20.6.114.5",
+      "4.144.194.224",
+      "135.171.20.58",
+      "57.158.128.114",
+      "20.198.192.118",
+      "20.6.65.200",
+      "172.188.250.166",
+      "4.145.180.29",
+      "20.205.243.128",
+      "135.171.228.121",
+      "20.198.128.121",
+      "20.198.128.186",
+      "20.198.128.64",
+      "20.198.128.69",
+      "20.247.207.65",
+      "20.247.207.75",
+      "20.247.207.73",
+      "20.247.207.76",
+      "20.247.207.60",
+      "20.247.207.71",
+      "57.155.78.132"
+    ],
+    "provisioningState": "Succeeded",
+    "runningStatus": "Running",
+    "template": {
+      "containers": [
+        {
+          "env": [
+            {
+              "name": "ASPNETCORE_ENVIRONMENT"
+            },
+            {
+              "name": "Azure__KeyVault__Url"
+            },
+            {
+              "name": "FORCE_UPDATE"
+            }
+          ],
+          "image": "skillsnapregistry.azurecr.io/community-service:20260402121611",
+          "name": "community-service",
+          "resources": {
+            "cpu": 0.5,
+            "ephemeralStorage": "2Gi",
+            "memory": "1Gi"
+          }
+        }
+      ],
+      "initContainers": null,
+      "revisionSuffix": "",
+      "scale": {
+        "cooldownPeriod": 300,
+        "maxReplicas": 10,
+        "minReplicas": 0,
+        "pollingInterval": 30,
+        "rules": null
+      },
+      "serviceBinds": null,
+      "terminationGracePeriodSeconds": null,
+      "volumes": null
+    },
+    "workloadProfileName": "Consumption"
+  },
+  "resourceGroup": "CapStone",
+  "systemData": {
+    "createdAt": "2026-03-27T12:33:38.4107063",
+    "createdBy": "phuocthinh151204@gmail.com",
+    "createdByType": "User",
+    "lastModifiedAt": "2026-04-02T05:28:52.1063595",
+    "lastModifiedBy": "phuocthinh151204@gmail.com",
+    "lastModifiedByType": "User"
+  },
+  "type": "Microsoft.App/containerApps"
+}
+PS D:\Capstone> az containerapp update --name company-service --resource-group CapStone --image skillsnapregistry.azurecr.io/company-service:20260402121611 --cpu 0.5 --memory 1Gi
+{
+  "id": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/containerapps/company-service",
+  "identity": {
+    "principalId": "1aa9768c-4312-4fcc-98ac-a58d4075b64a",
+    "tenantId": "5b6c0514-0f27-433f-87b7-021cad0435a6",
+    "type": "SystemAssigned"
+  },
+  "kind": "containerapps",
+  "location": "Southeast Asia",
+  "name": "company-service",
+  "properties": {
+    "configuration": {
+      "activeRevisionsMode": "Single",
+      "dapr": null,
+      "identitySettings": [],
+      "ingress": {
+        "additionalPortMappings": null,
+        "allowInsecure": false,
+        "clientCertificateMode": "Ignore",
+        "corsPolicy": null,
+        "customDomains": null,
+        "exposedPort": 0,
+        "external": true,
+        "fqdn": "company-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
+        "ipSecurityRestrictions": null,
+        "stickySessions": {
+          "affinity": "none"
+        },
+        "targetPort": 8080,
+        "traffic": [
+          {
+            "latestRevision": true,
+            "weight": 100
+          }
+        ],
+        "transport": "Auto"
+      },
+      "maxInactiveRevisions": 100,
+      "registries": [
+        {
+          "identity": "system-environment",
+          "passwordSecretRef": "",
+          "server": "skillsnapregistry.azurecr.io",
+          "username": ""
+        }
+      ],
+      "runtime": null,
+      "secrets": null,
+      "service": null
+    },
+    "customDomainVerificationId": "D4F8AA8C2632896F69F1921C7BB4B88E779624500B8BEBF74AF334C4E3CC7A83",
+    "delegatedIdentities": [],
+    "environmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
+    "eventStreamEndpoint": "https://southeastasia.azurecontainerapps.dev/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/containerApps/company-service/eventstream",
+    "latestReadyRevisionName": "company-service--0000003",
+    "latestRevisionFqdn": "company-service--0000004.grayforest-11aba44e.southeastasia.azurecontainerapps.io",
+    "latestRevisionName": "company-service--0000004",
+    "managedEnvironmentId": "/subscriptions/02e23774-a362-4859-b315-baff6018a6ba/resourceGroups/CapStone/providers/Microsoft.App/managedEnvironments/skillsnap-env",
+    "outboundIpAddresses": [
+      "20.205.150.1",
+      "20.205.150.0",
+      "20.205.150.18",
+      "20.205.149.225",
+      "20.247.245.155",
+      "20.247.245.157",
+      "20.247.245.153",
+      "20.247.245.143",
+      "20.247.246.7",
+      "20.247.246.1",
+      "20.6.114.5",
+      "4.144.194.224",
+      "135.171.20.58",
+      "57.158.128.114",
+      "20.198.192.118",
+      "20.6.65.200",
+      "172.188.250.166",
+      "4.145.180.29",
+      "20.205.243.128",
+      "135.171.228.121",
+      "20.198.128.121",
+      "20.198.128.186",
+      "20.198.128.64",
+      "20.198.128.69",
+      "20.247.207.65",
+      "20.247.207.75",
+      "20.247.207.73",
+      "20.247.207.76",
+      "20.247.207.60",
+      "20.247.207.71",
+      "57.155.78.132"
+    ],
+    "provisioningState": "Succeeded",
+    "runningStatus": "Running",
+    "template": {
+      "containers": [
+        {
+          "env": [
+            {
+              "name": "ASPNETCORE_ENVIRONMENT"
+            },
+            {
+              "name": "Azure__KeyVault__Url"
+            },
+            {
+              "name": "FORCE_UPDATE"
+            }
+          ],
+          "image": "skillsnapregistry.azurecr.io/company-service:20260402121611",
+          "name": "company-service",
+          "resources": {
+            "cpu": 0.5,
+            "ephemeralStorage": "2Gi",
+            "memory": "1Gi"
+          }
+        }
+      ],
+      "initContainers": null,
+      "revisionSuffix": "",
+      "scale": {
+        "cooldownPeriod": 300,
+        "maxReplicas": 10,
+        "minReplicas": 0,
+        "pollingInterval": 30,
+        "rules": null
+      },
+      "serviceBinds": null,
+      "terminationGracePeriodSeconds": null,
+      "volumes": null
+    },
+    "workloadProfileName": "Consumption"
+  },
+  "resourceGroup": "CapStone",
+  "systemData": {
+    "createdAt": "2026-03-27T08:19:06.2203961",
+    "createdBy": "phuocthinh151204@gmail.com",
+    "createdByType": "User",
+    "lastModifiedAt": "2026-04-02T05:29:17.0285095",
+    "lastModifiedBy": "phuocthinh151204@gmail.com",
+    "lastModifiedByType": "User"
+  },
+  "type": "Microsoft.App/containerApps"
+}

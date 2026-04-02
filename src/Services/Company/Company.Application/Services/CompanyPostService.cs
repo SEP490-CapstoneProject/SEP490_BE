@@ -1,5 +1,6 @@
 using Company.Application.Clients;
 using Company.Application.DTOs;
+using Company.Application.Helpers;
 using Company.Application.Interfaces;
 using Company.Domain.Entities;
 using Microsoft.AspNetCore.Http;
@@ -81,7 +82,7 @@ public class CompanyPostService : ICompanyPostService
             RequirementsPreferred = request.RequirementsPreferred,
             Benefits = request.Benefits,
             Status = request.Status,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeHelper.GetVietnamTime()
         };
 
         var created = await _repository.CreatePostAsync(post);

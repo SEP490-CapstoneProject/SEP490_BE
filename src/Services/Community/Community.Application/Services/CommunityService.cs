@@ -1,5 +1,6 @@
 using Community.Application.Clients;
 using Community.Application.DTOs;
+using Community.Application.Helpers;
 using Community.Application.Interfaces;
 using Community.Domain.Entities;
 using Microsoft.AspNetCore.Http;
@@ -175,7 +176,8 @@ public class CommunityService : ICommunityService
             Description = request.Description,
             CoverImageVideo = string.Empty,
             PortfolioId = request.PortfolioId,
-            Status = request.Status
+            Status = request.Status,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
         };
 
         var created = await _repository.CreatePostAsync(post);
@@ -252,7 +254,13 @@ public class CommunityService : ICommunityService
 
     public async Task<Comment> AddCommentAsync(int postId, int userId, string content)
     {
-        var comment = new Comment { CommunityPostId = postId, UserId = userId, Content = content };
+        var comment = new Comment 
+        { 
+            CommunityPostId = postId, 
+            UserId = userId, 
+            Content = content,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
         return await _repository.AddCommentAsync(comment);
     }
 
@@ -263,7 +271,14 @@ public class CommunityService : ICommunityService
 
     public async Task<ReplyComment> AddReplyAsync(int commentId, int userId, int? replyToUserId, string content)
     {
-        var reply = new ReplyComment { CommentId = commentId, UserId = userId, ReplyToUserId = replyToUserId, Content = content };
+        var reply = new ReplyComment 
+        { 
+            CommentId = commentId, 
+            UserId = userId, 
+            ReplyToUserId = replyToUserId, 
+            Content = content,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
         return await _repository.AddReplyAsync(reply);
     }
 
