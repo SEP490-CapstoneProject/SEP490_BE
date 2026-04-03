@@ -74,7 +74,16 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyHeader().AllowAnyMethod().AllowCredentials().SetIsOriginAllowed(_ => true));
+    {
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
 });
 
 var redisConn = builder.Configuration["Redis:ConnectionString"];
