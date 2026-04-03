@@ -34,34 +34,35 @@ public class CommunityRepository : ICommunityRepository
 
     public async Task<FeedCountsResult> GetFeedCountsAsync(List<int> postIds, int? currentUserId)
     {
-        // All 3 queries run in parallel
-        var commentTask = _context.Comments
+        // Execute queries sequentially to avoid DbContext concurrency issues
+        var commentCounts = await _context.Comments
+            .AsNoTracking()
             .Where(c => postIds.Contains(c.CommunityPostId))
             .GroupBy(c => c.CommunityPostId)
             .Select(g => new { PostId = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        var favoriteTask = currentUserId.HasValue
-            ? _context.CommunityPostFavorites
+        var favoritedPostIds = currentUserId.HasValue
+            ? await _context.CommunityPostFavorites
+                .AsNoTracking()
                 .Where(f => f.UserId == currentUserId.Value && postIds.Contains(f.CommunityPostId))
                 .Select(f => f.CommunityPostId)
                 .ToListAsync()
-            : Task.FromResult(new List<int>());
+            : new List<int>();
 
-        var saveTask = currentUserId.HasValue
-            ? _context.CommunityPostSaves
+        var savedPostIds = currentUserId.HasValue
+            ? await _context.CommunityPostSaves
+                .AsNoTracking()
                 .Where(s => s.UserId == currentUserId.Value && postIds.Contains(s.CommunityPostId))
                 .Select(s => s.CommunityPostId)
                 .ToListAsync()
-            : Task.FromResult(new List<int>());
-
-        await Task.WhenAll(commentTask, favoriteTask, saveTask);
+            : new List<int>();
 
         return new FeedCountsResult
         {
-            CommentCounts = commentTask.Result.ToDictionary(x => x.PostId, x => x.Count),
-            FavoritedPostIds = new HashSet<int>(favoriteTask.Result),
-            SavedPostIds = new HashSet<int>(saveTask.Result)
+            CommentCounts = commentCounts.ToDictionary(x => x.PostId, x => x.Count),
+            FavoritedPostIds = new HashSet<int>(favoritedPostIds),
+            SavedPostIds = new HashSet<int>(savedPostIds)
         };
     }
 
@@ -188,6 +189,7 @@ public class CommunityRepository : ICommunityRepository
             .Where(s => s.UserId == userId)
             .Include(s => s.CommunityPost)
                 .ThenInclude(p => p.Media)
+            .OrderByDescending(s => s.CommunityPost.CreatedAt)
             .Select(s => s.CommunityPost)
             .ToListAsync();
     }
@@ -198,6 +200,7 @@ public class CommunityRepository : ICommunityRepository
             .Where(f => f.UserId == userId)
             .Include(f => f.CommunityPost)
                 .ThenInclude(p => p.Media)
+            .OrderByDescending(f => f.CommunityPost.CreatedAt)
             .Select(f => f.CommunityPost)
             .ToListAsync();
     }
@@ -215,7 +218,7 @@ public class CommunityRepository : ICommunityRepository
     {
         return await _context.Comments
             .Where(c => c.CommunityPostId == postId)
-            .OrderBy(c => c.CreatedAt)
+            .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
     }
 
@@ -225,6 +228,11 @@ public class CommunityRepository : ICommunityRepository
             .Where(r => commentIds.Contains(r.CommentId))
             .OrderBy(r => r.CreatedAt)
             .ToListAsync();
+    }
+
+    public async Task<Comment?> GetCommentByIdAsync(int commentId)
+    {
+        return await _context.Comments.FirstOrDefaultAsync(c => c.Id == commentId);
     }
 
     public async Task<int?> GetCommentOwnerAsync(int commentId)
@@ -258,7 +266,7 @@ public class CommunityRepository : ICommunityRepository
     {
         return await _context.ReplyComments
             .Where(r => r.CommentId == commentId)
-            .OrderBy(r => r.CreatedAt)
+            .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
     }
 

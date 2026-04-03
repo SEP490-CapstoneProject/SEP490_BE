@@ -29,6 +29,7 @@ public interface ICommunityRepository
     Task<Comment> AddCommentAsync(Comment comment);
     Task<IEnumerable<Comment>> GetCommentsByPostIdAsync(int postId);
     Task<IEnumerable<ReplyComment>> GetRepliesByCommentIdsAsync(List<int> commentIds);
+    Task<Comment?> GetCommentByIdAsync(int commentId);
     Task<int?> GetCommentOwnerAsync(int commentId);
     Task DeleteCommentAsync(int id);
     

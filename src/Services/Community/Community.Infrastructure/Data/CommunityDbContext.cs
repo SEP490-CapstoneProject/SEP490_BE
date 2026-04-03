@@ -29,7 +29,7 @@ public class CommunityDbContext : DbContext
             entity.Property(e => e.CoverImageVideo).HasColumnName("coverImageVideo").HasMaxLength(255);
             entity.Property(e => e.PortfolioId).HasColumnName("portfolioId");
             entity.Property(e => e.FavoriteCount).HasColumnName("favoriteCount").HasDefaultValue(0);
-            entity.Property(e => e.CreatedAt).HasColumnName("createAt").HasDefaultValueSql("GETDATE()");
+            entity.Property(e => e.CreatedAt).HasColumnName("createAt");
             entity.Property(e => e.Status).HasColumnName("status");
 
             entity.HasIndex(e => e.UserId).HasDatabaseName("IX_CommunityPost_UserId");
@@ -104,7 +104,7 @@ public class CommunityDbContext : DbContext
             entity.Property(e => e.CommunityPostId).HasColumnName("communityPostId").IsRequired();
             entity.Property(e => e.UserId).HasColumnName("userId").IsRequired();
             entity.Property(e => e.Content).HasColumnName("content");
-            entity.Property(e => e.CreatedAt).HasColumnName("createAt").HasDefaultValueSql("GETDATE()");
+            entity.Property(e => e.CreatedAt).HasColumnName("createAt");
 
             entity.HasOne(e => e.CommunityPost)
                 .WithMany(p => p.Comments)
@@ -125,7 +125,7 @@ public class CommunityDbContext : DbContext
             entity.Property(e => e.UserId).HasColumnName("userId").IsRequired();
             entity.Property(e => e.ReplyToUserId).HasColumnName("replyToUserId");
             entity.Property(e => e.Content).HasColumnName("content");
-            entity.Property(e => e.CreatedAt).HasColumnName("createAt").HasDefaultValueSql("GETDATE()");
+            entity.Property(e => e.CreatedAt).HasColumnName("createAt");
 
             entity.HasOne(e => e.Comment)
                 .WithMany(c => c.Replies)

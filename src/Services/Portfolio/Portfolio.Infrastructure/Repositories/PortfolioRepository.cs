@@ -26,6 +26,7 @@ public class PortfolioRepository : IPortfolioRepository
         => await _context.Portfolios
             .Where(p => p.EmployeeId == employeeId)
             .Include(p => p.Blocks)
+            .OrderByDescending(p => p.CreatedAt)
             .ToListAsync();
 
     public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total)> GetAllAsync(int page, int pageSize, string? status)

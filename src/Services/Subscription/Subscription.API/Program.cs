@@ -140,6 +140,22 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("User"));
 });
 
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 // Configure pipeline
@@ -147,6 +163,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 >>>>>>> 52bc06426d6e7755e66ecdaab8d748db4b31d45e
 
+app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseFeatureAuthorization();

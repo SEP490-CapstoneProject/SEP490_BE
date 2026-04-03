@@ -1,252 +1,314 @@
-# 🎯 TASK: Implement Payment Service (VNPay + MoMo + Payment History)
+# 🚀 SYSTEM REFACTOR PROMPT — SPLIT REALTIME SERVICE & CLEAN NOTIFICATION ARCHITECTURE
 
-## 🧠 Context
+## 🎯 Objective
 
-You are building a **Payment Service** for a microservices system (Skillsnap platform).
+Refactor the existing system to:
 
-This service handles:
-
-* Payment processing (VNPay, MoMo)
-* Webhook handling
-* Payment history storage
-* Event publishing to Subscription Service
-
-⚠️ DO NOT implement subscription or entitlement logic here.
+1. Extract a dedicated **Realtime Service (SignalR-based)**.
+2. Refactor **Notification Service** to focus only on notification logic.
+3. Implement **realtime for Comment and Reply (Community feature)**.
+4. Ensure **event-driven architecture (RabbitMQ)** with clean separation of concerns.
+5. Maintain production-grade practices: scalability, idempotency, decoupling.
 
 ---
 
-# 🏗️ Architecture
+# 🧠 Current System (IMPORTANT CONTEXT)
 
-Flow:
+## Notification Service (existing)
 
-1. Client → Payment Service (create payment)
-2. Payment Service → VNPay/MoMo (redirect URL)
-3. User completes payment
-4. VNPay/MoMo → webhook → Payment Service
-5. Payment Service:
+* Consumes events from **RabbitMQ**
+* Flow:
+  Event → Consumer → Save Notification (DB) → Invalidate cache → Push realtime via SignalR
+* Uses:
 
-   * verify signature
-   * update payment status
-   * save history
-   * publish `payment.succeeded` event
-6. Subscription Service consumes event
+  * `IHubContext<NotificationHub>`
+  * Push event: `"ReceiveNotification"`
+  * SignalR group: `user_{userId}`
+* Handles domains:
 
----
+  * `post.*`, `connection.*`, `portfolio.*`, `job.*`, `system.*`
 
-# 📦 Data Model
+## Problem
 
-## Payment
+* Notification Service is handling BOTH:
 
-* Id (GUID)
-* UserId (int)
-* PlanId (int)
-* Amount (decimal)
-* Currency (string, default "VND")
-* Provider (VNPAY | MOMO)
-* Status (Pending, Success, Failed, Cancelled)
-* PaymentUrl (string)
-* TransactionId (string, from provider)
-* OrderCode (string, internal)
-* CreatedAt (datetime)
-* PaidAt (datetime?)
+  * Notification logic ❗
+  * Realtime delivery ❗
+* This will not scale when adding:
+
+  * Comment realtime
+  * Chat
+  * Presence
 
 ---
 
-## PaymentHistory (MUST HAVE)
+# 🏗️ TARGET ARCHITECTURE
 
-* Id (GUID)
-* PaymentId (FK)
-* OldStatus (string)
-* NewStatus (string)
-* Action (Created, WebhookReceived, Success, Failed)
-* RawData (JSON string from provider)
-* CreatedAt (datetime)
+## Event-driven architecture with separation
 
----
-
-## ProcessedEvent (Idempotency)
-
-* EventId (string, PK)
-* ProcessedAt (datetime)
+Community Service
+↓
+RabbitMQ (Exchange: skillsnap.events)
+↓
+┌─────────────────────────────┬─────────────────────────────┐
+↓                             ↓
+Realtime Service               Notification Service
+(SignalR ONLY)                 (Business Logic ONLY)
 
 ---
 
-# 🔌 Provider Abstraction
+# ✅ TASK 1 — CREATE REALTIME SERVICE
 
-Create interface:
+## Requirements
+
+### Tech
+
+* ASP.NET Core
+* SignalR
+* RabbitMQ Consumer
+
+---
+
+## 1. Create Realtime Service structure
+
+RealtimeService/
+├── Hubs/
+│    ├── NotificationHub.cs
+│    ├── CommunityHub.cs
+│
+├── Consumers/
+│    ├── CommentEventConsumer.cs
+│    ├── ReplyEventConsumer.cs
+│    ├── NotificationEventConsumer.cs (optional)
+│
+├── Services/
+│    ├── IRealtimePushService.cs
+│    ├── SignalRPushService.cs
+│
+├── Extensions/
+├── Program.cs
+
+---
+
+## 2. Implement SignalR Hubs
+
+### NotificationHub
+
+* Group: `user_{userId}`
+
+### CommunityHub
+
+* Group: `post_{postId}`
+
+Methods:
+
+* JoinPost(postId)
+* LeavePost(postId)
+
+---
+
+## 3. Implement Realtime Push Service
+
+Example:
 
 ```csharp
-public interface IPaymentProvider
-{
-    Task<string> CreatePaymentAsync(Payment payment);
-    Task<PaymentResult> HandleWebhookAsync(IQueryCollection query);
+await _hubContext.Clients.Group($"post_{postId}")
+    .SendAsync("ReceiveComment", commentDto);
+```
+
+---
+
+## 4. Implement RabbitMQ Consumers
+
+Consume events:
+
+* `post.comment.created`
+* `post.reply.created`
+* (optional) `notification.created`
+
+---
+
+## Behavior
+
+### On CommentCreatedEvent
+
+* Push:
+  `"ReceiveComment"` → group `post_{postId}`
+
+### On ReplyCreatedEvent
+
+* Push:
+  `"ReceiveReply"` → group `post_{postId}`
+
+---
+
+# ✅ TASK 2 — REFACTOR NOTIFICATION SERVICE
+
+## REMOVE ALL REALTIME LOGIC
+
+❌ Remove:
+
+* SignalR Hub
+* IHubContext usage
+* Push logic inside Notification Service
+
+---
+
+## KEEP ONLY:
+
+✔️ Event Consumer
+✔️ Notification DB persistence
+✔️ Cache (unread count)
+✔️ Business logic (decide whether to notify)
+
+---
+
+## ADD (OPTIONAL BUT RECOMMENDED)
+
+Publish new event:
+
+```json
+NotificationCreatedEvent {
+  NotificationId,
+  UserId,
+  Type,
+  Content,
+  CreatedAt
 }
 ```
 
-Implement:
+---
 
-* VnPayProvider
-* MoMoProvider
+## Flow AFTER refactor:
+
+Event (e.g. CommentCreated)
+↓
+Notification Service
+↓
+Save DB
+↓
+Publish NotificationCreatedEvent (optional)
 
 ---
 
-# ⚡ API Endpoints
+# ✅ TASK 3 — COMMUNITY SERVICE EVENT CONTRACT
 
-## Create Payment
+Ensure Community Service publishes:
 
-POST /api/payments/create
+### CommentCreatedEvent
 
-Request:
+```json
 {
-"planId": 2,
-"provider": "VNPAY"
+  "eventId": "uuid",
+  "eventType": "post.comment.created",
+  "postId": "...",
+  "commentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
 }
+```
 
-Response:
+---
+
+### ReplyCreatedEvent
+
+```json
 {
-"paymentUrl": "https://..."
+  "eventId": "uuid",
+  "eventType": "post.reply.created",
+  "postId": "...",
+  "commentId": "...",
+  "parentCommentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
 }
-
-Rules:
-
-* Get price from DB (NOT from client)
-* Create Payment (status = Pending)
-* Return provider payment URL
+```
 
 ---
 
-## Webhook Endpoints
+# ✅ TASK 4 — FRONTEND INTEGRATION (React)
 
-POST /api/payments/webhook/vnpay
-POST /api/payments/webhook/momo
+## Single connection to Realtime Service
 
----
-
-# 🔁 Webhook Processing (CRITICAL)
-
-Steps:
-
-1. Validate signature (MANDATORY)
-
-   * VNPay: hash secret key
-   * MoMo: HMAC SHA256
-
-2. Idempotency check:
-
-   * If eventId already processed → return
-
-3. Find Payment by OrderCode
-
-4. Update status:
-
-   * Pending → Success / Failed
-
-5. Save PaymentHistory:
-
-   * store raw webhook payload
-
-6. Publish event:
-
-   * payment.succeeded (only when success)
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("/communityHub")
+  .build();
+```
 
 ---
 
-# 📡 Event Contract
+## Subscribe events
 
-Publish:
-
-{
-"eventType": "payment.succeeded",
-"eventId": "evt_unique",
-"userId": 123,
-"planId": 2,
-"paymentId": "guid",
-"amount": 99000,
-"provider": "VNPAY",
-"timestamp": "..."
-}
+```javascript
+connection.on("ReceiveComment", handler);
+connection.on("ReceiveReply", handler);
+connection.on("ReceiveNotification", handler);
+```
 
 ---
 
-# 📊 Payment History APIs
+## Join group
 
-## User
-
-GET /api/payments/my-history
-
-Return:
-
-* planName
-* amount
-* status
-* provider
-* paidAt
+```javascript
+connection.invoke("JoinPost", postId);
+```
 
 ---
 
-## Admin
+# ⚠️ IMPORTANT RULES
 
-GET /api/admin/payments
+## 1. DO NOT call SignalR from Notification Service
 
-Support filters:
+## 2. DO NOT chain event like:
 
-* userId
-* status
-* date range
+Notification → Realtime ❌
 
----
+## 3. BOTH services must consume directly from RabbitMQ
 
-# ⚠️ Critical Rules
+## 4. Ensure idempotency
 
-DO NOT ❌
-
-* Trust client price
-* Skip signature validation
-* Skip idempotency
-* Ignore webhook retries
-* Skip saving raw webhook data
-* Directly activate subscription (use event)
-
-DO ✅
-
-* Always verify provider signature
-* Always use DB price
-* Store full payment history
-* Publish event via outbox pattern
-* Handle duplicate webhook calls safely
+* Use eventId
+* Prevent duplicate push
 
 ---
 
-# 🚀 Implementation Phases
+# 🔥 BONUS (IF POSSIBLE)
 
-Phase 1:
-
-* Entities + DB + migration
-
-Phase 2:
-
-* VNPay integration
-
-Phase 3:
-
-* MoMo integration
-
-Phase 4:
-
-* Webhook + history + idempotency
-
-Phase 5:
-
-* Event publishing (RabbitMQ + Outbox)
+* Add Redis backplane for SignalR scaling
+* Add retry + DLQ for RabbitMQ
+* Add structured logging (eventId tracing)
 
 ---
 
-# 🎯 Expected Outcome
+# 🎯 FINAL RESULT EXPECTED
 
-* Fully working Payment Service
-* VNPay + MoMo supported
-* Reliable webhook handling
-* Complete payment history
-* Integrated with Subscription Service via events
+✔️ Clean separation of concerns
+✔️ Realtime Service handles ALL SignalR
+✔️ Notification Service handles ONLY notification
+✔️ Comment & Reply realtime working
+✔️ Event-driven, scalable architecture
 
 ---
+
+# 📌 OUTPUT REQUIREMENTS
+
+Provide:
+
+1. Folder structure
+2. Key code files (Hub, Consumer, PushService)
+3. Refactored Notification Service code changes
+4. Event contract definitions
+5. Explanation of flow
+
+---
+
+# 🚀 GOAL
+
+System should be:
+
+* Scalable to thousands of concurrent users
+* Clean for microservices architecture
+* Ready for future features (chat, presence, live updates)

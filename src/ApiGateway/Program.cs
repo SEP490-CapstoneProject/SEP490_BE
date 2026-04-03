@@ -2,6 +2,13 @@ using ApiGateway.Azure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel for long-lived WebSocket connections
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(5);
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
+});
+
 // Add Azure Key Vault configuration
 builder.Configuration.AddAzureKeyVault();
 
@@ -26,6 +33,7 @@ SetCluster("connection-cluster", "ConnectionService");
 SetCluster("community-cluster", "CommunityService");
 SetCluster("subscription-cluster", "SubscriptionService");
 SetCluster("notification-cluster", "NotificationService");
+SetCluster("realtime-cluster", "RealtimeService");
 SetCluster("media-cluster", "MediaService");
 SetCluster("application-cluster", "ApplicationService");
 SetCluster("payment-cluster", "PaymentService");
@@ -51,9 +59,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
@@ -80,11 +93,12 @@ app.MapGet("/services", () => Results.Ok(new
         new { name = "auth", port = 5001, path = "/api/auth" },
         new { name = "userprofile", port = 5002, path = "/api/userprofile" },
         new { name = "portfolio", port = 5003, path = "/api/portfolio" },
-        new { name = "company", port = 5004, path = "/api/company" },
+        new { name = "company", port = 5004, path = "/api/company-posts" },
         new { name = "connection", port = 5006, path = "/api/connection" },
         new { name = "community", port = 5007, path = "/api/community" },
         new { name = "subscription", port = 5008, path = "/api/subscription" },
         new { name = "notification", port = 5011, path = "/api/notifications" },
+        new { name = "realtime", port = 5015, path = "/hubs/realtime" },
         new { name = "media", port = 5012, path = "/api/media" },
         new { name = "application", port = 5013, path = "/api/applications" }
     }

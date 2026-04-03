@@ -1,0 +1,617 @@
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 58b9a31..780d986 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -210,6 +210,33 @@ services:
+       - recruitment-network
+     restart: on-failure
+ 
++  # Realtime Service
++  realtime-service:
++    build:
++      context: .
++      dockerfile: src/Services/Realtime/Dockerfile
++    container_name: realtime-service
++    ports:
++      - "5015:8080"
++    environment:
++      - ASPNETCORE_ENVIRONMENT=Development
++      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
++      - JwtSettings__Issuer=SkillSnapAuth
++      - JwtSettings__Audience=SkillSnapUsers
++      - RabbitMQ__HostName=rabbitmq
++      - RabbitMQ__UserName=guest
++      - RabbitMQ__Password=guest
++      - RabbitMQ__Port=5672
++      - Redis__ConnectionString=redis:6379
++    depends_on:
++      rabbitmq:
++        condition: service_healthy
++      redis:
++        condition: service_healthy
++    networks:
++      - recruitment-network
++    restart: on-failure
++
+   # Application Service
+   application-service:
+     build:
+diff --git a/src/ApiGateway/Program.cs b/src/ApiGateway/Program.cs
+index a2ae736..972574c 100644
+--- a/src/ApiGateway/Program.cs
++++ b/src/ApiGateway/Program.cs
+@@ -26,6 +26,7 @@ SetCluster("connection-cluster", "ConnectionService");
+ SetCluster("community-cluster", "CommunityService");
+ SetCluster("subscription-cluster", "SubscriptionService");
+ SetCluster("notification-cluster", "NotificationService");
++SetCluster("realtime-cluster", "RealtimeService");
+ SetCluster("media-cluster", "MediaService");
+ SetCluster("application-cluster", "ApplicationService");
+ SetCluster("payment-cluster", "PaymentService");
+@@ -85,6 +86,7 @@ app.MapGet("/services", () => Results.Ok(new
+         new { name = "community", port = 5007, path = "/api/community" },
+         new { name = "subscription", port = 5008, path = "/api/subscription" },
+         new { name = "notification", port = 5011, path = "/api/notifications" },
++        new { name = "realtime", port = 5015, path = "/hubs/realtime" },
+         new { name = "media", port = 5012, path = "/api/media" },
+         new { name = "application", port = 5013, path = "/api/applications" }
+     }
+diff --git a/src/ApiGateway/appsettings.Development.json b/src/ApiGateway/appsettings.Development.json
+index 4eb44f4..3362357 100644
+--- a/src/ApiGateway/appsettings.Development.json
++++ b/src/ApiGateway/appsettings.Development.json
+@@ -64,6 +64,13 @@
+           }
+         }
+       },
++      "realtime-cluster": {
++        "Destinations": {
++          "destination1": {
++            "Address": "http://localhost:5015"
++          }
++        }
++      },
+       "media-cluster": {
+         "Destinations": {
+           "destination1": {
+diff --git a/src/ApiGateway/appsettings.json b/src/ApiGateway/appsettings.json
+index 132a5cd..12deffb 100644
+--- a/src/ApiGateway/appsettings.json
++++ b/src/ApiGateway/appsettings.json
+@@ -16,6 +16,7 @@
+     "CommunityService": "http://community-service:8080",
+     "SubscriptionService": "http://subscription-service:8080",
+     "NotificationService": "http://notification-service:8080",
++    "RealtimeService": "http://realtime-service:8080",
+     "MediaService": "http://media-service:8080",
+     "ApplicationService": "http://application-service:8080",
+     "PaymentService": "http://payment-service:8080"
+@@ -100,10 +101,10 @@
+           "Path": "/api/notifications/{**catch-all}"
+         }
+       },
+-      "notification-hub-route": {
+-        "ClusterId": "notification-cluster",
++      "realtime-hub-route": {
++        "ClusterId": "realtime-cluster",
+         "Match": {
+-          "Path": "/hubs/notifications/{**catch-all}"
++          "Path": "/hubs/realtime/{**catch-all}"
+         }
+       },
+       "posts-route": {
+@@ -200,6 +201,13 @@
+           }
+         }
+       },
++      "realtime-cluster": {
++        "Destinations": {
++          "destination1": {
++            "Address": "http://realtime-service:8080"
++          }
++        }
++      },
+       "media-cluster": {
+         "Destinations": {
+           "destination1": {
+diff --git a/src/Services/Community/Community.API/Program.cs b/src/Services/Community/Community.API/Program.cs
+index d08742b..7f219dc 100644
+--- a/src/Services/Community/Community.API/Program.cs
++++ b/src/Services/Community/Community.API/Program.cs
+@@ -5,6 +5,7 @@ using Community.Application.Services;
+ using Community.Infrastructure.Clients;
+ using Community.Infrastructure.Data;
+ using Community.Infrastructure.Repositories;
++using Community.Infrastructure.Services;
+ using Community.Infrastructure.Azure;
+ using Community.Infrastructure.Configuration;
+ using Microsoft.AspNetCore.Authentication.JwtBearer;
+@@ -62,6 +63,7 @@ builder.Services.AddDbContext<CommunityDbContext>(options =>
+ // Add DI
+ builder.Services.AddScoped<ICommunityRepository, CommunityRepository>();
+ builder.Services.AddScoped<ICommunityService, CommunityService>();
++builder.Services.AddScoped<ICommunityEventPublisher, RabbitMqCommunityEventPublisher>();
+ 
+ // Add typed HttpClient for Media Service
+ var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
+diff --git a/src/Services/Community/Community.API/appsettings.Development.json b/src/Services/Community/Community.API/appsettings.Development.json
+index 0c208ae..d767598 100644
+--- a/src/Services/Community/Community.API/appsettings.Development.json
++++ b/src/Services/Community/Community.API/appsettings.Development.json
+@@ -4,5 +4,11 @@
+       "Default": "Information",
+       "Microsoft.AspNetCore": "Warning"
+     }
++  },
++  "RabbitMQ": {
++    "HostName": "localhost",
++    "UserName": "guest",
++    "Password": "guest",
++    "Port": "5672"
+   }
+ }
+diff --git a/src/Services/Community/Community.API/appsettings.json b/src/Services/Community/Community.API/appsettings.json
+index fe0ad34..d25afe1 100644
+--- a/src/Services/Community/Community.API/appsettings.json
++++ b/src/Services/Community/Community.API/appsettings.json
+@@ -21,5 +21,23 @@
+     "MediaService": "http://media-service:8080",
+     "UserProfileService": "http://userprofile-service:8080",
+     "PortfolioService": "http://portfolio-service:8080"
++  },
++  "RabbitMQ": {
++    "HostName": "rabbitmq",
++    "UserName": "guest",
++    "Password": "guest",
++    "Port": "5672"
++  },
++  "Realtime": {
++    "HubPath": "/hubs/realtime",
++    "Events": [
++      "ReceiveNotification",
++      "ReceiveComment",
++      "ReceiveReply"
++    ],
++    "Groups": {
++      "JoinMethod": "JoinPost",
++      "LeaveMethod": "LeavePost"
++    }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs b/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs
+index 9c0e8ff..f278cf6 100644
+--- a/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs
++++ b/src/Services/Community/Community.Application/Interfaces/ICommunityRepository.cs
+@@ -29,6 +29,7 @@ public interface ICommunityRepository
+     Task<Comment> AddCommentAsync(Comment comment);
+     Task<IEnumerable<Comment>> GetCommentsByPostIdAsync(int postId);
+     Task<IEnumerable<ReplyComment>> GetRepliesByCommentIdsAsync(List<int> commentIds);
++    Task<Comment?> GetCommentByIdAsync(int commentId);
+     Task<int?> GetCommentOwnerAsync(int commentId);
+     Task DeleteCommentAsync(int id);
+     
+diff --git a/src/Services/Community/Community.Application/Services/CommunityService.cs b/src/Services/Community/Community.Application/Services/CommunityService.cs
+index 77ccec4..a871de9 100644
+--- a/src/Services/Community/Community.Application/Services/CommunityService.cs
++++ b/src/Services/Community/Community.Application/Services/CommunityService.cs
+@@ -5,6 +5,7 @@ using Community.Application.Interfaces;
+ using Community.Domain.Entities;
+ using Microsoft.AspNetCore.Http;
+ using Microsoft.Extensions.Logging;
++using RecruitmentPlatform.Contracts.Realtime;
+ 
+ namespace Community.Application.Services;
+ 
+@@ -14,6 +15,7 @@ public class CommunityService : ICommunityService
+     private readonly IUserInfoClient _userInfoClient;
+     private readonly IPortfolioPreviewClient _portfolioPreviewClient;
+     private readonly IMediaUploadClient _mediaUploadClient;
++    private readonly ICommunityEventPublisher _eventPublisher;
+     private readonly ILogger<CommunityService> _logger;
+ 
+     public CommunityService(
+@@ -21,12 +23,14 @@ public class CommunityService : ICommunityService
+         IUserInfoClient userInfoClient,
+         IPortfolioPreviewClient portfolioPreviewClient,
+         IMediaUploadClient mediaUploadClient,
++        ICommunityEventPublisher eventPublisher,
+         ILogger<CommunityService> logger)
+     {
+         _repository = repository;
+         _userInfoClient = userInfoClient;
+         _portfolioPreviewClient = portfolioPreviewClient;
+         _mediaUploadClient = mediaUploadClient;
++        _eventPublisher = eventPublisher;
+         _logger = logger;
+     }
+ 
+@@ -261,7 +265,32 @@ public class CommunityService : ICommunityService
+             Content = content,
+             CreatedAt = DateTimeHelper.GetVietnamTime()
+         };
+-        return await _repository.AddCommentAsync(comment);
++        var created = await _repository.AddCommentAsync(comment);
++
++        var post = await _repository.GetPostByIdAsync(postId);
++        if (post is not null)
++        {
++            var evt = new CommentCreatedEvent
++            {
++                EventId = Guid.NewGuid().ToString("N"),
++                EventType = "post.comment.created",
++                Version = 1,
++                PostId = postId,
++                CommentId = created.Id,
++                UserId = post.UserId.ToString(),
++                ActorId = userId.ToString(),
++                ActorType = "USER",
++                ObjectId = postId.ToString(),
++                Title = "B├¼nh luß║¡n mß╗¢i",
++                Type = "COMMUNITY",
++                Content = created.Content,
++                CreatedAt = created.CreatedAt
++            };
++
++            await _eventPublisher.PublishCommentCreatedAsync(evt);
++        }
++
++        return created;
+     }
+ 
+     public async Task<IEnumerable<Comment>> GetCommentsAsync(int postId) => await _repository.GetCommentsByPostIdAsync(postId);
+@@ -279,7 +308,34 @@ public class CommunityService : ICommunityService
+             Content = content,
+             CreatedAt = DateTimeHelper.GetVietnamTime()
+         };
+-        return await _repository.AddReplyAsync(reply);
++        var created = await _repository.AddReplyAsync(reply);
++
++        var comment = await _repository.GetCommentByIdAsync(commentId);
++        if (comment is not null)
++        {
++            var evt = new ReplyCreatedEvent
++            {
++                EventId = Guid.NewGuid().ToString("N"),
++                EventType = "post.reply.created",
++                Version = 1,
++                PostId = comment.CommunityPostId,
++                CommentId = commentId,
++                ParentCommentId = commentId,
++                UserId = comment.UserId.ToString(),
++                ActorId = userId.ToString(),
++                ActorType = "USER",
++                ObjectId = comment.CommunityPostId.ToString(),
++                Title = "Trß║ú lß╗¥i b├¼nh luß║¡n",
++                Type = "COMMUNITY",
++                ReplyToUserId = replyToUserId,
++                Content = created.Content,
++                CreatedAt = created.CreatedAt
++            };
++
++            await _eventPublisher.PublishReplyCreatedAsync(evt);
++        }
++
++        return created;
+     }
+ 
+     public async Task<IEnumerable<ReplyComment>> GetRepliesAsync(int commentId) => await _repository.GetRepliesByCommentIdAsync(commentId);
+diff --git a/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj b/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj
+index cb843b1..6d6833c 100644
+--- a/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj
++++ b/src/Services/Community/Community.Infrastructure/Community.Infrastructure.csproj
+@@ -16,6 +16,7 @@
+     <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.6.0" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
++    <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0">
+       <PrivateAssets>all</PrivateAssets>
+       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+diff --git a/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs b/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs
+index 06b24e1..158c6c5 100644
+--- a/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs
++++ b/src/Services/Community/Community.Infrastructure/Repositories/CommunityRepository.cs
+@@ -230,6 +230,11 @@ public class CommunityRepository : ICommunityRepository
+             .ToListAsync();
+     }
+ 
++    public async Task<Comment?> GetCommentByIdAsync(int commentId)
++    {
++        return await _context.Comments.FirstOrDefaultAsync(c => c.Id == commentId);
++    }
++
+     public async Task<int?> GetCommentOwnerAsync(int commentId)
+     {
+         return await _context.Comments
+diff --git a/src/Services/Notification/Notification.API/Hubs/NotificationHub.cs b/src/Services/Notification/Notification.API/Hubs/NotificationHub.cs
+deleted file mode 100644
+index 20d9d5c..0000000
+--- a/src/Services/Notification/Notification.API/Hubs/NotificationHub.cs
++++ /dev/null
+@@ -1,33 +0,0 @@
+-using System.Security.Claims;
+-using Microsoft.AspNetCore.Authorization;
+-using Microsoft.AspNetCore.SignalR;
+-
+-namespace Notification.API.Hubs;
+-
+-[Authorize]
+-public class NotificationHub : Hub
+-{
+-    public override async Task OnConnectedAsync()
+-    {
+-        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+-                  ?? Context.User?.FindFirst("sub")?.Value
+-                  ?? Context.User?.FindFirst("nameid")?.Value;
+-
+-        if (!string.IsNullOrEmpty(userId))
+-            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+-
+-        await base.OnConnectedAsync();
+-    }
+-
+-    public override async Task OnDisconnectedAsync(Exception? exception)
+-    {
+-        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+-                  ?? Context.User?.FindFirst("sub")?.Value
+-                  ?? Context.User?.FindFirst("nameid")?.Value;
+-
+-        if (!string.IsNullOrEmpty(userId))
+-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user_{userId}");
+-
+-        await base.OnDisconnectedAsync(exception);
+-    }
+-}
+diff --git a/src/Services/Notification/Notification.API/Program.cs b/src/Services/Notification/Notification.API/Program.cs
+index dee59c9..4d3f9a5 100644
+--- a/src/Services/Notification/Notification.API/Program.cs
++++ b/src/Services/Notification/Notification.API/Program.cs
+@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
+ using Microsoft.EntityFrameworkCore;
+ using Microsoft.IdentityModel.Tokens;
+ using Microsoft.OpenApi.Models;
+-using Notification.API.Hubs;
+-using Notification.API.Services;
+ using Notification.Application.Interfaces;
+ using Notification.Application.Services;
+ using Notification.Infrastructure.Azure;
+@@ -39,10 +37,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+         {
+             OnMessageReceived = context =>
+             {
+-                var accessToken = context.Request.Query["access_token"];
+-                var path = context.HttpContext.Request.Path;
+-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notifications"))
+-                    context.Token = accessToken;
+                 return Task.CompletedTask;
+             }
+         };
+@@ -87,8 +81,6 @@ else
+     builder.Services.AddDistributedMemoryCache();
+ }
+ 
+-builder.Services.AddSignalR();
+-
+ builder.Services.AddCors(options =>
+ {
+     options.AddPolicy("AllowAll", policy =>
+@@ -105,7 +97,7 @@ builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client
+ 
+ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+ builder.Services.AddScoped<INotificationService, NotificationService>();
+-builder.Services.AddScoped<INotificationPushService, SignalRPushService>();
++builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
+ 
+ builder.Services.AddHostedService<RabbitMQConsumer>();
+ 
+@@ -126,7 +118,6 @@ app.UseCors("AllowAll");
+ app.UseAuthentication();
+ app.UseAuthorization();
+ app.MapControllers();
+-app.MapHub<NotificationHub>("/hubs/notifications");
+ 
+ app.Run();
+ 
+diff --git a/src/Services/Notification/Notification.API/Services/SignalRPushService.cs b/src/Services/Notification/Notification.API/Services/SignalRPushService.cs
+deleted file mode 100644
+index 16a4566..0000000
+--- a/src/Services/Notification/Notification.API/Services/SignalRPushService.cs
++++ /dev/null
+@@ -1,16 +0,0 @@
+-using Microsoft.AspNetCore.SignalR;
+-using Notification.Application.DTOs;
+-using Notification.Application.Interfaces;
+-using Notification.API.Hubs;
+-
+-namespace Notification.API.Services;
+-
+-public class SignalRPushService : INotificationPushService
+-{
+-    private readonly IHubContext<NotificationHub> _hubContext;
+-
+-    public SignalRPushService(IHubContext<NotificationHub> hubContext) => _hubContext = hubContext;
+-
+-    public Task PushAsync(string userId, UserNotificationDto dto) =>
+-        _hubContext.Clients.Group($"user_{userId}").SendAsync("ReceiveNotification", dto);
+-}
+diff --git a/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs b/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs
+index 94ae820..236779c 100644
+--- a/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs
++++ b/src/Services/Notification/Notification.Application/DTOs/NotificationDtos.cs
+@@ -39,3 +39,19 @@ public class NotificationEventDto
+     public string Type { get; set; } = default!;
+     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+ }
++
++public class NotificationCreatedEventDto
++{
++    public string EventId { get; set; } = Guid.NewGuid().ToString("N");
++    public string EventType { get; set; } = "notification.created";
++    public int Version { get; set; } = 1;
++    public int NotificationId { get; set; }
++    public string UserId { get; set; } = default!;
++    public string Title { get; set; } = default!;
++    public string Content { get; set; } = default!;
++    public string Type { get; set; } = default!;
++    public string? ObjectId { get; set; }
++    public ActorDto? Actor { get; set; }
++    public DateTime CreatedAt { get; set; }
++    public bool IsRead { get; set; }
++}
+diff --git a/src/Services/Notification/Notification.Application/Interfaces/INotificationPushService.cs b/src/Services/Notification/Notification.Application/Interfaces/INotificationPushService.cs
+deleted file mode 100644
+index 83fc08e..0000000
+--- a/src/Services/Notification/Notification.Application/Interfaces/INotificationPushService.cs
++++ /dev/null
+@@ -1,8 +0,0 @@
+-using Notification.Application.DTOs;
+-
+-namespace Notification.Application.Interfaces;
+-
+-public interface INotificationPushService
+-{
+-    Task PushAsync(string userId, UserNotificationDto dto);
+-}
+diff --git a/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs b/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs
+index bed863c..8b940d2 100644
+--- a/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs
++++ b/src/Services/Notification/Notification.Application/Interfaces/INotificationService.cs
+@@ -8,6 +8,7 @@ public interface INotificationService
+     Task<CursorPagedResult<UserNotificationDto>> GetNotificationsAsync(string userId, int? cursor, int limit);
+     Task<int> GetUnreadCountAsync(string userId);
+     Task<UserNotificationDto> CreateNotificationAsync(NotificationEntity entity);
++    Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity);
+     Task MarkAsReadAsync(int id, string userId);
+     Task MarkAllAsReadAsync(string userId);
+ }
+diff --git a/src/Services/Notification/Notification.Application/Services/NotificationService.cs b/src/Services/Notification/Notification.Application/Services/NotificationService.cs
+index 9a787ab..09c890a 100644
+--- a/src/Services/Notification/Notification.Application/Services/NotificationService.cs
++++ b/src/Services/Notification/Notification.Application/Services/NotificationService.cs
+@@ -58,24 +58,53 @@ public class NotificationService : INotificationService
+     public async Task<UserNotificationDto> CreateNotificationAsync(NotificationEntity entity)
+     {
+         var created = await _repo.CreateAsync(entity);
+-        ActorDto? actor = null;
+-        if (created.ActorId != null && created.ActorType != "SYSTEM")
+-            actor = await _actorResolver.ResolveActorAsync(created.ActorId, created.ActorType);
++        var actor = await ResolveActorAsync(created.ActorId, created.ActorType);
++        return MapToUserDto(created, actor);
++    }
+ 
+-        return new UserNotificationDto
++    public async Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity)
++    {
++        var actor = await ResolveActorAsync(entity.ActorId, entity.ActorType);
++        return new NotificationCreatedEventDto
+         {
+-            Id = created.Id,
+-            UserId = created.UserId,
+-            Title = created.Title,
+-            Content = created.Content,
+-            Type = created.Type,
+-            ObjectId = created.ObjectId,
++            NotificationId = entity.Id,
++            UserId = entity.UserId,
++            Title = entity.Title,
++            Content = entity.Content,
++            Type = entity.Type,
++            ObjectId = entity.ObjectId,
+             Actor = actor,
+-            CreatedAt = created.CreatedAt,
+-            IsRead = created.IsRead
++            CreatedAt = entity.CreatedAt,
++            IsRead = entity.IsRead
+         };
+     }
+ 
+     public Task MarkAsReadAsync(int id, string userId) => _repo.MarkAsReadAsync(id, userId);
+     public Task MarkAllAsReadAsync(string userId) => _repo.MarkAllAsReadAsync(userId);
++
++    private async Task<ActorDto?> ResolveActorAsync(string? actorId, string actorType)
++    {
++        if (actorId is null || actorType == "SYSTEM")
++        {
++            return null;
++        }
++
++        return await _actorResolver.ResolveActorAsync(actorId, actorType);
++    }
++
++    private static UserNotificationDto MapToUserDto(NotificationEntity entity, ActorDto? actor)
++    {
++        return new UserNotificationDto
++        {
++            Id = entity.Id,
++            UserId = entity.UserId,
++            Title = entity.Title,
++            Content = entity.Content,
++            Type = entity.Type,
++            ObjectId = entity.ObjectId,
++            Actor = actor,
++            CreatedAt = entity.CreatedAt,
++            IsRead = entity.IsRead
++        };
++    }
+ }
+diff --git a/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs b/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs
+index 6d17f32..6deb297 100644
+--- a/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs
++++ b/src/Services/Notification/Notification.Infrastructure/Messaging/EventModels.cs
+@@ -2,7 +2,9 @@ namespace Notification.Infrastructure.Messaging;
+ 
+ public class NotificationEvent
+ {
++    public string? EventId { get; set; }
+     public string EventType { get; set; } = default!;
++    public int Version { get; set; } = 1;
+     public string UserId { get; set; } = default!;
+     public string? ActorId { get; set; }
+     public string ActorType { get; set; } = "USER";
+diff --git a/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs b/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs
+index f0f01e2..94fccaa 100644
+--- a/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs
++++ b/src/Services/Notification/Notification.Infrastructure/Messaging/RabbitMQConsumer.cs
+@@ -105,7 +105,7 @@ public class RabbitMQConsumer : BackgroundService
+ 
+             using var scope = _scopeFactory.CreateScope();
+             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+-            var pushService = scope.ServiceProvider.GetRequiredService<INotificationPushService>();
++            var eventPublisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+ 
+             var entity = new NotificationEntity
+             {
+@@ -119,13 +119,18 @@ public class RabbitMQConsumer : BackgroundService
+                 CreatedAt = evt.CreatedAt == default ? DateTime.UtcNow : evt.CreatedAt
+             };
+ 
+-            var dto = await notificationService.CreateNotificationAsync(entity);
++            await notificationService.CreateNotificationAsync(entity);
++            var createdEvent = await notificationService.BuildCreatedEventAsync(entity);
++            if (!string.IsNullOrWhiteSpace(evt.EventId))
++            {
++                createdEvent.EventId = evt.EventId;
++            }
+ 
+             var cache = scope.ServiceProvider.GetService<IDistributedCache>();
+             if (cache != null)
+                 await cache.RemoveAsync($"unread:{evt.UserId}");
+ 
+-            await pushService.PushAsync(evt.UserId, dto);
++            await eventPublisher.PublishNotificationCreatedAsync(createdEvent);
+ 
+             await _channel.BasicAckAsync(ea.DeliveryTag, false);
+         }
+diff --git a/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj b/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj
+index 5e6116e..dbce9ab 100644
+--- a/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj
++++ b/src/Services/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj
+@@ -23,5 +23,6 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\Notification.Application\Notification.Application.csproj" />
++    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
+   </ItemGroup>
+ </Project>
