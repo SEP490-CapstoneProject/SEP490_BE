@@ -1,7 +1,9 @@
 using Company.Application.Clients;
 using Company.Application.Interfaces;
 using Company.Application.Services;
+using Company.Infrastructure.Azure;
 using Company.Infrastructure.Clients;
+using Company.Infrastructure.Configuration;
 using Company.Infrastructure.Data;
 using Company.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,6 +12,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddAzureKeyVault();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -53,12 +57,20 @@ builder.Services.AddDbContext<CompanyDbContext>(options =>
 
 builder.Services.AddScoped<ICompanyPostRepository, CompanyPostRepository>();
 builder.Services.AddScoped<ICompanyPostService, CompanyPostService>();
+builder.Services.AddScoped<ICompanyCacheRepository, CompanyCacheRepository>();
 
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
 builder.Services.AddHttpClient<IMediaUploadClient, MediaUploadClient>(client =>
 {
     client.BaseAddress = new Uri(mediaServiceUrl);
     client.Timeout = TimeSpan.FromMinutes(5);
+});
+
+var userProfileServiceUrl = builder.Configuration["ServiceUrls:UserProfileService"] ?? "http://userprofile-service:8080";
+builder.Services.AddHttpClient<ICompanyProfileClient, UserProfileCompanyClient>(client =>
+{
+    client.BaseAddress = new Uri(userProfileServiceUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 var jwtSecret = builder.Configuration["JwtSettings:Secret"];
@@ -87,9 +99,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        policy.WithOrigins(
+              "https://sep-490-web-fork.vercel.app",
+              "http://localhost:3000",
+              "http://localhost:5173"
+          )
+          .AllowAnyMethod()
+          .AllowAnyHeader()
+          .AllowCredentials();
     });
 });
 
@@ -101,11 +118,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-if (app.Environment.IsDevelopment())
+// Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Company API V1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowAll");
 app.UseAuthentication();

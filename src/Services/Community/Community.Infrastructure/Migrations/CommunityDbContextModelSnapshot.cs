@@ -41,10 +41,8 @@ namespace Community.Infrastructure.Migrations
                         .HasColumnName("content");
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasColumnName("createAt")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasColumnName("createAt");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -77,10 +75,8 @@ namespace Community.Infrastructure.Migrations
                         .HasColumnName("coverImageVideo");
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasColumnName("createAt")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasColumnName("createAt");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -244,10 +240,8 @@ namespace Community.Infrastructure.Migrations
                         .HasColumnName("content");
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasColumnName("createAt")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasColumnName("createAt");
 
                     b.Property<int?>("ReplyToUserId")
                         .HasColumnType("int")

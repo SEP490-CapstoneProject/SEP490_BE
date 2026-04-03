@@ -28,6 +28,8 @@ bld/
 .env.local
 *.env.local
 *.user
+appsettings.Production.json
+**/appsettings.Production.json
 *.userprefs
 
 ## Visual Studio
@@ -133,6 +135,13 @@ docker-compose.override.yml
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+
+## Secrets
+appsettings.*.json
+!appsettings.json
+!appsettings.Development.json
 
 ## OS
 .DS_Store

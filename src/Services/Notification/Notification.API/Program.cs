@@ -3,16 +3,18 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Notification.API.Hubs;
-using Notification.API.Services;
 using Notification.Application.Interfaces;
 using Notification.Application.Services;
+using Notification.Infrastructure.Azure;
 using Notification.Infrastructure.Clients;
+using Notification.Infrastructure.Configuration;
 using Notification.Infrastructure.Data;
 using Notification.Infrastructure.Messaging;
 using Notification.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddAzureKeyVault();
 
 var jwtKey = builder.Configuration["JwtSettings:SecretKey"] ?? "default-secret-key-32-characters!";
 var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "SkillSnapAuth";
@@ -35,10 +37,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = context =>
             {
-                var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notifications"))
-                    context.Token = accessToken;
                 return Task.CompletedTask;
             }
         };
@@ -83,13 +81,19 @@ else
     builder.Services.AddDistributedMemoryCache();
 }
 
-builder.Services.AddSignalR();
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyHeader().AllowAnyMethod().AllowCredentials()
-              .SetIsOriginAllowed(_ => true));
+    {
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
 });
 
 builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client =>
@@ -101,7 +105,7 @@ builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<INotificationPushService, SignalRPushService>();
+builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
 
@@ -122,7 +126,6 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
 

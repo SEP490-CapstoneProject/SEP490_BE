@@ -8,6 +8,7 @@ public interface INotificationService
     Task<CursorPagedResult<UserNotificationDto>> GetNotificationsAsync(string userId, int? cursor, int limit);
     Task<int> GetUnreadCountAsync(string userId);
     Task<UserNotificationDto> CreateNotificationAsync(NotificationEntity entity);
+    Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity);
     Task MarkAsReadAsync(int id, string userId);
     Task MarkAllAsReadAsync(string userId);
 }

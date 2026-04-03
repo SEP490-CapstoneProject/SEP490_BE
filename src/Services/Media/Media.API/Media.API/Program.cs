@@ -1,5 +1,7 @@
 using Media.API.Models;
 using Media.API.Services;
+using Media.API.Azure;
+using Media.API.Configuration;
 using DotNetEnv;
 
 // Load environment variables from .env.local
@@ -10,6 +12,9 @@ if (File.Exists(envPath))
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // Configure Kestrel to allow large file uploads (150MB)
 builder.WebHost.ConfigureKestrel(serverOptions =>
@@ -22,12 +27,18 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Configure Cloudinary settings from environment variables
+// Configure Cloudinary settings (Key Vault/config first, env fallback)
 builder.Services.Configure<CloudinarySettings>(options =>
 {
-    options.CloudName = Environment.GetEnvironmentVariable("CLOUDINARY_CLOUD_NAME") ?? "";
-    options.ApiKey = Environment.GetEnvironmentVariable("CLOUDINARY_API_KEY") ?? "";
-    options.ApiSecret = Environment.GetEnvironmentVariable("CLOUDINARY_API_SECRET") ?? "";
+    options.CloudName = builder.Configuration["Cloudinary:CloudName"]
+                        ?? Environment.GetEnvironmentVariable("CLOUDINARY_CLOUD_NAME")
+                        ?? "";
+    options.ApiKey = builder.Configuration["Cloudinary:ApiKey"]
+                     ?? Environment.GetEnvironmentVariable("CLOUDINARY_API_KEY")
+                     ?? "";
+    options.ApiSecret = builder.Configuration["Cloudinary:ApiSecret"]
+                        ?? Environment.GetEnvironmentVariable("CLOUDINARY_API_SECRET")
+                        ?? "";
 });
 
 // Add DI
@@ -46,12 +57,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Configure pipeline
-if (app.Environment.IsDevelopment())
+// Configure pipeline - Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Media API V1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowAll");
 app.UseAuthorization();

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Portfolio.Infrastructure.Data;
+using Portfolio.Infrastructure.Azure;
+using Portfolio.Infrastructure.Configuration;
 using Portfolio.Application.Interfaces;
 using Portfolio.Application.Services;
 using Portfolio.Infrastructure.Repositories;
@@ -11,6 +13,9 @@ using Portfolio.Infrastructure.Services;
 using Portfolio.Application.BlockHandlers;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault configuration
+builder.Configuration.AddAzureKeyVault();
 
 // Add MVC + Swagger
 builder.Services.AddControllers();
@@ -132,7 +137,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
@@ -145,12 +157,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// Pipeline
-if (app.Environment.IsDevelopment())
+// Pipeline - Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Portfolio API V1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowAll");
 app.UseAuthentication();

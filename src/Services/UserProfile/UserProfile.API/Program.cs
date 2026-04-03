@@ -6,8 +6,13 @@ using UserProfile.Application.Interfaces;
 using UserProfile.Application.Services;
 using UserProfile.Infrastructure.Data;
 using UserProfile.Infrastructure.Repositories;
+using UserProfile.Infrastructure.Azure;
+using UserProfile.Infrastructure.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Azure Key Vault (works in Azure with Managed Identity, skips if not configured)
+builder.Configuration.AddAzureKeyVault();
 
 // Add services
 builder.Services.AddControllers();
@@ -80,7 +85,8 @@ builder.Services.AddAuthorization();
 // Add HttpClient for Media Service
 builder.Services.AddHttpClient("MediaService", client =>
 {
-    client.BaseAddress = new Uri("http://media-service:8080");
+    var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
+    client.BaseAddress = new Uri(mediaServiceUrl);
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
@@ -95,9 +101,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
@@ -110,12 +121,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// Configure pipeline
-if (app.Environment.IsDevelopment())
+// Configure pipeline - Enable Swagger in all environments for API documentation
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserProfile API V1");
+    c.RoutePrefix = "swagger"; // Access at /swagger
+});
 
 app.UseCors("AllowAll");
 app.UseAuthentication();

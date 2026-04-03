@@ -1,234 +1,314 @@
-You are a senior .NET backend architect designing a scalable, secure, multi-tenant system.
+# 🚀 SYSTEM REFACTOR PROMPT — SPLIT REALTIME SERVICE & CLEAN NOTIFICATION ARCHITECTURE
 
-I am building a Portfolio Service using:
-- ASP.NET Core Web API
-- Entity Framework Core
-- Clean Architecture (Controller → Service → Repository)
-- SQL Server
-- JWT Authentication
+## 🎯 Objective
 
-I need to implement a "Compliment" feature (company evaluates portfolios) with strict multi-tenant isolation, flexible querying, and high performance.
+Refactor the existing system to:
 
----
-
-🎯 1. ENTITY DESIGN
-
-Create Compliment entity:
-
-- Id (int, PK)
-- PortfolioId (FK)
-- CompanyId (FK)
-- State (enum: Pending = 0, Approved = 1, Rejected = 2)
-- Content (nvarchar)
-- Score (int, optional, 1–5)
-- CreatedAt (datetime)
-
-Add:
-- Navigation properties
-- Enum for State
-- CreatedAt default value
+1. Extract a dedicated **Realtime Service (SignalR-based)**.
+2. Refactor **Notification Service** to focus only on notification logic.
+3. Implement **realtime for Comment and Reply (Community feature)**.
+4. Ensure **event-driven architecture (RabbitMQ)** with clean separation of concerns.
+5. Maintain production-grade practices: scalability, idempotency, decoupling.
 
 ---
 
-🎯 2. DATA CONSTRAINTS
+# 🧠 Current System (IMPORTANT CONTEXT)
 
-- Each company can only compliment a portfolio ONCE
-→ Add UNIQUE constraint (PortfolioId, CompanyId)
+## Notification Service (existing)
 
----
+* Consumes events from **RabbitMQ**
+* Flow:
+  Event → Consumer → Save Notification (DB) → Invalidate cache → Push realtime via SignalR
+* Uses:
 
-🎯 3. MULTI-TENANT SECURITY (CRITICAL)
+  * `IHubContext<NotificationHub>`
+  * Push event: `"ReceiveNotification"`
+  * SignalR group: `user_{userId}`
+* Handles domains:
 
-System must ensure:
+  * `post.*`, `connection.*`, `portfolio.*`, `job.*`, `system.*`
 
-- Company ONLY sees its own compliments
-- NEVER expose compliments of other companies
+## Problem
 
-Implement 3-layer protection:
+* Notification Service is handling BOTH:
 
-A. Global Query Filter (EF Core)
-- Filter Compliment by CompanyId from current user
+  * Notification logic ❗
+  * Realtime delivery ❗
+* This will not scale when adding:
 
-B. Service-level validation
-- Prevent update/delete access to other company data
-
-C. Authorization policy
-- Only role "company" can access compliment APIs
-
----
-
-🎯 4. CURRENT USER SERVICE
-
-- Create ICurrentUserService
-- Extract CompanyId from JWT claims
-- Use dependency injection (DO NOT manually parse token everywhere)
+  * Comment realtime
+  * Chat
+  * Presence
 
 ---
 
-🎯 5. GLOBAL QUERY FILTER
+# 🏗️ TARGET ARCHITECTURE
 
-- Apply filter on Compliment:
+## Event-driven architecture with separation
 
-  c => c.CompanyId == currentCompanyId
-
-- Ensure it works automatically in all queries
-- Allow bypass using IgnoreQueryFilters() for admin use
-
----
-
-🎯 6. API DESIGN (SINGLE FLEXIBLE ENDPOINT)
-
-GET /api/portfolios
-
-Query params:
-
-- page
-- pageSize
-- includeCompliments (bool)
-- complimentState (enum)
-- hasCompliment (bool)
+Community Service
+↓
+RabbitMQ (Exchange: skillsnap.events)
+↓
+┌─────────────────────────────┬─────────────────────────────┐
+↓                             ↓
+Realtime Service               Notification Service
+(SignalR ONLY)                 (Business Logic ONLY)
 
 ---
 
-🎯 7. BUSINESS LOGIC
+# ✅ TASK 1 — CREATE REALTIME SERVICE
 
-IMPORTANT: ALL compliment logic MUST use companyId
+## Requirements
 
-A. hasCompliment:
+### Tech
 
-- true:
-  → portfolios where EXISTS compliment by this company
-
-- false:
-  → portfolios where NOT EXISTS compliment by this company
-
-B. complimentState:
-
-→ portfolios where:
-   EXISTS compliment by this company AND state matches
-
-C. includeCompliments:
-
-- true → include compliments in response
-- false → do NOT include compliments
+* ASP.NET Core
+* SignalR
+* RabbitMQ Consumer
 
 ---
 
-🎯 8. QUERY IMPLEMENTATION
+## 1. Create Realtime Service structure
 
-- DO NOT use Include()
-- Use projection (Select)
-- Filter at database level
-
-Examples:
-
-- Filter:
-  p.Compliments.Any(c => c.CompanyId == companyId)
-
-- Mapping:
-  Only map compliments when includeCompliments = true
-
----
-
-🎯 9. DTO DESIGN
-
-PortfolioDto:
-- Id
-- Title
-- ...
-- Compliments (optional)
-
-ComplimentDto:
-- Id
-- Content
-- State
-- Score
+RealtimeService/
+├── Hubs/
+│    ├── NotificationHub.cs
+│    ├── CommunityHub.cs
+│
+├── Consumers/
+│    ├── CommentEventConsumer.cs
+│    ├── ReplyEventConsumer.cs
+│    ├── NotificationEventConsumer.cs (optional)
+│
+├── Services/
+│    ├── IRealtimePushService.cs
+│    ├── SignalRPushService.cs
+│
+├── Extensions/
+├── Program.cs
 
 ---
 
-🎯 10. PAGINATION
+## 2. Implement SignalR Hubs
 
-- Apply Skip/Take AFTER filtering
-- Return total count
+### NotificationHub
 
----
+* Group: `user_{userId}`
 
-🎯 11. PERFORMANCE OPTIMIZATION
+### CommunityHub
 
-Indexes:
+* Group: `post_{postId}`
 
-- IX_Compliment_Portfolio_Company (PortfolioId, CompanyId)
-- IX_Compliment_Portfolio_Company_State (PortfolioId, CompanyId, State)
+Methods:
 
-Avoid:
-- N+1 queries
-- Loading unnecessary data
+* JoinPost(postId)
+* LeavePost(postId)
 
 ---
 
-🎯 12. AGGREGATE FIELDS (RECOMMENDED)
+## 3. Implement Realtime Push Service
 
-Add to Portfolio:
+Example:
 
-- ComplimentCount
-- ApprovedComplimentCount
-- AverageScore
-
-Use for fast filtering and sorting
-
----
-
-🎯 13. PERMISSION ENFORCEMENT
-
-- Validate CompanyId in service layer before update/delete
-- Throw ForbiddenException if mismatch
-- Ensure no data leakage across tenants
+```csharp
+await _hubContext.Clients.Group($"post_{postId}")
+    .SendAsync("ReceiveComment", commentDto);
+```
 
 ---
 
-🎯 14. BONUS FEATURES
+## 4. Implement RabbitMQ Consumers
 
-- Scoring system (1–5 stars)
-- Sorting portfolios by:
-  + score
-  + compliment count
-- Admin mode using IgnoreQueryFilters()
+Consume events:
 
----
-
-🎯 15. OUTPUT REQUIRED
-
-Generate:
-
-- Entity classes
-- Enum
-- DbContext configuration (with global query filter)
-- Migration (indexes + unique constraint)
-- CurrentUserService
-- Repository interface + implementation
-- Service layer
-- Controller endpoints
-- DTOs
-- LINQ query implementing:
-  + includeCompliments
-  + hasCompliment
-  + complimentState
-  + pagination
+* `post.comment.created`
+* `post.reply.created`
+* (optional) `notification.created`
 
 ---
 
-🎯 16. CODE QUALITY
+## Behavior
 
-- Clean, readable, production-ready
-- Follow SOLID principles
-- Avoid duplicated logic
-- Optimize for large-scale systems
+### On CommentCreatedEvent
+
+* Push:
+  `"ReceiveComment"` → group `post_{postId}`
+
+### On ReplyCreatedEvent
+
+* Push:
+  `"ReceiveReply"` → group `post_{postId}`
 
 ---
 
-🚨 IMPORTANT RULES:
+# ✅ TASK 2 — REFACTOR NOTIFICATION SERVICE
 
-- ALWAYS filter Compliment by CompanyId
-- NEVER expose other companies’ data
-- DO NOT break existing Portfolio API response shape
-- DO NOT use Include() for this feature
+## REMOVE ALL REALTIME LOGIC
+
+❌ Remove:
+
+* SignalR Hub
+* IHubContext usage
+* Push logic inside Notification Service
+
+---
+
+## KEEP ONLY:
+
+✔️ Event Consumer
+✔️ Notification DB persistence
+✔️ Cache (unread count)
+✔️ Business logic (decide whether to notify)
+
+---
+
+## ADD (OPTIONAL BUT RECOMMENDED)
+
+Publish new event:
+
+```json
+NotificationCreatedEvent {
+  NotificationId,
+  UserId,
+  Type,
+  Content,
+  CreatedAt
+}
+```
+
+---
+
+## Flow AFTER refactor:
+
+Event (e.g. CommentCreated)
+↓
+Notification Service
+↓
+Save DB
+↓
+Publish NotificationCreatedEvent (optional)
+
+---
+
+# ✅ TASK 3 — COMMUNITY SERVICE EVENT CONTRACT
+
+Ensure Community Service publishes:
+
+### CommentCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "post.comment.created",
+  "postId": "...",
+  "commentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+### ReplyCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "post.reply.created",
+  "postId": "...",
+  "commentId": "...",
+  "parentCommentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+# ✅ TASK 4 — FRONTEND INTEGRATION (React)
+
+## Single connection to Realtime Service
+
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("/communityHub")
+  .build();
+```
+
+---
+
+## Subscribe events
+
+```javascript
+connection.on("ReceiveComment", handler);
+connection.on("ReceiveReply", handler);
+connection.on("ReceiveNotification", handler);
+```
+
+---
+
+## Join group
+
+```javascript
+connection.invoke("JoinPost", postId);
+```
+
+---
+
+# ⚠️ IMPORTANT RULES
+
+## 1. DO NOT call SignalR from Notification Service
+
+## 2. DO NOT chain event like:
+
+Notification → Realtime ❌
+
+## 3. BOTH services must consume directly from RabbitMQ
+
+## 4. Ensure idempotency
+
+* Use eventId
+* Prevent duplicate push
+
+---
+
+# 🔥 BONUS (IF POSSIBLE)
+
+* Add Redis backplane for SignalR scaling
+* Add retry + DLQ for RabbitMQ
+* Add structured logging (eventId tracing)
+
+---
+
+# 🎯 FINAL RESULT EXPECTED
+
+✔️ Clean separation of concerns
+✔️ Realtime Service handles ALL SignalR
+✔️ Notification Service handles ONLY notification
+✔️ Comment & Reply realtime working
+✔️ Event-driven, scalable architecture
+
+---
+
+# 📌 OUTPUT REQUIREMENTS
+
+Provide:
+
+1. Folder structure
+2. Key code files (Hub, Consumer, PushService)
+3. Refactored Notification Service code changes
+4. Event contract definitions
+5. Explanation of flow
+
+---
+
+# 🚀 GOAL
+
+System should be:
+
+* Scalable to thousands of concurrent users
+* Clean for microservices architecture
+* Ready for future features (chat, presence, live updates)

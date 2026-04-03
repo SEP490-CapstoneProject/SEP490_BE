@@ -1,0 +1,23 @@
+PS D:\Capstone> az containerapp logs show --name media-service --resource-group CapStone --follow
+{"TimeStamp": "2026-03-28T12:24:16.18557", "Log": "Connecting to the container 'media-service'..."}
+{"TimeStamp": "2026-03-28T12:24:16.24255", "Log": "Successfully Connected to container: 'media-service' [Revision: 'media-service--e1f4j3f', Replica: 'media-service--e1f4j3f-bc558c855-xqw8b']"}
+{"TimeStamp": "2026-03-28T12:23:17.289057+00:00", "Log": "F          at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteRuntimeResolver.VisitCache(ServiceCallSite callSite, RuntimeResolverContext context, ServiceProviderEngineScope serviceProviderEngine, RuntimeResolverLock lockType)"}
+{"TimeStamp": "2026-03-28T12:23:17.2890635+00:00", "Log": "F          at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteRuntimeResolver.VisitScopeCache(ServiceCallSite callSite, RuntimeResolverContext context)"}
+{"TimeStamp": "2026-03-28T12:23:17.2890661+00:00", "Log": "F          at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteVisitor`2.VisitCallSite(ServiceCallSite callSite, TArgument argument)"}
+{"TimeStamp": "2026-03-28T12:23:17.2890682+00:00", "Log": "F          at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteRuntimeResolver.Resolve(ServiceCallSite callSite, ServiceProviderEngineScope scope)"}
+{"TimeStamp": "2026-03-28T12:23:17.2890721+00:00", "Log": "F          at Microsoft.Extensions.DependencyInjection.ServiceLookup.DynamicServiceProviderEngine.<>c__DisplayClass2_0.<RealizeService>b__0(ServiceProviderEngineScope scope)"}
+{"TimeStamp": "2026-03-28T12:23:17.2890965+00:00", "Log": "F          at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(ServiceIdentifier serviceIdentifier, ServiceProviderEngineScope serviceProviderEngineScope)"}
+{"TimeStamp": "2026-03-28T12:23:17.2891021+00:00", "Log": "F          at Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceProviderEngineScope.GetService(Type serviceType)"}
+{"TimeStamp": "2026-03-28T12:23:17.2891055+00:00", "Log": "F          at lambda_method4(Closure, IServiceProvider, Object[])"}
+{"TimeStamp": "2026-03-28T12:23:17.2891079+00:00", "Log": "F          at Microsoft.AspNetCore.Mvc.Controllers.ControllerFactoryProvider.<>c__DisplayClass6_0.<CreateControllerFactory>g__CreateController|0(ControllerContext controllerContext)"}
+{"TimeStamp": "2026-03-28T12:23:17.2891101+00:00", "Log": "F          at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)"}
+{"TimeStamp": "2026-03-28T12:23:17.2891123+00:00", "Log": "F          at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()"}
+{"TimeStamp": "2026-03-28T12:23:17.2891144+00:00", "Log": "F       --- End of stack trace from previous location ---"}
+{"TimeStamp": "2026-03-28T12:23:17.2891165+00:00", "Log": "F          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)"}
+{"TimeStamp": "2026-03-28T12:23:17.2891301+00:00", "Log": "F          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)"}
+{"TimeStamp": "2026-03-28T12:23:17.2891342+00:00", "Log": "F          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)"}
+{"TimeStamp": "2026-03-28T12:23:17.2891373+00:00", "Log": "F          at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)"}
+{"TimeStamp": "2026-03-28T12:23:17.2892252+00:00", "Log": "F          at Swashbuckle.AspNetCore.SwaggerUI.SwaggerUIMiddleware.Invoke(HttpContext httpContext)"}
+{"TimeStamp": "2026-03-28T12:23:17.28923+00:00", "Log": "F          at Swashbuckle.AspNetCore.Swagger.SwaggerMiddleware.Invoke(HttpContext httpContext, ISwaggerProvider swaggerProvider)"}
+{"TimeStamp": "2026-03-28T12:23:17.2892325+00:00", "Log": "F          at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)"}
+{"TimeStamp": "2026-03-28T12:23:17.2892347+00:00", "Log": "F          at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)"}

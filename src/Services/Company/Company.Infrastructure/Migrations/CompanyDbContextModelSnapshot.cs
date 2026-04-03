@@ -17,6 +17,7 @@ namespace Company.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("companysvc")
                 .HasAnnotation("ProductVersion", "8.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
@@ -43,7 +44,7 @@ namespace Company.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("COMPANY", (string)null);
+                    b.ToTable("COMPANY", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPost", b =>
@@ -74,10 +75,8 @@ namespace Company.Infrastructure.Migrations
                         .HasColumnName("coverImageVideo");
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasColumnName("createAt")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasColumnName("createAt");
 
                     b.Property<string>("EmploymentType")
                         .HasMaxLength(50)
@@ -129,7 +128,7 @@ namespace Company.Infrastructure.Migrations
                     b.HasIndex("Status", "CreatedAt", "PostId")
                         .HasDatabaseName("IX_Post_Status_CreateAt_PostId");
 
-                    b.ToTable("COMPANY_POST", (string)null);
+                    b.ToTable("COMPANY_POST", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPostMedia", b =>
@@ -165,7 +164,7 @@ namespace Company.Infrastructure.Migrations
                     b.HasIndex("CompanyPostId")
                         .HasDatabaseName("IX_PostMedia_PostId");
 
-                    b.ToTable("COMPANY_POST_MEDIA", (string)null);
+                    b.ToTable("COMPANY_POST_MEDIA", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPostSave", b =>
@@ -193,19 +192,7 @@ namespace Company.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_PostSave_User_Post");
 
-                    b.ToTable("COMPANY_POST_SAVE", (string)null);
-                });
-
-            modelBuilder.Entity("Company.Domain.Entities.CompanyPost", b =>
-                {
-                    b.HasOne("Company.Domain.Entities.CompanyEntity", "Company")
-                        .WithMany("Posts")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_CompanyPost_Company");
-
-                    b.Navigation("Company");
+                    b.ToTable("COMPANY_POST_SAVE", "companysvc");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPostMedia", b =>
@@ -230,11 +217,6 @@ namespace Company.Infrastructure.Migrations
                         .HasConstraintName("FK_PostSave_Post");
 
                     b.Navigation("CompanyPost");
-                });
-
-            modelBuilder.Entity("Company.Domain.Entities.CompanyEntity", b =>
-                {
-                    b.Navigation("Posts");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPost", b =>

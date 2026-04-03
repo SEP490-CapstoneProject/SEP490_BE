@@ -5,9 +5,11 @@ A comprehensive recruitment and professional networking platform built with **AS
 ## 🏗️ Architecture Overview
 
 This project implements a microservices architecture with:
-- **11 Microservices** (each with its own database)
-- **1 API Gateway** (routing and authentication)
-- **SQL Server** (single instance, 11 separate databases)
+- **10 Microservices** (each with its own database)
+- **1 API Gateway** (YARP - routing and authentication)
+- **SQL Server** (single instance, separate databases)
+- **RabbitMQ** (event-driven communication)
+- **Redis** (caching)
 - **Docker & Docker Compose** (containerization and orchestration)
 - **JWT Authentication** (secure token-based auth)
 - **Clean Architecture** (Domain, Application, Infrastructure, API layers)
@@ -16,18 +18,17 @@ This project implements a microservices architecture with:
 
 | Service | Port | Database | Description |
 |---------|------|----------|-------------|
-| API Gateway | 5000 | - | Routes requests to microservices |
+| API Gateway | 5000 | - | YARP reverse proxy, routes requests |
 | Auth Service | 5001 | AuthServiceDb | Authentication & user management |
-| UserProfile Service | 5002 | UserProfileServiceDb | Employee profiles |
+| UserProfile Service | 5002 | UserProfileServiceDb | Employee & Company profiles |
 | Portfolio Service | 5003 | PortfolioServiceDb | CV/Portfolio management |
-| Company Service | 5004 | CompanyServiceDb | Company profiles |
-| JobHiring Service | 5005 | JobHiringServiceDb | Job posts & applications |
+| Company Service | 5004 | CompanyServiceDb | Company profiles & posts |
 | Connection Service | 5006 | ConnectionServiceDb | Matching & messaging |
-| Community Service | 5007 | CommunityServiceDb | Social posts |
+| Community Service | 5007 | CommunityServiceDb | Social posts & interactions |
 | Subscription Service | 5008 | SubscriptionServiceDb | Plans & billing |
-| Advertisement Service | 5009 | AdvertisementServiceDb | Advertisements |
-| Moderation Service | 5010 | ModerationServiceDb | Content moderation |
-| Notification Service | 5011 | NotificationServiceDb | User notifications |
+| Notification Service | 5011 | NotificationServiceDb | Real-time notifications (SignalR) |
+| Media Service | 5012 | - | Cloudinary upload |
+| Application Service | 5013 | ApplicationServiceDb | Job applications |
 
 ## 🚀 Quick Start
 
@@ -76,28 +77,23 @@ dotnet run
 ```
 RecruitmentPlatform/
 ├── src/
-│   ├── ApiGateway/                    # API Gateway
+│   ├── ApiGateway/                    # YARP API Gateway
 │   ├── Services/
-│   │   ├── Auth/                      # ✅ FULLY IMPLEMENTED
-│   │   │   ├── Auth.API/
-│   │   │   ├── Auth.Application/
-│   │   │   ├── Auth.Domain/
-│   │   │   └── Auth.Infrastructure/
-│   │   ├── UserProfile/               # ⚠️ PARTIALLY IMPLEMENTED
-│   │   ├── Portfolio/                 # 🔲 TO BE IMPLEMENTED
-│   │   ├── Company/                   # 🔲 TO BE IMPLEMENTED
-│   │   ├── JobHiring/                 # 🔲 TO BE IMPLEMENTED
-│   │   ├── Connection/                # 🔲 TO BE IMPLEMENTED
-│   │   ├── Community/                 # 🔲 TO BE IMPLEMENTED
-│   │   ├── Subscription/              # 🔲 TO BE IMPLEMENTED
-│   │   ├── Advertisement/             # 🔲 TO BE IMPLEMENTED
-│   │   ├── Moderation/                # 🔲 TO BE IMPLEMENTED
-│   │   └── Notification/              # 🔲 TO BE IMPLEMENTED
+│   │   ├── Auth/                      # ✅ Authentication
+│   │   ├── UserProfile/               # ✅ Employee & Company profiles
+│   │   ├── Portfolio/                 # ✅ CV/Portfolio management
+│   │   ├── Company/                   # ✅ Company service
+│   │   ├── Connection/                # ✅ Matching & chat
+│   │   ├── Community/                 # ✅ Social posts
+│   │   ├── Subscription/              # ✅ Plans & billing
+│   │   ├── Notification/              # ✅ Real-time notifications
+│   │   ├── Media/                     # ✅ Cloudinary upload
+│   │   └── Application/               # ✅ Job applications
 │   └── Shared/
-│       ├── RecruitmentPlatform.Common/      # ✅ Base entities, utilities
-│       └── RecruitmentPlatform.Contracts/   # ✅ DTOs, enums
-├── docker-compose.yml                 # ✅ Docker orchestration
-└── RecruitmentPlatform.sln           # ✅ Solution file
+│       ├── RecruitmentPlatform.Common/
+│       └── RecruitmentPlatform.Contracts/
+├── docker-compose.yml
+└── RecruitmentPlatform.sln
 ```
 
 ## ✅ Completed Components
@@ -237,12 +233,7 @@ Reference (Id, PortfolioId, Name, Position, Company, Phone, Email)
 ### Company Service
 ```sql
 Company (Id, UserId, CompanyName, Address, Description, AvatarUrl)
-```
-
-### JobHiring Service
-```sql
-JobPost (Id, CompanyId, Position, Salary, EmploymentType, Description, CreatedAt, Status)
-JobApplication (Id, JobPostId, UserId, PortfolioId, Status, AppliedAt)
+CompanyPost (Id, CompanyId, Position, Salary, Address, Description, Media, Status)
 ```
 
 ### Connection Service
@@ -254,7 +245,9 @@ Message (Id, MessageRoomId, SenderUserId, Content, CreatedAt)
 
 ### Community Service
 ```sql
-CommunityPost (Id, UserId, Content, CreatedAt, Status)
+CommunityPost (Id, UserId, Content, Media, CreatedAt, Status)
+Comment (Id, PostId, UserId, Content, CreatedAt)
+Favorite (Id, PostId, UserId, CreatedAt)
 ```
 
 ### Subscription Service
@@ -264,20 +257,15 @@ Subscription (Id, UserId, PlanId, StartDate, EndDate, Status)
 Payment (Id, UserId, Amount, PaymentMethod, PaymentStatus, CreatedAt)
 ```
 
-### Advertisement Service
-```sql
-Advertisement (Id, CompanyId, Type, Status, StartDate, EndDate)
-```
-
-### Moderation Service
-```sql
-Report (Id, ReporterId, TargetType, TargetId, Reason, Status, CreatedAt)
-ModerationLog (Id, ModeratorId, Action, TargetType, TargetId, CreatedAt)
-```
-
 ### Notification Service
 ```sql
-Notification (Id, UserId, Title, Content, Type, CreatedAt)
+Notification (Id, UserId, Title, Content, Type, ObjectId, ActorId, IsRead, CreatedAt)
+```
+
+### Application Service
+```sql
+Application (Id, EmployeeId, CompanyId, CompanyPostId, PortfolioId, RoomId, Status, AppliedAt)
+-- Status: WAITING(0), REVIEWING(1), ACCEPTED(2), REJECTED(3)
 ```
 
 ## 🔐 Authentication Flow
@@ -405,32 +393,21 @@ Each service has Swagger UI available at:
 - **Entity Framework Core 8.0** - ORM
 - **SQL Server 2022** - Database
 - **Docker** - Containerization
+- **YARP** - API Gateway / Reverse Proxy
+- **RabbitMQ** - Message broker
+- **Redis** - Caching
+- **SignalR** - Real-time communication
 - **JWT** - Authentication
 - **BCrypt** - Password hashing
+- **Cloudinary** - Media storage
+- **Polly** - Resilience & retry policies
 - **Swagger/OpenAPI** - API documentation
 - **Clean Architecture** - Code organization
-
-## 🎯 Next Steps
-
-1. **Complete UserProfile Service** (started, needs DbContext, Repository, Service, Controller)
-2. **Implement Portfolio Service** (complex with many related entities)
-3. **Implement Company Service**
-4. **Implement JobHiring Service** (core business logic)
-5. **Implement Connection Service** (chat functionality)
-6. **Implement remaining services** (Community, Subscription, Advertisement, Moderation, Notification)
-7. **Implement API Gateway** with YARP
-8. **Add comprehensive unit tests**
-9. **Add integration tests**
-10. **Deploy to production**
 
 ## 📄 License
 
 This project is for educational/capstone purposes.
 
-## 👥 Contributors
-
-- Your Name - Initial work
-
 ---
 
-**Status**: 🟢 Auth Service Complete | 🟡 9 Services Pending | 🔴 API Gateway Pending
+**Status**: 🟢 10 Services Implemented | 🟢 API Gateway (YARP) Complete

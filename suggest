@@ -1,156 +1,379 @@
-You are a senior .NET architect reviewing a production-ready Portfolio Service (Plan v3).
+# 🚀 REFACTOR PROMPT — REALTIME SERVICE (SINGLE CONNECTION) & NOTIFICATION CLEANUP
 
-The system already has:
+## 🎯 Objective
 
-- Secure multi-tenant Global Query Filter:
-    c => !c.IsDeleted && (_currentUser.IsAdmin || c.CompanyId == _currentUser.CompanyId)
+Refactor system to:
 
-- Compliment feature with:
-  + transactions
-  + aggregate recalculation from DB
-  + soft delete
-  + audit fields
-
-- Single API endpoint (GET /api/portfolio)
-- Role-aware logic inside service layer
+1. Extract a dedicated **Realtime Service (SignalR)**.
+2. Refactor **Notification Service** to remove realtime responsibilities.
+3. Implement **comment & reply realtime** via event-driven architecture.
+4. Use **SINGLE SignalR connection (ONE HUB ONLY)** for all realtime events.
+5. Ensure production-grade: idempotency, scalability, clean separation.
 
 ---
 
-🎯 YOUR TASK
+# 🏗️ TARGET ARCHITECTURE
 
-Refine the plan to reach ENTERPRISE-GRADE quality by fixing 2 remaining design issues:
-
----
-
-🚨 ISSUE 1 — MAGIC NUMBER (CompanyId = 0)
-
-Current design:
-
-    int CompanyId { get; } // 0 means no tenant
-
-This is NOT ideal because:
-
-- Magic number is unclear and unsafe
-- Risk if database accidentally contains CompanyId = 0
-- Hard to maintain and reason about
+Community Service
+↓
+RabbitMQ (skillsnap.events)
+↓
+┌─────────────────────┬──────────────────────┐
+↓                     ↓
+Realtime Service       Notification Service
+(SignalR ONLY)         (Business Logic ONLY)
 
 ---
 
-✅ REQUIRED FIX
+# ⚠️ CRITICAL DESIGN DECISIONS (MUST FOLLOW)
 
-Replace magic number approach with a clean design:
+## 1. SINGLE CONNECTION STRATEGY (MANDATORY)
 
-Option A (preferred):
+* ONLY ONE HUB:
 
-    bool HasCompany { get; }
-    int CompanyId { get; }
+  ```
+  /hubs/realtime
+  ```
 
-Global Query Filter:
+* DO NOT create multiple hubs like:
 
-    c => !c.IsDeleted &&
-         (_currentUser.IsAdmin ||
-          (_currentUser.HasCompany && c.CompanyId == _currentUser.CompanyId))
-
----
-
-OR Option B:
-
-    int? CompanyId { get; }
-
-Filter:
-
-    c => !c.IsDeleted &&
-         (_currentUser.IsAdmin || c.CompanyId == _currentUser.CompanyId)
+  * ❌ /hubs/notifications
+  * ❌ /hubs/community
 
 ---
 
-📌 REQUIREMENT:
+## 2. SINGLE HUB EVENT DESIGN
 
-- Ensure EF Core can translate the filter
-- Avoid method calls that break SQL translation
-- Ensure default behavior = NO DATA instead of data leak
+RealtimeHub handles ALL events:
 
----
-
-🚨 ISSUE 2 — ADMIN + INCLUDE NAVIGATION BUG
-
-Problem:
-
-Using:
-
-    Portfolio.Include(p => p.Compliments)
-
-Global Query Filter STILL applies → admin does NOT see full data
+* ReceiveNotification
+* ReceiveComment
+* ReceiveReply
 
 ---
 
-✅ REQUIRED FIX
+## 3. GROUP STRATEGY
 
-1. DO NOT rely on Include() for Compliments
-2. Use projection-based queries ONLY
+* User group:
 
-Example:
+  ```
+  user_{userId}
+  ```
 
-    .Select(p => new PortfolioDto {
-        ...
-        Compliments = _context.Compliments
-            .IgnoreQueryFilters()
-            .Where(c => c.PortfolioId == p.Id)
-            .Select(...)
-            .ToList()
-    })
+* Post group:
+
+  ```
+  post_{postId}
+  ```
 
 ---
 
-📌 REQUIREMENT:
+# ✅ TASK 1 — CREATE REALTIME SERVICE
 
-- Admin must explicitly opt-in to full data using IgnoreQueryFilters()
-- Avoid hidden filtering behavior
-- Prevent confusion in future development
+## Structure
 
----
-
-🎯 ADDITIONAL HARDENING
-
-1. Ensure ALL queries follow:
-
-    - Projection (Select)
-    - No Include()
-    - No N+1
-
-2. Service must still enforce:
-
-    - Ownership validation
-    - Role-based access control
-
-3. Background jobs:
-
-    - MUST use IgnoreQueryFilters()
-    - MUST NOT rely on default filter
+RealtimeService/
+├── Hubs/
+│    └── RealtimeHub.cs
+│
+├── Consumers/
+│    ├── CommentEventConsumer.cs
+│    ├── ReplyEventConsumer.cs
+│    ├── NotificationEventConsumer.cs
+│
+├── Services/
+│    ├── IRealtimePushService.cs
+│    ├── SignalRPushService.cs
+│
+├── Infrastructure/
+│    ├── Idempotency (Redis)
+│
+└── Program.cs
 
 ---
 
-🎯 OUTPUT REQUIRED
+# ✅ TASK 2 — IMPLEMENT REALTIME HUB
 
-Provide:
+## RealtimeHub.cs
 
-1. Updated ICurrentUserService design
-2. Final Global Query Filter implementation
-3. Example LINQ query:
-   - Normal user
-   - Company
-   - Admin (with IgnoreQueryFilters)
-4. Explanation of:
-   - Why magic number is dangerous
-   - Why Include() breaks admin expectations
-5. Final checklist for production readiness
+### MUST IMPLEMENT:
+
+### 1. Auto join user group on connect
+
+```csharp
+public override async Task OnConnectedAsync()
+{
+    var userId = Context.UserIdentifier;
+
+    await Groups.AddToGroupAsync(
+        Context.ConnectionId,
+        $"user_{userId}"
+    );
+
+    await base.OnConnectedAsync();
+}
+```
 
 ---
 
-🚨 FINAL GOAL
+### 2. Join/Leave post group
 
-- No magic numbers
-- No hidden filtering bugs
-- Explicit admin behavior
-- Fully predictable multi-tenant system
-- Enterprise-grade maintainability
+```csharp
+public async Task JoinPost(string postId)
+{
+    await Groups.AddToGroupAsync(
+        Context.ConnectionId,
+        $"post_{postId}"
+    );
+}
+
+public async Task LeavePost(string postId)
+{
+    await Groups.RemoveFromGroupAsync(
+        Context.ConnectionId,
+        $"post_{postId}"
+    );
+}
+```
+
+---
+
+# ✅ TASK 3 — REALTIME PUSH SERVICE
+
+Implement:
+
+```csharp
+PushNotification(userId)
+PushComment(postId)
+PushReply(postId)
+```
+
+SignalR mapping:
+
+* Notification → user_{userId}
+* Comment → post_{postId}
+* Reply → post_{postId}
+
+---
+
+# ✅ TASK 4 — RABBITMQ CONSUMERS
+
+Consume directly from RabbitMQ:
+
+* post.comment.created
+* post.reply.created
+* notification.created
+
+---
+
+## Behavior
+
+### CommentCreatedEvent
+
+→ Push "ReceiveComment" → group post_{postId}
+
+### ReplyCreatedEvent
+
+→ Push "ReceiveReply" → group post_{postId}
+
+### NotificationCreatedEvent
+
+→ Push "ReceiveNotification" → group user_{userId}
+
+---
+
+# ✅ TASK 5 — IDEMPOTENCY (MANDATORY)
+
+## Use Redis
+
+Key:
+
+```
+event:{eventId}
+```
+
+TTL:
+
+```
+5–10 minutes
+```
+
+Logic:
+
+* If key exists → skip push
+* If not → process + set key
+
+---
+
+# ✅ TASK 6 — EVENT CONTRACT (MUST INCLUDE VERSION)
+
+### CommentCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "post.comment.created",
+  "version": 1,
+  "postId": "...",
+  "commentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+### ReplyCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "post.reply.created",
+  "version": 1,
+  "postId": "...",
+  "commentId": "...",
+  "parentCommentId": "...",
+  "userId": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+### NotificationCreatedEvent
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "notification.created",
+  "version": 1,
+  "notificationId": "...",
+  "userId": "...",
+  "type": "...",
+  "content": "...",
+  "createdAt": "..."
+}
+```
+
+---
+
+# ✅ TASK 7 — REFACTOR NOTIFICATION SERVICE
+
+## REMOVE COMPLETELY:
+
+* SignalR Hub
+* IHubContext usage
+* SignalRPushService
+* Any realtime push logic
+
+---
+
+## KEEP:
+
+* RabbitMQ consumer
+* Notification DB persistence
+* Unread cache
+* Business logic
+
+---
+
+## ADD:
+
+After saving notification:
+
+→ Publish `notification.created`
+
+---
+
+# ❗ RULE: NO CHAINING
+
+❌ Notification → Realtime
+✅ Both consume from RabbitMQ independently
+
+---
+
+# ✅ TASK 8 — FRONTEND INTEGRATION
+
+## SINGLE CONNECTION
+
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("/hubs/realtime", {
+    accessTokenFactory: () => token
+  })
+  .build();
+```
+
+---
+
+## Subscribe events
+
+```javascript
+connection.on("ReceiveNotification", ...)
+connection.on("ReceiveComment", ...)
+connection.on("ReceiveReply", ...)
+```
+
+---
+
+## Reconnect handling (MANDATORY)
+
+```javascript
+connection.onreconnected(() => {
+  connection.invoke("JoinPost", postId);
+});
+```
+
+---
+
+## Join group
+
+```javascript
+connection.invoke("JoinPost", postId);
+```
+
+---
+
+# ✅ TASK 9 — API GATEWAY
+
+* Enable WebSocket forwarding
+* Route:
+
+  ```
+  /hubs/realtime → Realtime Service
+  ```
+* Ensure upgrade headers work
+
+---
+
+# ✅ TASK 10 — OBSERVABILITY (MANDATORY)
+
+Log MUST include:
+
+* eventId
+* routingKey
+* userId / postId
+* connectionId
+
+---
+
+# 🎯 FINAL EXPECTATION
+
+* ONLY ONE SignalR connection
+* Notification Service has ZERO realtime logic
+* Realtime Service handles ALL realtime
+* Comment & reply realtime works
+* No duplicate push
+* Fully event-driven, scalable
+
+---
+
+# 🚀 GOAL
+
+System must be:
+
+* Scalable (thousands of connections)
+* Clean microservices architecture
+* Ready for chat / presence / live features

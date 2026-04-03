@@ -16,9 +16,11 @@ public class CompanyDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.HasDefaultSchema("companysvc");
+
         modelBuilder.Entity<CompanyPost>(entity =>
         {
-            entity.ToTable("COMPANY_POST");
+            entity.ToTable("COMPANY_POST", "companysvc");
             entity.HasKey(e => e.PostId);
             entity.Property(e => e.PostId).HasColumnName("postId");
             entity.Property(e => e.CompanyId).HasColumnName("companyId").IsRequired();
@@ -33,14 +35,10 @@ public class CompanyDbContext : DbContext
             entity.Property(e => e.RequirementsPreferred).HasColumnName("requirementsPreferred");
             entity.Property(e => e.Benefits).HasColumnName("benefits");
             entity.Property(e => e.CoverImageVideo).HasColumnName("coverImageVideo").HasMaxLength(500);
-            entity.Property(e => e.CreatedAt).HasColumnName("createAt").HasDefaultValueSql("GETDATE()");
+            entity.Property(e => e.CreatedAt).HasColumnName("createAt");
             entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue(1);
 
-            entity.HasOne(e => e.Company)
-                .WithMany(c => c.Posts)
-                .HasForeignKey(e => e.CompanyId)
-                .HasConstraintName("FK_CompanyPost_Company")
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.Ignore(e => e.Company);
 
             // Feed sort index: status + createAt DESC + postId DESC
             entity.HasIndex(e => new { e.Status, e.CreatedAt, e.PostId })
@@ -53,9 +51,9 @@ public class CompanyDbContext : DbContext
 
         modelBuilder.Entity<CompanyPostMedia>(entity =>
         {
-            entity.ToTable("COMPANY_POST_MEDIA");
+            entity.ToTable("COMPANY_POST_MEDIA", "companysvc");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
             entity.Property(e => e.CompanyPostId).HasColumnName("companyPostId").IsRequired();
             entity.Property(e => e.Type).HasColumnName("type").HasMaxLength(50);
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
@@ -73,9 +71,9 @@ public class CompanyDbContext : DbContext
 
         modelBuilder.Entity<CompanyPostSave>(entity =>
         {
-            entity.ToTable("COMPANY_POST_SAVE");
+            entity.ToTable("COMPANY_POST_SAVE", "companysvc");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
             entity.Property(e => e.CompanyPostId).HasColumnName("companyPostId").IsRequired();
             entity.Property(e => e.UserId).HasColumnName("userId").IsRequired();
 
@@ -92,11 +90,12 @@ public class CompanyDbContext : DbContext
 
         modelBuilder.Entity<CompanyEntity>(entity =>
         {
-            entity.ToTable("COMPANY");
+            entity.ToTable("COMPANY", "companysvc");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
             entity.Property(e => e.AvatarUrl).HasColumnName("avatarUrl").HasMaxLength(500);
+            entity.Ignore(e => e.Posts);
         });
     }
 }

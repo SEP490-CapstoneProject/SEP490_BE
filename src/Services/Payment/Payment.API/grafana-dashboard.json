@@ -1,0 +1,204 @@
+{
+  "dashboard": {
+    "title": "Payment Service Dashboard",
+    "uid": "payment-service",
+    "tags": ["payment", "fintech", "payos"],
+    "timezone": "browser",
+    "schemaVersion": 36,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Payment Success Rate",
+        "type": "gauge",
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 8 },
+        "targets": [
+          {
+            "expr": "payment_success_rate",
+            "legendFormat": "Success Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "orange", "value": 90 },
+                { "color": "yellow", "value": 95 },
+                { "color": "green", "value": 99 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Payments Over Time",
+        "type": "timeseries",
+        "gridPos": { "x": 6, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(payment_total_created[5m])",
+            "legendFormat": "Created"
+          },
+          {
+            "expr": "rate(payment_total_succeeded[5m])",
+            "legendFormat": "Succeeded"
+          },
+          {
+            "expr": "rate(payment_total_failed[5m])",
+            "legendFormat": "Failed"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Total Payments Today",
+        "type": "stat",
+        "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "payment_total_created",
+            "legendFormat": "Created"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Total Succeeded",
+        "type": "stat",
+        "gridPos": { "x": 18, "y": 4, "w": 3, "h": 4 },
+        "targets": [
+          {
+            "expr": "payment_total_succeeded",
+            "legendFormat": "Succeeded"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "green" }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Total Failed",
+        "type": "stat",
+        "gridPos": { "x": 21, "y": 4, "w": 3, "h": 4 },
+        "targets": [
+          {
+            "expr": "payment_total_failed",
+            "legendFormat": "Failed"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "red" }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Webhook Processing",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(webhook_total_received[5m])",
+            "legendFormat": "Received"
+          },
+          {
+            "expr": "rate(webhook_total_processed[5m])",
+            "legendFormat": "Processed"
+          },
+          {
+            "expr": "rate(webhook_total_failed[5m])",
+            "legendFormat": "Failed"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Average Latency",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "payment_latency_avg_ms",
+            "legendFormat": "Payment Creation"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 500 },
+                { "color": "red", "value": 1000 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Webhook Latency",
+        "type": "stat",
+        "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "webhook_latency_avg_ms",
+            "legendFormat": "Webhook Processing"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 100 },
+                { "color": "red", "value": 500 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Payments by Provider",
+        "type": "piechart",
+        "gridPos": { "x": 12, "y": 12, "w": 6, "h": 8 },
+        "targets": [
+          {
+            "expr": "payment_by_provider_created",
+            "legendFormat": "{{provider}}"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Recent Alerts",
+        "type": "logs",
+        "gridPos": { "x": 18, "y": 12, "w": 6, "h": 8 },
+        "options": {
+          "showLabels": true,
+          "showTime": true
+        }
+      }
+    ]
+  }
+}
