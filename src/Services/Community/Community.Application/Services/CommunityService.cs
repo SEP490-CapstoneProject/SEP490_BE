@@ -107,6 +107,44 @@ public class CommunityService : ICommunityService
         return MapToDto(post, authors, counts, previews);
     }
 
+    public async Task<List<CommunityPostDto>> GetPostsByUserIdDtoAsync(int userId, int? currentUserId)
+    {
+        // Get all posts by user
+        var posts = (await _repository.GetPostsByUserIdAsync(userId)).ToList();
+        
+        if (posts.Count == 0)
+            return new List<CommunityPostDto>();
+
+        var postIds = posts.Select(p => p.Id).ToList();
+        var uniqueUserIds = new List<int> { userId }; // Only one user in this case
+
+        // Parallel: counts + authors
+        var countsTask = _repository.GetFeedCountsAsync(postIds, currentUserId);
+        var authorsTask = _userInfoClient.GetAuthorsBatchAsync(uniqueUserIds);
+
+        await Task.WhenAll(countsTask, authorsTask);
+        var counts = countsTask.Result;
+        var authors = authorsTask.Result;
+
+        // Portfolio previews in parallel (only for posts with portfolioId)
+        var portfolioIds = posts.Where(p => p.PortfolioId.HasValue)
+                                .Select(p => p.PortfolioId!.Value)
+                                .Distinct()
+                                .ToList();
+
+        var previews = new Dictionary<int, PortfolioPreviewDto?>();
+        if (portfolioIds.Count > 0)
+        {
+            var previewTasks = portfolioIds.Select(async pid =>
+                (pid, preview: await _portfolioPreviewClient.GetPreviewAsync(pid)));
+            var previewResults = await Task.WhenAll(previewTasks);
+            foreach (var (pid, preview) in previewResults)
+                previews[pid] = preview;
+        }
+
+        return posts.Select(p => MapToDto(p, authors, counts, previews)).ToList();
+    }
+
     public async Task<PostCommentsResponseDto> GetCommentsResponseAsync(int postId)
     {
         var comments = (await _repository.GetCommentsByPostIdAsync(postId)).ToList();
@@ -256,7 +294,7 @@ public class CommunityService : ICommunityService
 
     // ─── Comment operations ───────────────────────────────────────────────────
 
-    public async Task<Comment> AddCommentAsync(int postId, int userId, string content)
+    public async Task<PostCommentDto> AddCommentAsync(int postId, int userId, string content)
     {
         var comment = new Comment 
         { 
@@ -290,7 +328,18 @@ public class CommunityService : ICommunityService
             await _eventPublisher.PublishCommentCreatedAsync(evt);
         }
 
-        return created;
+        // Fetch author data for DTO
+        var authors = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
+        var authorDto = authors.TryGetValue(userId, out var a) ? a : Fallback(userId);
+
+        return new PostCommentDto
+        {
+            Id = created.Id,
+            Author = new CommentUserDto { Id = authorDto.Id, Name = authorDto.Name, Avatar = authorDto.Avatar, Role = authorDto.Role },
+            Content = created.Content,
+            CreatedAt = created.CreatedAt.ToString("o"),
+            Replies = new List<ReplyCommentDto>()
+        };
     }
 
     public async Task<IEnumerable<Comment>> GetCommentsAsync(int postId) => await _repository.GetCommentsByPostIdAsync(postId);
@@ -298,7 +347,7 @@ public class CommunityService : ICommunityService
 
     // ─── Reply operations ─────────────────────────────────────────────────────
 
-    public async Task<ReplyComment> AddReplyAsync(int commentId, int userId, int? replyToUserId, string content)
+    public async Task<ReplyCommentDto> AddReplyAsync(int commentId, int userId, int? replyToUserId, string content)
     {
         var reply = new ReplyComment 
         { 
@@ -335,7 +384,25 @@ public class CommunityService : ICommunityService
             await _eventPublisher.PublishReplyCreatedAsync(evt);
         }
 
-        return created;
+        // Fetch author data for DTO (include replyToUser if present)
+        var userIds = replyToUserId.HasValue 
+            ? new[] { userId, replyToUserId.Value } 
+            : new[] { userId };
+        var authors = await _userInfoClient.GetAuthorsBatchAsync(userIds);
+        
+        var authorDto = authors.TryGetValue(userId, out var a) ? a : Fallback(userId);
+        CommentUserDto? replyToUserDto = null;
+        if (replyToUserId.HasValue && authors.TryGetValue(replyToUserId.Value, out var rta))
+            replyToUserDto = new CommentUserDto { Id = rta.Id, Name = rta.Name, Avatar = rta.Avatar, Role = rta.Role };
+
+        return new ReplyCommentDto
+        {
+            Id = created.Id,
+            Author = new CommentUserDto { Id = authorDto.Id, Name = authorDto.Name, Avatar = authorDto.Avatar, Role = authorDto.Role },
+            ReplyToUser = replyToUserDto,
+            Content = created.Content,
+            CreatedAt = created.CreatedAt.ToString("o")
+        };
     }
 
     public async Task<IEnumerable<ReplyComment>> GetRepliesAsync(int commentId) => await _repository.GetRepliesByCommentIdAsync(commentId);

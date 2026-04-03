@@ -69,7 +69,8 @@ public class CommunityController : ControllerBase
     [HttpGet("posts/user/{userId:int}")]
     public async Task<IActionResult> GetPostsByUser(int userId)
     {
-        var posts = await _service.GetPostsByUserIdAsync(userId);
+        var currentUserId = GetCurrentUserId();
+        var posts = await _service.GetPostsByUserIdDtoAsync(userId, currentUserId);
         return Ok(posts);
     }
 

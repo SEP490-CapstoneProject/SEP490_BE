@@ -2,6 +2,13 @@ using ApiGateway.Azure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel for long-lived WebSocket connections
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(5);
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
+});
+
 // Add Azure Key Vault configuration
 builder.Configuration.AddAzureKeyVault();
 
