@@ -136,7 +136,7 @@ public class CommunityService : ICommunityService
             return new PostCommentDto
             {
                 Id = c.Id,
-                Author = new CommentUserDto { Id = authorDto.Id, Name = authorDto.Name, Avatar = authorDto.Avatar },
+                Author = new CommentUserDto { Id = authorDto.Id, Name = authorDto.Name, Avatar = authorDto.Avatar, Role = authorDto.Role },
                 Content = c.Content,
                 CreatedAt = c.CreatedAt.ToString("o"),
                 Replies = commentReplies.Select(r =>
@@ -144,12 +144,12 @@ public class CommunityService : ICommunityService
                     var rAuthor = authors.TryGetValue(r.UserId, out var ra) ? ra : Fallback(r.UserId);
                     CommentUserDto? replyTo = null;
                     if (r.ReplyToUserId.HasValue && authors.TryGetValue(r.ReplyToUserId.Value, out var rta))
-                        replyTo = new CommentUserDto { Id = rta.Id, Name = rta.Name, Avatar = rta.Avatar };
+                        replyTo = new CommentUserDto { Id = rta.Id, Name = rta.Name, Avatar = rta.Avatar, Role = rta.Role };
 
                     return new ReplyCommentDto
                     {
                         Id = r.Id,
-                        Author = new CommentUserDto { Id = rAuthor.Id, Name = rAuthor.Name, Avatar = rAuthor.Avatar },
+                        Author = new CommentUserDto { Id = rAuthor.Id, Name = rAuthor.Name, Avatar = rAuthor.Avatar, Role = rAuthor.Role },
                         ReplyToUser = replyTo,
                         Content = r.Content,
                         CreatedAt = r.CreatedAt.ToString("o")

@@ -84,8 +84,16 @@ else
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyHeader().AllowAnyMethod().AllowCredentials()
-              .SetIsOriginAllowed(_ => true));
+    {
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
 });
 
 builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client =>
