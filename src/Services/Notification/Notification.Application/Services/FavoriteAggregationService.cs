@@ -8,12 +8,16 @@ public class FavoriteAggregationService
 {
     private readonly IDistributedCache _cache;
     private readonly TimeSpan _aggregationWindow;
+    private readonly TimeSpan _cacheTtl;
 
     public FavoriteAggregationService(IDistributedCache cache, IConfiguration configuration)
     {
         _cache = cache;
         var windowMinutes = configuration.GetValue<int?>("FavoriteAggregation:WindowMinutes") ?? 3;
         _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        // Keep key alive slightly longer than aggregation window so flush service
+        // has time to read and process it on next poll cycle.
+        _cacheTtl = _aggregationWindow + TimeSpan.FromSeconds(90);
     }
 
     public async Task<bool> TryAggregateAsync(int postId, string ownerId, string actorId, string actorName, CancellationToken cancellationToken = default)
@@ -33,7 +37,7 @@ public class FavoriteAggregationService
                 await _cache.SetStringAsync(key, JsonSerializer.Serialize(data), 
                     new DistributedCacheEntryOptions 
                     { 
-                        AbsoluteExpirationRelativeToNow = _aggregationWindow 
+                        AbsoluteExpirationRelativeToNow = _cacheTtl
                     }, cancellationToken);
 
                 return true; // Aggregated, don't create notification yet
@@ -55,7 +59,7 @@ public class FavoriteAggregationService
         await _cache.SetStringAsync(key, JsonSerializer.Serialize(newData),
             new DistributedCacheEntryOptions 
             { 
-                AbsoluteExpirationRelativeToNow = _aggregationWindow 
+                AbsoluteExpirationRelativeToNow = _cacheTtl
             }, cancellationToken);
 
         return false; // First event, create notification immediately
