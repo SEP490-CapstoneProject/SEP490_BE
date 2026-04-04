@@ -29,8 +29,8 @@ public interface ICommunityService
     Task<bool> UnsavePostAsync(int postId, int userId);
     Task<bool> FavoritePostAsync(int postId, int userId);
     Task<bool> UnfavoritePostAsync(int postId, int userId);
-    Task<IEnumerable<CommunityPost>> GetSavedPostsAsync(int userId);
-    Task<IEnumerable<CommunityPost>> GetFavoritedPostsAsync(int userId);
+    Task<List<CommunityPostDto>> GetSavedPostsAsync(int userId);
+    Task<List<CommunityPostDto>> GetFavoritedPostsAsync(int userId);
 
     // Comment operations
     Task<PostCommentDto> AddCommentAsync(int postId, int userId, string content);

@@ -8,6 +8,14 @@ public abstract class RealtimeEventBase
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class RealtimeUserDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Avatar { get; set; } = string.Empty;
+    public string Role { get; set; } = "USER";
+}
+
 public sealed class CommentCreatedEvent : RealtimeEventBase
 {
     public int PostId { get; set; }
@@ -19,6 +27,7 @@ public sealed class CommentCreatedEvent : RealtimeEventBase
     public string Title { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
+    public RealtimeUserDto? Author { get; set; }
 }
 
 public sealed class ReplyCreatedEvent : RealtimeEventBase
@@ -34,6 +43,8 @@ public sealed class ReplyCreatedEvent : RealtimeEventBase
     public string Type { get; set; } = string.Empty;
     public int? ReplyToUserId { get; set; }
     public string Content { get; set; } = string.Empty;
+    public RealtimeUserDto? Author { get; set; }
+    public RealtimeUserDto? ReplyToUser { get; set; }
 }
 
 public sealed class NotificationActorDto
