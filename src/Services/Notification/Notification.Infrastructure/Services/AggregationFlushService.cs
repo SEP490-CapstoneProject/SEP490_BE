@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
@@ -70,10 +71,16 @@ public class AggregationFlushService : BackgroundService
 
             try
             {
-                var value = await db.StringGetAsync(key);
-                if (!value.HasValue) continue;
+                // FavoriteAggregationService writes via IDistributedCache (StackExchangeRedisCache),
+                // which stores payload in Redis hash field "data".
+                var rawData = await db.HashGetAsync(key, "data");
+                if (!rawData.HasValue) continue;
 
-                var data = JsonSerializer.Deserialize<AggregationData>(value!);
+                var bytes = (byte[]?)rawData;
+                if (bytes == null || bytes.Length == 0) continue;
+
+                var json = Encoding.UTF8.GetString(bytes);
+                var data = JsonSerializer.Deserialize<AggregationData>(json);
                 if (data == null) continue;
 
                 // Check if aggregation window has expired
