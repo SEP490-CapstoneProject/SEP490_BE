@@ -64,6 +64,7 @@ builder.Services.AddDbContext<CommunityDbContext>(options =>
 builder.Services.AddScoped<ICommunityRepository, CommunityRepository>();
 builder.Services.AddScoped<ICommunityService, CommunityService>();
 builder.Services.AddScoped<ICommunityEventPublisher, RabbitMqCommunityEventPublisher>();
+builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
 
 // Add typed HttpClient for Media Service
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";

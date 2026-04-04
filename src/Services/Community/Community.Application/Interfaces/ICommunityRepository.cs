@@ -22,6 +22,7 @@ public interface ICommunityRepository
     Task<bool> UnsavePostAsync(int postId, int userId);
     Task<bool> FavoritePostAsync(int postId, int userId);
     Task<bool> UnfavoritePostAsync(int postId, int userId);
+    Task<int> GetPostFavoriteCountAsync(int postId);
     Task<IEnumerable<CommunityPost>> GetSavedPostsByUserAsync(int userId);
     Task<IEnumerable<CommunityPost>> GetFavoritedPostsByUserAsync(int userId);
     
