@@ -54,6 +54,14 @@ public sealed class NotificationActorDto
     public string? AvatarUrl { get; set; }
 }
 
+public sealed class PostFavoriteChangedEvent : RealtimeEventBase
+{
+    public int PostId { get; set; }
+    public int UserId { get; set; }
+    public string Action { get; set; } = "FAVORITE"; // "FAVORITE" or "UNFAVORITE"
+    public int NewFavoriteCount { get; set; }
+}
+
 public sealed class NotificationCreatedEvent : RealtimeEventBase
 {
     public int NotificationId { get; set; }

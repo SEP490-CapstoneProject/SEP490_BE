@@ -119,6 +119,7 @@ builder.Services.AddSingleton<IRealtimePushService, SignalRPushService>();
 builder.Services.AddHostedService<CommentEventConsumer>();
 builder.Services.AddHostedService<ReplyEventConsumer>();
 builder.Services.AddHostedService<NotificationEventConsumer>();
+builder.Services.AddHostedService<PostFavoriteEventConsumer>();
 
 var app = builder.Build();
 

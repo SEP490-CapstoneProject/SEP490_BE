@@ -183,6 +183,17 @@ public class CommunityRepository : ICommunityRepository
         return true;
     }
 
+    public async Task<int> GetPostFavoriteCountAsync(int postId)
+    {
+        var post = await _context.CommunityPosts
+            .AsNoTracking()
+            .Where(p => p.Id == postId)
+            .Select(p => p.FavoriteCount)
+            .FirstOrDefaultAsync();
+        
+        return post;
+    }
+
     public async Task<IEnumerable<CommunityPost>> GetSavedPostsByUserAsync(int userId)
     {
         return await _context.CommunityPostSaves

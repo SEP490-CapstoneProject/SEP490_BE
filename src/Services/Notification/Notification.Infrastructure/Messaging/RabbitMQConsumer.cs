@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Notification.Application.Interfaces;
+using Notification.Application.Services;
 using Notification.Domain.Entities;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -130,6 +131,30 @@ public class RabbitMQConsumer : BackgroundService
             }
 
             using var scope = _scopeFactory.CreateScope();
+
+            // Check if this is a post.favorite event for aggregation
+            if (evt.EventType == "post.favorite")
+            {
+                var aggregationService = scope.ServiceProvider.GetService<FavoriteAggregationService>();
+                if (aggregationService != null)
+                {
+                    var actorName = ExtractActorNameFromContent(evt.Content);
+                    var isAggregated = await aggregationService.TryAggregateAsync(
+                        int.Parse(evt.ObjectId ?? "0"), 
+                        evt.UserId, 
+                        evt.ActorId ?? "", 
+                        actorName);
+
+                    if (isAggregated)
+                    {
+                        // Event was aggregated, don't create notification yet
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
+                    }
+                    // If not aggregated, fall through to create notification immediately
+                }
+            }
+
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
             var eventPublisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
 
@@ -165,6 +190,17 @@ public class RabbitMQConsumer : BackgroundService
             _logger.LogError(ex, "Error processing notification event, sending to DLQ");
             await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
         }
+    }
+
+    private static string ExtractActorNameFromContent(string content)
+    {
+        // Extract actor name from content like "John Doe đã thích bài viết của bạn"
+        var index = content.IndexOf(" đã thích");
+        if (index > 0)
+        {
+            return content.Substring(0, index).Trim();
+        }
+        return "Ai đó";
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

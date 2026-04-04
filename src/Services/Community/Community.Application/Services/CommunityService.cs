@@ -2,6 +2,7 @@ using Community.Application.Clients;
 using Community.Application.DTOs;
 using Community.Application.Helpers;
 using Community.Application.Interfaces;
+using Community.Application.Models.Events;
 using Community.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ public class CommunityService : ICommunityService
     private readonly IPortfolioPreviewClient _portfolioPreviewClient;
     private readonly IMediaUploadClient _mediaUploadClient;
     private readonly ICommunityEventPublisher _eventPublisher;
+    private readonly INotificationEventPublisher _notificationPublisher;
     private readonly ILogger<CommunityService> _logger;
 
     public CommunityService(
@@ -24,6 +26,7 @@ public class CommunityService : ICommunityService
         IPortfolioPreviewClient portfolioPreviewClient,
         IMediaUploadClient mediaUploadClient,
         ICommunityEventPublisher eventPublisher,
+        INotificationEventPublisher notificationPublisher,
         ILogger<CommunityService> logger)
     {
         _repository = repository;
@@ -31,6 +34,7 @@ public class CommunityService : ICommunityService
         _portfolioPreviewClient = portfolioPreviewClient;
         _mediaUploadClient = mediaUploadClient;
         _eventPublisher = eventPublisher;
+        _notificationPublisher = notificationPublisher;
         _logger = logger;
     }
 
@@ -287,8 +291,82 @@ public class CommunityService : ICommunityService
 
     public async Task<bool> SavePostAsync(int postId, int userId) => await _repository.SavePostAsync(postId, userId);
     public async Task<bool> UnsavePostAsync(int postId, int userId) => await _repository.UnsavePostAsync(postId, userId);
-    public async Task<bool> FavoritePostAsync(int postId, int userId) => await _repository.FavoritePostAsync(postId, userId);
-    public async Task<bool> UnfavoritePostAsync(int postId, int userId) => await _repository.UnfavoritePostAsync(postId, userId);
+    
+    public async Task<bool> FavoritePostAsync(int postId, int userId)
+    {
+        var result = await _repository.FavoritePostAsync(postId, userId);
+        if (result)
+        {
+            // Get post details to check owner
+            var post = await _repository.GetPostByIdAsync(postId);
+            if (post != null && post.UserId != userId) // Don't notify self-favorite
+            {
+                // Get actor (favoriter) info for notification
+                var actors = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
+                var actorInfo = actors.FirstOrDefault().Value; // Get AuthorDto from KeyValuePair
+                
+                var notificationEvt = new PostFavoriteNotificationEvent
+                {
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "post.favorite",
+                    Version = 1,
+                    UserId = post.UserId.ToString(), // Post owner receives notification
+                    ActorId = userId.ToString(),     // Person who favorited
+                    ActorType = "USER",
+                    ObjectId = postId.ToString(),
+                    Title = "Lượt thích mới",
+                    Content = $"{actorInfo?.Name ?? "Ai đó"} đã thích bài viết của bạn",
+                    Type = "POST_FAVORITE",
+                    CreatedAt = DateTimeHelper.GetVietnamTime()
+                };
+
+                await _notificationPublisher.PublishPostFavoriteNotificationAsync(notificationEvt);
+            }
+
+            // Get new favorite count for realtime update
+            var favoriteCount = await _repository.GetPostFavoriteCountAsync(postId);
+
+            var realtimeEvt = new PostFavoriteChangedEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.favorite.changed",
+                Version = 1,
+                PostId = postId,
+                UserId = userId,
+                Action = "FAVORITE",
+                NewFavoriteCount = favoriteCount,
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostFavoriteChangedAsync(realtimeEvt);
+        }
+        return result;
+    }
+    
+    public async Task<bool> UnfavoritePostAsync(int postId, int userId)
+    {
+        var result = await _repository.UnfavoritePostAsync(postId, userId);
+        if (result)
+        {
+            // Get new favorite count
+            var favoriteCount = await _repository.GetPostFavoriteCountAsync(postId);
+
+            var evt = new PostFavoriteChangedEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.favorite.changed",
+                Version = 1,
+                PostId = postId,
+                UserId = userId,
+                Action = "UNFAVORITE",
+                NewFavoriteCount = favoriteCount,
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostFavoriteChangedAsync(evt);
+        }
+        return result;
+    }
     
     public async Task<List<CommunityPostDto>> GetSavedPostsAsync(int userId)
     {
