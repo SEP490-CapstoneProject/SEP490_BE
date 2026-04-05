@@ -1,3 +1,5 @@
+using Community.Application.Helpers;
+
 namespace Community.Application.Models.Events;
 
 public sealed class PostFavoriteNotificationEvent
@@ -12,5 +14,5 @@ public sealed class PostFavoriteNotificationEvent
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = "POST_FAVORITE";
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTimeHelper.GetVietnamTime();
 }

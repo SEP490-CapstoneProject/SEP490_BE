@@ -9,10 +9,12 @@ COPY ["src/Services/Application/Application.API/Application.API.csproj", "Servic
 COPY ["src/Services/Application/Application.Application/Application.Application.csproj", "Services/Application/Application.Application/"]
 COPY ["src/Services/Application/Application.Domain/Application.Domain.csproj", "Services/Application/Application.Domain/"]
 COPY ["src/Services/Application/Application.Infrastructure/Application.Infrastructure.csproj", "Services/Application/Application.Infrastructure/"]
+COPY ["src/Shared/RecruitmentPlatform.Contracts/RecruitmentPlatform.Contracts.csproj", "Shared/RecruitmentPlatform.Contracts/"]
 
 RUN dotnet restore "Services/Application/Application.API/Application.API.csproj"
 
 COPY src/Services/Application/ Services/Application/
+COPY src/Shared/RecruitmentPlatform.Contracts/ Shared/RecruitmentPlatform.Contracts/
 
 WORKDIR "/src/Services/Application/Application.API"
 RUN dotnet build "Application.API.csproj" -c Release -o /app/build

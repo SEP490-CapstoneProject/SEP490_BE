@@ -44,6 +44,13 @@ public class CompanyPostService : ICompanyPostService
         return result;
     }
 
+    public async Task<CursorPagedResult<CompanyPostFeedDto>> GetSavedPostsAsync(DateTime? cursor, int limit, int userId)
+    {
+        var result = await _repository.GetSavedPostsAsync(cursor, limit, userId);
+        await EnrichCompanyCacheAsync(result.Items);
+        return result;
+    }
+
     public async Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId)
     {
         var detail = await _repository.GetPostDetailAsync(postId, userId);

@@ -2,6 +2,7 @@ using Application.Application.DTOs;
 using Application.Application.Interfaces;
 using Application.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using RecruitmentPlatform.Contracts.Time;
 
 namespace Application.Application.Services;
 
@@ -81,8 +82,8 @@ public class ApplicationService : IApplicationService
                 CompanyPostId = request.CompanyPostId,
                 PortfolioId = request.PortfolioId,
                 Status = ApplicationStatus.WAITING,
-                AppliedAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
+                AppliedAt = VietnamTime.Now(),
+                CreatedAt = VietnamTime.Now()
             };
 
             var created = await _repo.CreateAsync(application);
@@ -198,7 +199,7 @@ public class ApplicationService : IApplicationService
             throw new InvalidOperationException("Cannot revert to WAITING status");
 
         application.Status = request.Status;
-        application.UpdatedAt = DateTime.UtcNow;
+        application.UpdatedAt = VietnamTime.Now();
 
         var updated = await _repo.UpdateAsync(application);
 

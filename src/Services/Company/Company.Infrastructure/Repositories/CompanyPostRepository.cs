@@ -25,6 +25,54 @@ public class CompanyPostRepository : ICompanyPostRepository
         return await BuildFeedQuery(companyId, cursor, limit, userId);
     }
 
+    public async Task<CursorPagedResult<CompanyPostFeedDto>> GetSavedPostsAsync(DateTime? cursor, int limit, int userId)
+    {
+        var query = _context.CompanyPostSaves
+            .Where(s => s.UserId == userId)
+            .Join(
+                _context.CompanyPosts.Where(p => p.Status == 1),
+                s => s.CompanyPostId,
+                p => p.PostId,
+                (s, p) => p);
+
+        if (cursor.HasValue)
+            query = query.Where(p => p.CreatedAt < cursor.Value);
+
+        var items = await (
+                from p in query
+                join c in _context.Companies on p.CompanyId equals c.Id into pc
+                from c in pc.DefaultIfEmpty()
+                orderby p.CreatedAt descending, p.PostId descending
+                select new CompanyPostFeedDto
+                {
+                    CompanyId = p.CompanyId,
+                    PostId = p.PostId,
+                    Position = p.Position,
+                    CompanyName = c != null ? c.Name : null,
+                    CompanyAvatar = c != null ? c.AvatarUrl : null,
+                    CoverImageUrl = p.CoverImageVideo,
+                    MediaType = p.Media.OrderBy(m => m.Id).Select(m => m.Type).FirstOrDefault(),
+                    MediaUrl = p.Media.OrderBy(m => m.Id).Select(m => m.Address).FirstOrDefault(),
+                    Address = p.Address,
+                    Salary = p.Salary,
+                    EmploymentType = p.EmploymentType,
+                    CreatedAt = p.CreatedAt,
+                    IsSaved = true
+                })
+            .Take(limit + 1)
+            .ToListAsync();
+
+        var hasMore = items.Count > limit;
+        if (hasMore) items.RemoveAt(items.Count - 1);
+
+        return new CursorPagedResult<CompanyPostFeedDto>
+        {
+            Items = items,
+            NextCursor = hasMore ? items.LastOrDefault()?.CreatedAt : null,
+            HasMore = hasMore
+        };
+    }
+
     private async Task<CursorPagedResult<CompanyPostFeedDto>> BuildFeedQuery(int? companyId, DateTime? cursor, int limit, int? userId)
     {
         var query = _context.CompanyPosts

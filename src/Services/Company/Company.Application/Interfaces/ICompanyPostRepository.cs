@@ -8,6 +8,7 @@ public interface ICompanyPostRepository
 {
     Task<CursorPagedResult<CompanyPostFeedDto>> GetPostFeedAsync(DateTime? cursor, int limit, int? userId);
     Task<CursorPagedResult<CompanyPostFeedDto>> GetPostsByCompanyAsync(int companyId, DateTime? cursor, int limit, int? userId);
+    Task<CursorPagedResult<CompanyPostFeedDto>> GetSavedPostsAsync(DateTime? cursor, int limit, int userId);
     Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId);
     Task<bool> CheckPostSavedAsync(int userId, int postId);
     Task SavePostAsync(int userId, int postId);

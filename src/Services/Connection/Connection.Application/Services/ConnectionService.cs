@@ -1,4 +1,5 @@
 using Connection.Application.Interfaces;
+using RecruitmentPlatform.Contracts.Time;
 
 namespace Connection.Application.Services;
 
@@ -16,7 +17,7 @@ public class ConnectionService : IConnectionService
         // Sanitize input: server sets timestamps and initial status, ignore any nested rooms/messages from client
         conn.Id = 0; // ensure EF will insert
         conn.Rooms = new List<Connection.Domain.Entities.Room>();
-        conn.CreateAt = DateTime.UtcNow;
+        conn.CreateAt = VietnamTime.Now();
         conn.ConnectionAt = null;
         conn.Status = RecruitmentPlatform.Contracts.Enums.ConnectionStatus.PENDING.ToString();
 
@@ -48,7 +49,7 @@ public class ConnectionService : IConnectionService
         // Sanitize input: use only MessageRoomId (room id) and ignore any nested Room object
         message.Id = 0;
         message.Room = null;
-        message.CreatedAt = DateTime.UtcNow;
+        message.CreatedAt = VietnamTime.Now();
         // ensure default status (UNREAD = 0) if not provided
         if (message.Status != 1 && message.Status != 2)
         {
@@ -109,7 +110,7 @@ public class ConnectionService : IConnectionService
         conn.Status = status.ToString();
         if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED)
         {
-            conn.ConnectionAt = DateTime.UtcNow;
+            conn.ConnectionAt = VietnamTime.Now();
             // create room if not exists for this connection
             var rooms = await _repo.GetRoomsByConnectionAsync(conn.Id);
             if (rooms == null || !rooms.Any())
@@ -117,7 +118,7 @@ public class ConnectionService : IConnectionService
                 var room = new Connection.Domain.Entities.Room
                 {
                     ConnectionId = conn.Id,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = VietnamTime.Now(),
                     LastMessAt = null
                 };
                 await _repo.CreateRoomAsync(room);
