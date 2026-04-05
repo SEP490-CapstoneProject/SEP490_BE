@@ -10,6 +10,7 @@ using Notification.Application.Services;
 using Notification.Domain.Entities;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RecruitmentPlatform.Contracts.Time;
 
 namespace Notification.Infrastructure.Messaging;
 
@@ -167,7 +168,7 @@ public class RabbitMQConsumer : BackgroundService
                 ObjectId = evt.ObjectId,
                 ActorId = evt.ActorId,
                 ActorType = evt.ActorType,
-                CreatedAt = evt.CreatedAt == default ? DateTime.UtcNow : evt.CreatedAt
+                CreatedAt = evt.CreatedAt == default ? VietnamTime.Now() : evt.CreatedAt
             };
 
             await notificationService.CreateNotificationAsync(entity);

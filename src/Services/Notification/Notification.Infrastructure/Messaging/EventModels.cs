@@ -1,4 +1,5 @@
 namespace Notification.Infrastructure.Messaging;
+using RecruitmentPlatform.Contracts.Time;
 
 public class NotificationEvent
 {
@@ -12,5 +13,5 @@ public class NotificationEvent
     public string Title { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Type { get; set; } = default!;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = VietnamTime.Now();
 }
