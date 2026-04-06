@@ -9,6 +9,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Auth.Application.DTOs;
 
 namespace Auth.Application.Services;
 
@@ -123,6 +124,18 @@ public class AuthService : IAuthService
         });
     }
 
+    public async Task<InternalUserInfoDto?> GetInternalUserInfoByIdAsync(int userId)
+    {
+        var user = await _repository.GetByIdAsync(userId);
+        return user == null ? null : MapToInternalUserInfoDto(user);
+    }
+
+    public async Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByIdsAsync(IEnumerable<int> userIds)
+    {
+        var users = await _repository.GetByIdsAsync(userIds);
+        return users.Select(MapToInternalUserInfoDto);
+    }
+
     private async Task<LoginResponse> GenerateTokenResponse(User user)
     {
         int? employeeId = null;
@@ -204,5 +217,16 @@ public class AuthService : IAuthService
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomNumber);
         return Convert.ToBase64String(randomNumber);
+    }
+
+    private static InternalUserInfoDto MapToInternalUserInfoDto(User user)
+    {
+        return new InternalUserInfoDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            Status = user.Status.ToString(),
+            CreateAt = user.CreatedAt
+        };
     }
 }

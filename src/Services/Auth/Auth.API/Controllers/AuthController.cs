@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using RecruitmentPlatform.Common;
 using RecruitmentPlatform.Contracts.Auth;
 using System.Security.Claims;
+using Auth.Application.DTOs;
 
 namespace Auth.API.Controllers;
 
@@ -119,5 +120,43 @@ public class AuthController : ControllerBase
         {
             return BadRequest(ApiResponse<IEnumerable<UserDto>>.ErrorResponse(ex.Message));
         }
+    }
+
+    [HttpGet("internal/users/{id:int}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<InternalUserInfoDto>> GetInternalUserById(int id)
+    {
+        var user = await _authService.GetInternalUserInfoByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { error = $"User {id} not found" });
+        }
+
+        return Ok(user);
+    }
+
+    [HttpGet("internal/users")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<InternalUserInfoDto>>> GetInternalUsers([FromQuery] string ids)
+    {
+        if (string.IsNullOrWhiteSpace(ids))
+        {
+            return Ok(new List<InternalUserInfoDto>());
+        }
+
+        var userIds = ids.Split(',')
+            .Select(s => int.TryParse(s.Trim(), out var id) ? (int?)id : null)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        if (userIds.Count == 0)
+        {
+            return Ok(new List<InternalUserInfoDto>());
+        }
+
+        var users = await _authService.GetInternalUserInfosByIdsAsync(userIds);
+        return Ok(users);
     }
 }
