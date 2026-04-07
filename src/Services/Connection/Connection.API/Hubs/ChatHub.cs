@@ -67,7 +67,16 @@ public class ChatHub : Hub
 
         var created = await _service.CreateMessageAsync(message);
 
-        // Broadcast to group
-        await Clients.Group(roomId.ToString()).SendAsync("ReceiveMessage", created);
+        // Broadcast DTO (not entity) to avoid circular reference serialization errors
+        var dto = new Connection.Application.DTOs.MessageDto
+        {
+            Id = created.Id,
+            MessageRoomId = created.MessageRoomId,
+            UserId = created.UserId,
+            Content = created.Content,
+            CreatedAt = created.CreatedAt,
+            Status = created.Status == 1 ? "READ" : created.Status == 2 ? "DELIVERED" : "UNREAD"
+        };
+        await Clients.Group(roomId.ToString()).SendAsync("ReceiveMessage", dto);
     }
 }
