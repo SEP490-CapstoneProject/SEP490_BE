@@ -8,21 +8,21 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="7.5.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
-<<<<<<< HEAD
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
-=======
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Subscription.Application\Subscription.Application.csproj" />
-    <ProjectReference Include="..\Subscription.Infrastructure\Subscription.Infrastructure.csproj" />
->>>>>>> 52bc06426d6e7755e66ecdaab8d748db4b31d45e
+    <ProjectReference Include="..\Interview.Application\Interview.Application.csproj" />
+    <ProjectReference Include="..\Interview.Infrastructure\Interview.Infrastructure.csproj" />
+    <ProjectReference Include="..\Interview.Domain\Interview.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Common\RecruitmentPlatform.Common.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

@@ -179,8 +179,30 @@ services:
       - recruitment-network
     restart: on-failure
 
-  # Notification Service
-  notification-service:
+  # Interview Service
+  interview-service:
+    build:
+      context: .
+      dockerfile: src/Services/Interview/Dockerfile
+    container_name: interview-service
+    ports:
+      - "5013:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=InterviewServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - ServiceUrls__UserProfileService=http://userprofile-service:8080
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Moderation Service
+  moderation-service:
     build:
       context: .
       dockerfile: src/Services/Notification/Dockerfile
