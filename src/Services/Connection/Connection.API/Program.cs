@@ -10,7 +10,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddAzureKeyVault();
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Prevent circular reference errors when serializing entities with navigation properties
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.WriteIndented = false;
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
@@ -58,7 +64,10 @@ builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionService,
 // CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader());
 });
 
 var app = builder.Build();
@@ -67,7 +76,15 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<Connection.Infrastructure.Data.ConnectionDbContext>();
-    db.Database.Migrate();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Database migration failed at startup. The app will continue but may not function correctly.");
+    }
 }
 
 // AutoMapper not used; mapping done manually
@@ -78,6 +95,20 @@ app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Connection API V1");
     c.RoutePrefix = "swagger";
+});
+
+// Global exception handler - return JSON error instead of empty 500
+app.UseExceptionHandler(errApp =>
+{
+    errApp.Run(async ctx =>
+    {
+        ctx.Response.StatusCode = 500;
+        ctx.Response.ContentType = "application/json";
+        var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        var message = ex?.Error?.Message ?? "An unexpected error occurred";
+        var inner = ex?.Error?.InnerException?.Message;
+        await ctx.Response.WriteAsJsonAsync(new { error = message, inner });
+    });
 });
 
 app.UseCors("AllowAll");
