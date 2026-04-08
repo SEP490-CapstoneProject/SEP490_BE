@@ -1,4 +1,5 @@
 using Connection.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Connection.API.Controllers;
@@ -17,6 +18,7 @@ public class ConnectionController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize]
     public async Task<IActionResult> CreateConnection([FromBody] Connection.Application.DTOs.CreateConnectionRequest req)
     {
         var conn = new Connection.Domain.Entities.Connection
@@ -49,6 +51,7 @@ public class ConnectionController : ControllerBase
     public class UpdateStatusRequest { public string Status { get; set; } = string.Empty; }
 
     [HttpPut("{id}/status")]
+    [Authorize]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
     {
         if (string.IsNullOrEmpty(request?.Status)) return BadRequest(new { error = "Status is required" });
@@ -127,6 +130,7 @@ public class ConnectionController : ControllerBase
     }
 
     [HttpPost("rooms/{roomId}/messages")]
+    [Authorize]
     public async Task<IActionResult> CreateMessage(int roomId, [FromBody] Connection.Application.DTOs.CreateMessageRequest req)
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -168,6 +172,7 @@ public class ConnectionController : ControllerBase
     // Bulk tick-mark endpoint removed; messages are auto-marked READ when user joins a room (via SignalR JoinRoom)
 
     [HttpPost("rooms/{roomId}/mark-read")]
+    [Authorize]
     public async Task<IActionResult> MarkRoomRead(int roomId)
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
