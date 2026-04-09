@@ -59,7 +59,8 @@ public class RabbitMqNotificationEventPublisher : INotificationEventPublisher
                 {
                     Id = evt.Actor.Id,
                     Name = evt.Actor.Name,
-                    AvatarUrl = evt.Actor.AvatarUrl
+                    Avatar = evt.Actor.Avatar,
+                    Role = evt.Actor.Role
                 },
             CreatedAt = evt.CreatedAt,
             IsRead = evt.IsRead

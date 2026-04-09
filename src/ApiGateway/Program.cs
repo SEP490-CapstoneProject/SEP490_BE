@@ -62,6 +62,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://skill-snap-frontend.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
