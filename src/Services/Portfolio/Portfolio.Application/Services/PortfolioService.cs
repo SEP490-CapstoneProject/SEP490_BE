@@ -155,7 +155,7 @@ public class PortfolioService : IPortfolioService
             portfolio.Blocks.Add(block);
         }
 
-        _repo.AddAsync(portfolio);
+        // Entity already tracked by EF Core, just commit changes
         await _repo.CommitAsync();
 
         scope.Complete();
