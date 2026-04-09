@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Notification.Application.DTOs;
@@ -34,21 +35,17 @@ public class ActorResolverClient : IActorResolverClient
 
         try
         {
-            var response = await _httpClient.GetAsync($"/api/users/{actorId}");
-            if (!response.IsSuccessStatusCode)
-                return null;
-
-            var json = await response.Content.ReadAsStringAsync();
-            var profile = JsonSerializer.Deserialize<UserProfileResponse>(json, _jsonOptions);
-            if (profile is null) return null;
-
-            var actor = new ActorDto
+            ActorDto? actor = null;
+            if (string.Equals(actorType, "COMPANY", StringComparison.OrdinalIgnoreCase))
             {
-                Id = int.TryParse(actorId, out var parsedActorId) ? parsedActorId : 0,
-                Name = profile.FullName ?? profile.Username ?? actorId,
-                Avatar = profile.AvatarUrl ?? profile.ProfilePicture ?? string.Empty,
-                Role = profile.Role ?? profile.UserRole ?? "USER"
-            };
+                actor = await TryResolveCompanyAsync(actorId) ?? await TryResolveEmployeeAsync(actorId);
+            }
+            else
+            {
+                actor = await TryResolveEmployeeAsync(actorId) ?? await TryResolveCompanyAsync(actorId);
+            }
+
+            if (actor is null) return null;
 
             _cache.Set(cacheKey, actor, TimeSpan.FromMinutes(2));
             return actor;
@@ -60,13 +57,53 @@ public class ActorResolverClient : IActorResolverClient
         }
     }
 
-    private class UserProfileResponse
+    private async Task<ActorDto?> TryResolveEmployeeAsync(string actorId)
     {
-        public string? FullName { get; set; }
-        public string? Username { get; set; }
-        public string? AvatarUrl { get; set; }
-        public string? ProfilePicture { get; set; }
-        public string? Role { get; set; }
-        public string? UserRole { get; set; }
+        var response = await _httpClient.GetAsync($"/api/employee/by-user/{actorId}");
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        if (!response.IsSuccessStatusCode) return null;
+
+        var json = await response.Content.ReadAsStringAsync();
+        var profile = JsonSerializer.Deserialize<EmployeeProfileResponse>(json, _jsonOptions);
+        if (profile is null) return null;
+
+        return new ActorDto
+        {
+            Id = int.TryParse(actorId, out var parsedActorId) ? parsedActorId : 0,
+            Name = string.IsNullOrWhiteSpace(profile.Name) ? actorId : profile.Name,
+            Avatar = profile.Avatar ?? string.Empty,
+            Role = "USER"
+        };
+    }
+
+    private async Task<ActorDto?> TryResolveCompanyAsync(string actorId)
+    {
+        var response = await _httpClient.GetAsync($"/api/company/by-user/{actorId}");
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        if (!response.IsSuccessStatusCode) return null;
+
+        var json = await response.Content.ReadAsStringAsync();
+        var profile = JsonSerializer.Deserialize<CompanyProfileResponse>(json, _jsonOptions);
+        if (profile is null) return null;
+
+        return new ActorDto
+        {
+            Id = int.TryParse(actorId, out var parsedActorId) ? parsedActorId : 0,
+            Name = string.IsNullOrWhiteSpace(profile.CompanyName) ? actorId : profile.CompanyName,
+            Avatar = profile.Avatar ?? string.Empty,
+            Role = "COMPANY"
+        };
+    }
+
+    private class EmployeeProfileResponse
+    {
+        public string? Name { get; set; }
+        public string? Avatar { get; set; }
+    }
+
+    private class CompanyProfileResponse
+    {
+        public string? CompanyName { get; set; }
+        public string? Avatar { get; set; }
     }
 }
