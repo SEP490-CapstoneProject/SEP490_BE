@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Notification.API.Hubs;
-using Notification.API.Services;
 using Notification.Application.Interfaces;
 using Notification.Application.Services;
 using Notification.Infrastructure.Azure;
@@ -13,6 +11,7 @@ using Notification.Infrastructure.Configuration;
 using Notification.Infrastructure.Data;
 using Notification.Infrastructure.Messaging;
 using Notification.Infrastructure.Repositories;
+using Notification.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,10 +38,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = context =>
             {
-                var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notifications"))
-                    context.Token = accessToken;
                 return Task.CompletedTask;
             }
         };
@@ -56,11 +51,12 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Notification Service API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Enter: Bearer {token}",
+        Description = "Nhập JWT token (không cần gõ 'Bearer').",
         Name = "Authorization",
         In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
@@ -81,19 +77,33 @@ if (!string.IsNullOrEmpty(redisConn))
 {
     builder.Services.AddStackExchangeRedisCache(options =>
         options.Configuration = redisConn);
+    
+    // Add IConnectionMultiplexer for AggregationFlushService
+    builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+    {
+        var configuration = sp.GetService<IConfiguration>();
+        var connectionString = configuration!.GetConnectionString("Redis") ?? redisConn;
+        return StackExchange.Redis.ConnectionMultiplexer.Connect(connectionString);
+    });
 }
 else
 {
     builder.Services.AddDistributedMemoryCache();
 }
 
-builder.Services.AddSignalR();
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyHeader().AllowAnyMethod().AllowCredentials()
-              .SetIsOriginAllowed(_ => true));
+    {
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
 });
 
 builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client =>
@@ -105,9 +115,11 @@ builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<INotificationPushService, SignalRPushService>();
+builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
+builder.Services.AddScoped<FavoriteAggregationService>();
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
+builder.Services.AddHostedService<AggregationFlushService>();
 
 builder.Services.AddControllers();
 
@@ -126,7 +138,6 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
 

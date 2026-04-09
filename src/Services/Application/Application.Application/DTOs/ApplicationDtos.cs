@@ -42,7 +42,7 @@ public class PostDto
     public string Position { get; set; } = string.Empty;
     public string Salary { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
-    public string Media { get; set; } = string.Empty;
+    public List<PostMediaDto> Media { get; set; } = new();
 }
 
 public class CompanyDto

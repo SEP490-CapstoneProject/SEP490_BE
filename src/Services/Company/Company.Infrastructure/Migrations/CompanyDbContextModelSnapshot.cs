@@ -17,12 +17,11 @@ namespace Company.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("companysvc")
                 .HasAnnotation("ProductVersion", "8.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.HasDefaultSchema("companysvc");
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyEntity", b =>
                 {
@@ -76,10 +75,8 @@ namespace Company.Infrastructure.Migrations
                         .HasColumnName("coverImageVideo");
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
-                        .HasColumnName("createAt")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasColumnName("createAt");
 
                     b.Property<string>("EmploymentType")
                         .HasMaxLength(50)
@@ -198,18 +195,6 @@ namespace Company.Infrastructure.Migrations
                     b.ToTable("COMPANY_POST_SAVE", "companysvc");
                 });
 
-            modelBuilder.Entity("Company.Domain.Entities.CompanyPost", b =>
-                {
-                    b.HasOne("Company.Domain.Entities.CompanyEntity", "Company")
-                        .WithMany("Posts")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_CompanyPost_Company");
-
-                    b.Navigation("Company");
-                });
-
             modelBuilder.Entity("Company.Domain.Entities.CompanyPostMedia", b =>
                 {
                     b.HasOne("Company.Domain.Entities.CompanyPost", "CompanyPost")
@@ -232,11 +217,6 @@ namespace Company.Infrastructure.Migrations
                         .HasConstraintName("FK_PostSave_Post");
 
                     b.Navigation("CompanyPost");
-                });
-
-            modelBuilder.Entity("Company.Domain.Entities.CompanyEntity", b =>
-                {
-                    b.Navigation("Posts");
                 });
 
             modelBuilder.Entity("Company.Domain.Entities.CompanyPost", b =>

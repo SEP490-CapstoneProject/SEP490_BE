@@ -22,6 +22,7 @@ public interface ICommunityRepository
     Task<bool> UnsavePostAsync(int postId, int userId);
     Task<bool> FavoritePostAsync(int postId, int userId);
     Task<bool> UnfavoritePostAsync(int postId, int userId);
+    Task<int> GetPostFavoriteCountAsync(int postId);
     Task<IEnumerable<CommunityPost>> GetSavedPostsByUserAsync(int userId);
     Task<IEnumerable<CommunityPost>> GetFavoritedPostsByUserAsync(int userId);
     
@@ -29,6 +30,7 @@ public interface ICommunityRepository
     Task<Comment> AddCommentAsync(Comment comment);
     Task<IEnumerable<Comment>> GetCommentsByPostIdAsync(int postId);
     Task<IEnumerable<ReplyComment>> GetRepliesByCommentIdsAsync(List<int> commentIds);
+    Task<Comment?> GetCommentByIdAsync(int commentId);
     Task<int?> GetCommentOwnerAsync(int commentId);
     Task DeleteCommentAsync(int id);
     

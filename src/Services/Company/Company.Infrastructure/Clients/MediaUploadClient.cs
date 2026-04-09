@@ -25,17 +25,21 @@ public class MediaUploadClient : IMediaUploadClient
             var fileContent = new StreamContent(stream);
             fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
             form.Add(fileContent, "file", file.FileName);
-            form.Add(new StringContent(folder), "folder");
 
             var endpoint = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
                 ? "/api/upload/video"
                 : "/api/upload/image";
+            
+            // Folder should be passed as query parameter, not form data
+            endpoint = $"{endpoint}?folder={Uri.EscapeDataString(folder)}";
 
             var response = await _httpClient.PostAsync(endpoint, form);
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Media upload failed: {Status} for {File}", response.StatusCode, file.FileName);
+                var errorBody = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Media upload failed: {Status} for {File}. Body: {Body}", 
+                    response.StatusCode, file.FileName, errorBody);
                 return null;
             }
 

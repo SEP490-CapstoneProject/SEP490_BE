@@ -25,6 +25,54 @@ public class CompanyPostRepository : ICompanyPostRepository
         return await BuildFeedQuery(companyId, cursor, limit, userId);
     }
 
+    public async Task<CursorPagedResult<CompanyPostFeedDto>> GetSavedPostsAsync(DateTime? cursor, int limit, int userId)
+    {
+        var query = _context.CompanyPostSaves
+            .Where(s => s.UserId == userId)
+            .Join(
+                _context.CompanyPosts.Where(p => p.Status == 1),
+                s => s.CompanyPostId,
+                p => p.PostId,
+                (s, p) => p);
+
+        if (cursor.HasValue)
+            query = query.Where(p => p.CreatedAt < cursor.Value);
+
+        var items = await (
+                from p in query
+                join c in _context.Companies on p.CompanyId equals c.Id into pc
+                from c in pc.DefaultIfEmpty()
+                orderby p.CreatedAt descending, p.PostId descending
+                select new CompanyPostFeedDto
+                {
+                    CompanyId = p.CompanyId,
+                    PostId = p.PostId,
+                    Position = p.Position,
+                    CompanyName = c != null ? c.Name : null,
+                    CompanyAvatar = c != null ? c.AvatarUrl : null,
+                    CoverImageUrl = p.CoverImageVideo,
+                    MediaType = p.Media.OrderBy(m => m.Id).Select(m => m.Type).FirstOrDefault(),
+                    MediaUrl = p.Media.OrderBy(m => m.Id).Select(m => m.Address).FirstOrDefault(),
+                    Address = p.Address,
+                    Salary = p.Salary,
+                    EmploymentType = p.EmploymentType,
+                    CreatedAt = p.CreatedAt,
+                    IsSaved = true
+                })
+            .Take(limit + 1)
+            .ToListAsync();
+
+        var hasMore = items.Count > limit;
+        if (hasMore) items.RemoveAt(items.Count - 1);
+
+        return new CursorPagedResult<CompanyPostFeedDto>
+        {
+            Items = items,
+            NextCursor = hasMore ? items.LastOrDefault()?.CreatedAt : null,
+            HasMore = hasMore
+        };
+    }
+
     private async Task<CursorPagedResult<CompanyPostFeedDto>> BuildFeedQuery(int? companyId, DateTime? cursor, int limit, int? userId)
     {
         var query = _context.CompanyPosts
@@ -36,25 +84,28 @@ public class CompanyPostRepository : ICompanyPostRepository
         if (cursor.HasValue)
             query = query.Where(p => p.CreatedAt < cursor.Value);
 
-        var items = await query
-            .OrderByDescending(p => p.CreatedAt)
-            .ThenByDescending(p => p.PostId)
+        var items = await (
+                from p in query
+                join c in _context.Companies on p.CompanyId equals c.Id into pc
+                from c in pc.DefaultIfEmpty()
+                orderby p.CreatedAt descending, p.PostId descending
+                select new CompanyPostFeedDto
+                {
+                    CompanyId = p.CompanyId,
+                    PostId = p.PostId,
+                    Position = p.Position,
+                    CompanyName = c != null ? c.Name : null,
+                    CompanyAvatar = c != null ? c.AvatarUrl : null,
+                    CoverImageUrl = p.CoverImageVideo,
+                    MediaType = p.Media.OrderBy(m => m.Id).Select(m => m.Type).FirstOrDefault(),
+                    MediaUrl = p.Media.OrderBy(m => m.Id).Select(m => m.Address).FirstOrDefault(),
+                    Address = p.Address,
+                    Salary = p.Salary,
+                    EmploymentType = p.EmploymentType,
+                    CreatedAt = p.CreatedAt,
+                    IsSaved = userId.HasValue && _context.CompanyPostSaves.Any(s => s.UserId == userId.Value && s.CompanyPostId == p.PostId)
+                })
             .Take(limit + 1)
-            .Select(p => new CompanyPostFeedDto
-            {
-                PostId = p.PostId,
-                Position = p.Position,
-                CompanyName = p.Company != null ? p.Company.Name : null,
-                CompanyAvatar = p.Company != null ? p.Company.AvatarUrl : null,
-                CoverImageUrl = p.CoverImageVideo,
-                MediaType = p.Media.OrderBy(m => m.Id).Select(m => m.Type).FirstOrDefault(),
-                MediaUrl = p.Media.OrderBy(m => m.Id).Select(m => m.Address).FirstOrDefault(),
-                Address = p.Address,
-                Salary = p.Salary,
-                EmploymentType = p.EmploymentType,
-                CreatedAt = p.CreatedAt,
-                IsSaved = userId.HasValue && _context.CompanyPostSaves.Any(s => s.UserId == userId.Value && s.CompanyPostId == p.PostId)
-            })
             .ToListAsync();
 
         var hasMore = items.Count > limit;
@@ -71,11 +122,13 @@ public class CompanyPostRepository : ICompanyPostRepository
     public async Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId)
     {
         var post = await _context.CompanyPosts
-            .Include(p => p.Company)
             .Include(p => p.Media.OrderBy(m => m.Id))
             .FirstOrDefaultAsync(p => p.PostId == postId && p.Status == 1);
 
         if (post == null) return null;
+
+        var company = await _context.Companies
+            .FirstOrDefaultAsync(c => c.Id == post.CompanyId);
 
         var isSaved = userId.HasValue &&
             await _context.CompanyPostSaves.AnyAsync(s => s.UserId == userId.Value && s.CompanyPostId == postId);
@@ -85,8 +138,8 @@ public class CompanyPostRepository : ICompanyPostRepository
             PostId = post.PostId,
             CompanyId = post.CompanyId,
             Position = post.Position,
-            CompanyName = post.Company?.Name,
-            CompanyAvatar = post.Company?.AvatarUrl,
+            CompanyName = company?.Name,
+            CompanyAvatar = company?.AvatarUrl,
             CoverImageUrl = post.CoverImageVideo,
             Address = post.Address,
             Salary = post.Salary,

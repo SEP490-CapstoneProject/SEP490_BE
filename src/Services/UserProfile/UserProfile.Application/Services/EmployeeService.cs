@@ -10,15 +10,18 @@ namespace UserProfile.Application.Services;
 public class EmployeeService : IEmployeeService
 {
     private readonly IEmployeeRepository _repository;
+    private readonly IAuthUserClient _authUserClient;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<EmployeeService> _logger;
 
     public EmployeeService(
         IEmployeeRepository repository,
+        IAuthUserClient authUserClient,
         IHttpClientFactory httpClientFactory,
         ILogger<EmployeeService> logger)
     {
         _repository = repository;
+        _authUserClient = authUserClient;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
@@ -26,19 +29,45 @@ public class EmployeeService : IEmployeeService
     public async Task<EmployeeDto?> GetByIdAsync(int id)
     {
         var employee = await _repository.GetByIdAsync(id);
-        return employee == null ? null : MapToDto(employee);
+        if (employee == null) return null;
+
+        var user = await _authUserClient.GetUserByIdAsync(employee.UserId);
+        if (user == null)
+        {
+            throw new KeyNotFoundException($"Auth user {employee.UserId} not found");
+        }
+
+        return MapToDto(employee, user);
     }
 
     public async Task<EmployeeDto?> GetByUserIdAsync(int userId)
     {
         var employee = await _repository.GetByUserIdAsync(userId);
-        return employee == null ? null : MapToDto(employee);
+        if (employee == null) return null;
+
+        var user = await _authUserClient.GetUserByIdAsync(employee.UserId);
+        if (user == null)
+        {
+            throw new KeyNotFoundException($"Auth user {employee.UserId} not found");
+        }
+
+        return MapToDto(employee, user);
     }
 
     public async Task<IEnumerable<EmployeeDto>> GetAllAsync()
     {
         var employees = await _repository.GetAllAsync();
-        return employees.Select(MapToDto);
+        var authUsers = await _authUserClient.GetUsersByIdsAsync(employees.Select(e => e.UserId));
+
+        return employees.Select(e =>
+        {
+            if (!authUsers.TryGetValue(e.UserId, out var authUser))
+            {
+                throw new KeyNotFoundException($"Auth user {e.UserId} not found");
+            }
+
+            return MapToDto(e, authUser);
+        });
     }
 
     public async Task<EmployeeDto> CreateAsync(int userId, CreateEmployeeRequest request, IFormFile? avatar, IFormFile? coverImage)
@@ -69,7 +98,9 @@ public class EmployeeService : IEmployeeService
         }
 
         var created = await _repository.CreateAsync(employee);
-        return MapToDto(created);
+        var createdUser = await _authUserClient.GetUserByIdAsync(created.UserId)
+            ?? throw new KeyNotFoundException($"Auth user {created.UserId} not found");
+        return MapToDto(created, createdUser);
     }
 
     public async Task<EmployeeDto> UpdateAsync(int id, UpdateEmployeeRequest request, IFormFile? avatar, IFormFile? coverImage)
@@ -96,7 +127,9 @@ public class EmployeeService : IEmployeeService
         }
 
         var updated = await _repository.UpdateAsync(employee);
-        return MapToDto(updated);
+        var updatedUser = await _authUserClient.GetUserByIdAsync(updated.UserId)
+            ?? throw new KeyNotFoundException($"Auth user {updated.UserId} not found");
+        return MapToDto(updated, updatedUser);
     }
 
     public async Task<bool> DeleteAsync(int id)
@@ -137,12 +170,15 @@ public class EmployeeService : IEmployeeService
         }
     }
 
-    private static EmployeeDto MapToDto(Employee employee)
+    private static EmployeeDto MapToDto(Employee employee, AuthUserInfoDto authUser)
     {
         return new EmployeeDto
         {
             Id = employee.Id,
             UserId = employee.UserId,
+            Email = authUser.Email,
+            Status = authUser.Status,
+            CreateAt = authUser.CreateAt,
             Name = employee.Name,
             Phone = employee.Phone,
             CoverImage = employee.CoverImage,
