@@ -44,9 +44,10 @@ public class ActorResolverClient : IActorResolverClient
 
             var actor = new ActorDto
             {
-                Id = actorId,
+                Id = int.TryParse(actorId, out var parsedActorId) ? parsedActorId : 0,
                 Name = profile.FullName ?? profile.Username ?? actorId,
-                AvatarUrl = profile.AvatarUrl ?? profile.ProfilePicture
+                Avatar = profile.AvatarUrl ?? profile.ProfilePicture ?? string.Empty,
+                Role = profile.Role ?? profile.UserRole ?? "USER"
             };
 
             _cache.Set(cacheKey, actor, TimeSpan.FromMinutes(2));
@@ -65,5 +66,7 @@ public class ActorResolverClient : IActorResolverClient
         public string? Username { get; set; }
         public string? AvatarUrl { get; set; }
         public string? ProfilePicture { get; set; }
+        public string? Role { get; set; }
+        public string? UserRole { get; set; }
     }
 }

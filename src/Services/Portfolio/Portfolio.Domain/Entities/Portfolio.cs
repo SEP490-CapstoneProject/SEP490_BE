@@ -16,4 +16,5 @@ public class Portfolio
 
     public ICollection<PortfolioBlock> Blocks { get; set; } = new List<PortfolioBlock>();
     public ICollection<Compliment> Compliments { get; set; } = new List<Compliment>();
+    public ICollection<PortfolioFollow> Follows { get; set; } = new List<PortfolioFollow>();
 }
