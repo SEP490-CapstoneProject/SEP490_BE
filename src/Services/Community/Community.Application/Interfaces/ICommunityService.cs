@@ -10,12 +10,13 @@ public interface ICommunityService
     Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId);
     Task<CommunityPostDto?> GetPostDtoAsync(int postId, int? currentUserId);
     Task<PostCommentsResponseDto> GetCommentsResponseAsync(int postId);
+    Task<List<CommunityPostDto>> GetPostsByUserIdDtoAsync(int userId, int? currentUserId);
 
     // Post operations
     Task<CommunityPost?> GetPostByIdAsync(int id);
     Task<IEnumerable<CommunityPost>> GetAllPostsAsync();
     Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId);
-    Task<CommunityPost> CreatePostAsync(CreatePostRequest request, int userId, Dictionary<string, IFormFile> fileMap);
+    Task<CommunityPostDto> CreatePostAsync(CreatePostRequest request, int userId, Dictionary<string, IFormFile> fileMap);
     Task UpdatePostAsync(CommunityPost post);
     Task DeletePostAsync(int id);
 
@@ -28,16 +29,16 @@ public interface ICommunityService
     Task<bool> UnsavePostAsync(int postId, int userId);
     Task<bool> FavoritePostAsync(int postId, int userId);
     Task<bool> UnfavoritePostAsync(int postId, int userId);
-    Task<IEnumerable<CommunityPost>> GetSavedPostsAsync(int userId);
-    Task<IEnumerable<CommunityPost>> GetFavoritedPostsAsync(int userId);
+    Task<List<CommunityPostDto>> GetSavedPostsAsync(int userId);
+    Task<List<CommunityPostDto>> GetFavoritedPostsAsync(int userId);
 
     // Comment operations
-    Task<Comment> AddCommentAsync(int postId, int userId, string content);
+    Task<PostCommentDto> AddCommentAsync(int postId, int userId, string content);
     Task<IEnumerable<Comment>> GetCommentsAsync(int postId);
     Task DeleteCommentAsync(int commentId);
 
     // Reply operations
-    Task<ReplyComment> AddReplyAsync(int commentId, int userId, int? replyToUserId, string content);
+    Task<ReplyCommentDto> AddReplyAsync(int commentId, int userId, int? replyToUserId, string content);
     Task<IEnumerable<ReplyComment>> GetRepliesAsync(int commentId);
     Task DeleteReplyAsync(int replyId);
 }

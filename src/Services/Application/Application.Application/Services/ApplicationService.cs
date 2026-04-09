@@ -2,6 +2,7 @@ using Application.Application.DTOs;
 using Application.Application.Interfaces;
 using Application.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using RecruitmentPlatform.Contracts.Time;
 
 namespace Application.Application.Services;
 
@@ -32,13 +33,14 @@ public class ApplicationService : IApplicationService
         var employeeId = _currentUser.GetEmployeeId();
         var userId = _currentUser.GetUserId();
 
-        // Check subscription quota
-        var (canApply, currentUsage) = await _entitlementChecker.TryIncrementUsageAsync(userId, "MAX_APPLY");
-        if (!canApply)
-        {
-            _logger.LogWarning("User {UserId} exceeded MAX_APPLY quota", userId);
-            throw new InvalidOperationException("You have reached your application limit. Upgrade your subscription to apply to more jobs.");
-        }
+        // TEMPORARILY DISABLED: Subscription quota check for testing
+        // TODO: Re-enable when subscription system is fully tested and ready
+        // var (canApply, currentUsage) = await _entitlementChecker.TryIncrementUsageAsync(userId, "MAX_APPLY");
+        // if (!canApply)
+        // {
+        //     _logger.LogWarning("User {UserId} exceeded MAX_APPLY quota", userId);
+        //     throw new InvalidOperationException("You have reached your application limit. Upgrade your subscription to apply to more jobs.");
+        // }
 
         try
         {
@@ -46,7 +48,7 @@ public class ApplicationService : IApplicationService
             var employee = await _userProfileClient.GetEmployeeByIdAsync(employeeId);
             if (employee == null)
             {
-                await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
+                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new KeyNotFoundException($"Employee {employeeId} not found");
             }
 
@@ -54,7 +56,7 @@ public class ApplicationService : IApplicationService
             var post = await _userProfileClient.GetCompanyPostByIdAsync(request.CompanyPostId);
             if (post == null)
             {
-                await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
+                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new KeyNotFoundException($"Company post {request.CompanyPostId} not found");
             }
 
@@ -62,7 +64,7 @@ public class ApplicationService : IApplicationService
             var ownsPortfolio = await _userProfileClient.ValidatePortfolioOwnershipAsync(employeeId, request.PortfolioId);
             if (!ownsPortfolio)
             {
-                await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
+                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new UnauthorizedAccessException($"Portfolio {request.PortfolioId} does not belong to employee {employeeId}");
             }
 
@@ -70,7 +72,7 @@ public class ApplicationService : IApplicationService
             var exists = await _repo.ExistsByEmployeeAndPostAsync(employeeId, request.CompanyPostId);
             if (exists)
             {
-                await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
+                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new InvalidOperationException("You have already applied to this position");
             }
 
@@ -81,13 +83,13 @@ public class ApplicationService : IApplicationService
                 CompanyPostId = request.CompanyPostId,
                 PortfolioId = request.PortfolioId,
                 Status = ApplicationStatus.WAITING,
-                AppliedAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
+                AppliedAt = VietnamTime.Now(),
+                CreatedAt = VietnamTime.Now()
             };
 
             var created = await _repo.CreateAsync(application);
-            _logger.LogInformation("Application {Id} created by employee {EmployeeId} for post {PostId}. Usage: {Usage}",
-                created.ApplicationId, employeeId, request.CompanyPostId, currentUsage);
+            _logger.LogInformation("Application {Id} created by employee {EmployeeId} for post {PostId}",
+                created.ApplicationId, employeeId, request.CompanyPostId);
 
             // Map to DTO
             var company = await _userProfileClient.GetCompanyByIdAsync(post.CompanyId);
@@ -100,13 +102,10 @@ public class ApplicationService : IApplicationService
                 Company = MapCompanyDto(company)
             };
         }
-        catch (Exception ex) when (ex is not InvalidOperationException || ex.Message.Contains("application limit"))
+        catch (Exception)
         {
-            // Rollback usage on failure (but not for quota exceeded)
-            if (!ex.Message.Contains("application limit"))
-            {
-                await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
-            }
+            // DISABLED: Rollback on failure
+            // await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
             throw;
         }
     }
@@ -198,7 +197,7 @@ public class ApplicationService : IApplicationService
             throw new InvalidOperationException("Cannot revert to WAITING status");
 
         application.Status = request.Status;
-        application.UpdatedAt = DateTime.UtcNow;
+        application.UpdatedAt = VietnamTime.Now();
 
         var updated = await _repo.UpdateAsync(application);
 

@@ -71,13 +71,44 @@ var retryPolicy = HttpPolicyExtensions
 
 var timeoutPolicy = Policy.TimeoutAsync<HttpResponseMessage>(10);
 
-builder.Services.AddHttpClient<IUserProfileClient, UserProfileClient>(client =>
+// UserProfileClient - uses a custom factory to route to multiple services
+builder.Services.AddHttpClient("UserProfileService", client =>
 {
-    var baseUrl = builder.Configuration["ServiceUrls:UserProfileService"] ?? "http://localhost:5002";
+    var baseUrl = builder.Configuration["ServiceUrls:UserProfileService"] 
+        ?? "https://userprofile-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(baseUrl);
 })
 .AddPolicyHandler(retryPolicy)
 .AddPolicyHandler(timeoutPolicy);
+
+builder.Services.AddHttpClient("CompanyService", client =>
+{
+    var baseUrl = builder.Configuration["ServiceUrls:CompanyService"]
+        ?? "https://company-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
+    client.BaseAddress = new Uri(baseUrl);
+})
+.AddPolicyHandler(retryPolicy)
+.AddPolicyHandler(timeoutPolicy);
+
+builder.Services.AddHttpClient("PortfolioService", client =>
+{
+    var baseUrl = builder.Configuration["ServiceUrls:PortfolioService"]
+        ?? "https://portfolio-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
+    client.BaseAddress = new Uri(baseUrl);
+})
+.AddPolicyHandler(retryPolicy)
+.AddPolicyHandler(timeoutPolicy);
+
+builder.Services.AddScoped<IUserProfileClient>(sp =>
+{
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var logger = sp.GetRequiredService<ILogger<UserProfileClient>>();
+    var userProfileClient = httpClientFactory.CreateClient("UserProfileService");
+    var companyClient = httpClientFactory.CreateClient("CompanyService");
+    var portfolioClient = httpClientFactory.CreateClient("PortfolioService");
+    
+    return new UserProfileClient(userProfileClient, companyClient, portfolioClient, logger);
+});
 
 builder.Services.AddHttpClient<ISubscriptionClient, SubscriptionClient>(client =>
 {
@@ -92,7 +123,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        policy.WithOrigins(
+                  "https://sep-490-web-fork.vercel.app",
+                  "http://localhost:3000",
+                  "http://localhost:5173"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 

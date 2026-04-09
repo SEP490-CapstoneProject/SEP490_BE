@@ -58,24 +58,53 @@ public class NotificationService : INotificationService
     public async Task<UserNotificationDto> CreateNotificationAsync(NotificationEntity entity)
     {
         var created = await _repo.CreateAsync(entity);
-        ActorDto? actor = null;
-        if (created.ActorId != null && created.ActorType != "SYSTEM")
-            actor = await _actorResolver.ResolveActorAsync(created.ActorId, created.ActorType);
+        var actor = await ResolveActorAsync(created.ActorId, created.ActorType);
+        return MapToUserDto(created, actor);
+    }
 
-        return new UserNotificationDto
+    public async Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity)
+    {
+        var actor = await ResolveActorAsync(entity.ActorId, entity.ActorType);
+        return new NotificationCreatedEventDto
         {
-            Id = created.Id,
-            UserId = created.UserId,
-            Title = created.Title,
-            Content = created.Content,
-            Type = created.Type,
-            ObjectId = created.ObjectId,
+            NotificationId = entity.Id,
+            UserId = entity.UserId,
+            Title = entity.Title,
+            Content = entity.Content,
+            Type = entity.Type,
+            ObjectId = entity.ObjectId,
             Actor = actor,
-            CreatedAt = created.CreatedAt,
-            IsRead = created.IsRead
+            CreatedAt = entity.CreatedAt,
+            IsRead = entity.IsRead
         };
     }
 
     public Task MarkAsReadAsync(int id, string userId) => _repo.MarkAsReadAsync(id, userId);
     public Task MarkAllAsReadAsync(string userId) => _repo.MarkAllAsReadAsync(userId);
+
+    private async Task<ActorDto?> ResolveActorAsync(string? actorId, string actorType)
+    {
+        if (actorId is null || actorType == "SYSTEM")
+        {
+            return null;
+        }
+
+        return await _actorResolver.ResolveActorAsync(actorId, actorType);
+    }
+
+    private static UserNotificationDto MapToUserDto(NotificationEntity entity, ActorDto? actor)
+    {
+        return new UserNotificationDto
+        {
+            Id = entity.Id,
+            UserId = entity.UserId,
+            Title = entity.Title,
+            Content = entity.Content,
+            Type = entity.Type,
+            ObjectId = entity.ObjectId,
+            Actor = actor,
+            CreatedAt = entity.CreatedAt,
+            IsRead = entity.IsRead
+        };
+    }
 }

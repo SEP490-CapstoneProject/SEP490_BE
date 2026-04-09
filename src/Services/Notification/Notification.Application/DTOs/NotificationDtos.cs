@@ -39,3 +39,19 @@ public class NotificationEventDto
     public string Type { get; set; } = default!;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class NotificationCreatedEventDto
+{
+    public string EventId { get; set; } = Guid.NewGuid().ToString("N");
+    public string EventType { get; set; } = "notification.created";
+    public int Version { get; set; } = 1;
+    public int NotificationId { get; set; }
+    public string UserId { get; set; } = default!;
+    public string Title { get; set; } = default!;
+    public string Content { get; set; } = default!;
+    public string Type { get; set; } = default!;
+    public string? ObjectId { get; set; }
+    public ActorDto? Actor { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public bool IsRead { get; set; }
+}

@@ -20,7 +20,7 @@ public class ApplicationController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "employee")]
+    [Authorize(Roles = "USER")]
     public async Task<IActionResult> Create([FromBody] CreateApplicationRequest request)
     {
         try
@@ -48,7 +48,7 @@ public class ApplicationController : ControllerBase
     }
 
     [HttpGet("me")]
-    [Authorize(Roles = "employee")]
+    [Authorize(Roles = "USER")]
     public async Task<IActionResult> GetMyApplications([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         if (page < 1)
@@ -69,7 +69,7 @@ public class ApplicationController : ControllerBase
     }
 
     [HttpGet("company")]
-    [Authorize(Roles = "company")]
+    [Authorize(Roles = "RECRUITER")]
     public async Task<IActionResult> GetCompanyApplications([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         if (page < 1)
@@ -90,7 +90,7 @@ public class ApplicationController : ControllerBase
     }
 
     [HttpPut("{id}/status")]
-    [Authorize(Roles = "company")]
+    [Authorize(Roles = "RECRUITER")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateApplicationStatusRequest request)
     {
         try

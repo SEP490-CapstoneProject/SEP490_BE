@@ -1,4 +1,5 @@
 using RecruitmentPlatform.Contracts.Auth;
+using Auth.Application.DTOs;
 
 namespace Auth.Application.Interfaces;
 
@@ -11,4 +12,6 @@ public interface IAuthService
     Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
     Task LockUserAsync(int userId);
     Task<IEnumerable<UserDto>> GetAllUsersAsync();
+    Task<InternalUserInfoDto?> GetInternalUserInfoByIdAsync(int userId);
+    Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByIdsAsync(IEnumerable<int> userIds);
 }

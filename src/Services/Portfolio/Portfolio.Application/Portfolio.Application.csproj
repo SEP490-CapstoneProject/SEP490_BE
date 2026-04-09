@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Portfolio.Domain\Portfolio.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
