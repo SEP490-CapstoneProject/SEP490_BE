@@ -8,7 +8,7 @@ namespace Subscription.API.Controllers;
 
 [ApiController]
 [Route("api/admin")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "ADMIN")]
 public class AdminController : ControllerBase
 {
     private readonly ILogger<AdminController> _logger;

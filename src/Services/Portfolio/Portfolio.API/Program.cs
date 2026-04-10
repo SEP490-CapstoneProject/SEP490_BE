@@ -92,6 +92,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPortfolioRepository, PortfolioRepository>();
+builder.Services.AddScoped<IPortfolioFollowRepository, PortfolioFollowRepository>();
 builder.Services.AddScoped<IBlockRepository, BlockRepository>();
 builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
 builder.Services.AddScoped<IComplimentRepository, ComplimentRepository>();
@@ -102,6 +103,7 @@ builder.Services.AddScoped<IBlockService, BlockService>();
 builder.Services.AddScoped<BlockService>(); // concrete registration for PortfolioController
 builder.Services.AddScoped<IBlockTypeService, BlockTypeService>();
 builder.Services.AddScoped<IComplimentService, ComplimentService>();
+builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 
 // Block Handlers
 builder.Services.AddScoped<IBlockHandler, IntroBlockHandler>();
@@ -140,6 +142,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app/",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

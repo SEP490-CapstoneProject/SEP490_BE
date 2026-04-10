@@ -7,7 +7,7 @@ namespace Portfolio.API.Controllers;
 
 [ApiController]
 [Route("api/compliments")]
-[Authorize(Roles = "company")]
+[Authorize(Roles = "RECRUITER")]
 public class ComplimentController : ControllerBase
 {
     private readonly IComplimentService _service;

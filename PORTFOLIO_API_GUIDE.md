@@ -96,8 +96,8 @@ Content-Type: multipart/form-data
 
 ```json
 {
-  "employeeId": 2,
-  "name": "Portfolio của Phạm An Nhiên",
+  "employeeId": 5,
+  "name": "Portfolio update",
   "blocks": [
     {
       "type": "INTRO",
@@ -105,7 +105,7 @@ Content-Type: multipart/form-data
       "order": 1,
       "data": {
         "avatarKey": "avatar.jpg",
-        "name": "Phạm An Nhiên",
+        "name": "Trang Tan Duoc",
         "studyField": "Frontend Developer",
         "description": "2 năm kinh nghiệm phát triển web và mobile",
         "email": "annhien@example.com",
@@ -119,7 +119,6 @@ Content-Type: multipart/form-data
       "data": [
         { "name": "React" },
         { "name": "React Native" },
-        { "name": "TypeScript" },
         { "name": "Figma" }
       ]
     },
