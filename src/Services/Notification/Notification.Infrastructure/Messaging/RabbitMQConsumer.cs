@@ -29,6 +29,12 @@ public class RabbitMQConsumer : BackgroundService
     private const string DlqQueue = "notification.events.dlq";
 
     private static readonly string[] BindingKeys = { "post.*", "connection.*", "portfolio.*", "job.*", "system.*" };
+    private static readonly HashSet<string> NotificationEventTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "post.favorite",
+        "post.comment.created",
+        "post.reply.created"
+    };
 
     public RabbitMQConsumer(
         IServiceScopeFactory scopeFactory,
@@ -128,6 +134,31 @@ public class RabbitMQConsumer : BackgroundService
             if (evt is null || string.IsNullOrEmpty(evt.UserId))
             {
                 await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                return;
+            }
+
+            // Realtime-only counter event: never create notification (prevents unlike => like notification bug)
+            if (string.Equals(evt.EventType, "post.favorite.changed", StringComparison.OrdinalIgnoreCase))
+            {
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
+
+            if (!NotificationEventTypes.Contains(evt.EventType))
+            {
+                _logger.LogDebug("Skip non-notification event type {EventType}", evt.EventType);
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(evt.Type) ||
+                string.IsNullOrWhiteSpace(evt.Title) ||
+                string.IsNullOrWhiteSpace(evt.Content))
+            {
+                _logger.LogWarning(
+                    "Skip invalid notification event payload. EventType={EventType}, UserId={UserId}, Type={Type}",
+                    evt.EventType, evt.UserId, evt.Type);
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
                 return;
             }
 

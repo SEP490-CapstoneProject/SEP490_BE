@@ -18,6 +18,7 @@ public class PortfolioDbContext : DbContext
     public DbSet<BlockType> BlockTypes { get; set; }
     public DbSet<PortfolioBlock> PortfolioBlocks { get; set; }
     public DbSet<Compliment> Compliments { get; set; }
+    public DbSet<PortfolioFollow> PortfolioFollows { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -116,6 +117,29 @@ public class PortfolioDbContext : DbContext
 
             e.HasOne(x => x.Portfolio)
              .WithMany(x => x.Compliments)
+             .HasForeignKey(x => x.PortfolioId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // PortfolioFollow
+        modelBuilder.Entity<PortfolioFollow>(e =>
+        {
+            e.ToTable("PortfolioFollow");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.CompanyId).IsRequired();
+            e.Property(x => x.PortfolioId).IsRequired();
+            e.Property(x => x.InterestLevel).HasMaxLength(10).IsRequired();
+            e.Property(x => x.FollowedAt).HasDefaultValueSql("DATEADD(HOUR, 7, GETUTCDATE())");
+            e.Property(x => x.UpdatedAt).IsRequired(false);
+
+            e.HasIndex(x => x.CompanyId).HasDatabaseName("IX_PortfolioFollow_CompanyId");
+            e.HasIndex(x => x.PortfolioId).HasDatabaseName("IX_PortfolioFollow_PortfolioId");
+            e.HasIndex(x => new { x.CompanyId, x.PortfolioId })
+             .HasDatabaseName("UX_PortfolioFollow_Company_Portfolio")
+             .IsUnique();
+
+            e.HasOne(x => x.Portfolio)
+             .WithMany(x => x.Follows)
              .HasForeignKey(x => x.PortfolioId)
              .OnDelete(DeleteBehavior.Cascade);
         });

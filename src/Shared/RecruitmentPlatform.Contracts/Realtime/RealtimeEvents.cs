@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 namespace RecruitmentPlatform.Contracts.Realtime;
 
 public abstract class RealtimeEventBase
@@ -49,9 +50,11 @@ public sealed class ReplyCreatedEvent : RealtimeEventBase
 
 public sealed class NotificationActorDto
 {
-    public string Id { get; set; } = string.Empty;
+    public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
-    public string? AvatarUrl { get; set; }
+    public string Avatar { get; set; } = string.Empty;
+    [JsonPropertyName("Role")]
+    public string Role { get; set; } = "USER";
 }
 
 public sealed class PostFavoriteChangedEvent : RealtimeEventBase

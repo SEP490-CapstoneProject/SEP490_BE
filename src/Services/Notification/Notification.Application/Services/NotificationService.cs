@@ -19,7 +19,7 @@ public class NotificationService : INotificationService
     {
         var (items, nextCursor) = await _repo.GetNotificationsAsync(userId, cursor, limit);
 
-        var actorMap = new Dictionary<string, ActorDto?>();
+        var actorMap = new Dictionary<string, ActorDto>();
         var uniqueActors = items
             .Where(n => n.ActorId != null && n.ActorType != "SYSTEM")
             .Select(n => (n.ActorId!, n.ActorType))
@@ -29,7 +29,7 @@ public class NotificationService : INotificationService
         foreach (var (actorId, actorType) in uniqueActors)
         {
             if (!actorMap.ContainsKey(actorId))
-                actorMap[actorId] = await _actorResolver.ResolveActorAsync(actorId, actorType);
+                actorMap[actorId] = await ResolveActorAsync(actorId, actorType) ?? BuildFallbackActor(actorId);
         }
 
         var dtos = items.Select(n => new UserNotificationDto
@@ -40,7 +40,7 @@ public class NotificationService : INotificationService
             Content = n.Content,
             Type = n.Type,
             ObjectId = n.ObjectId,
-            Actor = n.ActorId != null ? actorMap.GetValueOrDefault(n.ActorId) : null,
+            Actor = n.ActorId != null ? actorMap.GetValueOrDefault(n.ActorId, BuildFallbackActor(n.ActorId)) : null,
             CreatedAt = n.CreatedAt,
             IsRead = n.IsRead
         }).ToList();
@@ -89,7 +89,18 @@ public class NotificationService : INotificationService
             return null;
         }
 
-        return await _actorResolver.ResolveActorAsync(actorId, actorType);
+        return await _actorResolver.ResolveActorAsync(actorId, actorType) ?? BuildFallbackActor(actorId);
+    }
+
+    private static ActorDto BuildFallbackActor(string actorId)
+    {
+        return new ActorDto
+        {
+            Id = int.TryParse(actorId, out var parsedActorId) ? parsedActorId : 0,
+            Name = "Unknown",
+            Avatar = string.Empty,
+            Role = "USER"
+        };
     }
 
     private static UserNotificationDto MapToUserDto(NotificationEntity entity, ActorDto? actor)
