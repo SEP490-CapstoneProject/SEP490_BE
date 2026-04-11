@@ -132,11 +132,20 @@ using (var scope = app.Services.CreateScope())
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
+        logger.LogInformation("Starting database migration...");
         db.Database.Migrate();
+        logger.LogInformation("✅ Database migration completed successfully.");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Database migration failed at startup. The app will continue but may not function correctly.");
+        logger.LogError(ex, "❌ Database migration failed at startup.");
+        logger.LogError("Connection String: {ConnectionString}", 
+            builder.Configuration.GetConnectionString("DefaultConnection"));
+        logger.LogError("This may indicate:");
+        logger.LogError("  1. Database server is not reachable");
+        logger.LogError("  2. Connection string is incorrect");
+        logger.LogError("  3. Insufficient permissions to create database");
+        throw;
     }
 }
 
