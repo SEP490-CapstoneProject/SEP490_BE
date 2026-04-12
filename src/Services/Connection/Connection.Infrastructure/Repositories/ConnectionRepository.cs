@@ -132,7 +132,25 @@ public class ConnectionRepository : IConnectionRepository
             .Take(limit)
             .ToListAsync();
 
-        // return in chronological order (oldest -> newest)
-        return items.OrderBy(m => m.CreatedAt).ToList();
+        // return in reverse chronological order (newest -> oldest) as requested
+        return items;
+    }
+
+    public async Task<IEnumerable<(int Id, int UserIdFrom, int UserIdTo)>> GetRoomUsersAsync(int roomId)
+    {
+        var results = await _context.Rooms
+            .Where(r => r.Id == roomId)
+            .Include(r => r.Connection)
+            .Select(r => new { r.Connection.Id, r.Connection.UserIdFrom, r.Connection.UserIdTo })
+            .ToListAsync();
+
+        return results.Select(r => (r.Id, r.UserIdFrom, r.UserIdTo));
+    }
+
+    public async Task<int> GetUnreadMessageCountAsync(int roomId, int userId)
+    {
+        return await _context.Messages
+            .Where(m => m.MessageRoomId == roomId && m.UserId != userId && m.Status == 0)
+            .CountAsync();
     }
 }

@@ -128,4 +128,14 @@ public class ConnectionService : IConnectionService
         await _repo.UpdateAsync(conn);
         return conn;
     }
+
+    public async Task<IEnumerable<(int Id, int UserIdFrom, int UserIdTo)>> GetRoomUsersAsync(int roomId)
+    {
+        return await _repo.GetRoomUsersAsync(roomId);
+    }
+
+    public async Task<int> GetUnreadMessageCountAsync(int roomId, int userId)
+    {
+        return await _repo.GetUnreadMessageCountAsync(roomId, userId);
+    }
 }
