@@ -18,4 +18,6 @@ public interface IConnectionService
     // Bulk mark-by-ids removed (auto mark on join used).
     Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId);
     Task<Connection.Domain.Entities.Connection?> UpdateConnectionStatusAsync(int connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus status);
+    Task<IEnumerable<(int Id, int UserIdFrom, int UserIdTo)>> GetRoomUsersAsync(int roomId);
+    Task<int> GetUnreadMessageCountAsync(int roomId, int userId);
 }
