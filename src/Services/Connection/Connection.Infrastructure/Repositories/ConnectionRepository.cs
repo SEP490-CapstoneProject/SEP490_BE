@@ -100,6 +100,7 @@ public class ConnectionRepository : IConnectionRepository
                 LastAt = x.Room.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.CreatedAt).FirstOrDefault(),
                 UnreadCount = x.Room.Messages.Count(m => m.Status == 0 && m.UserId != userId)
             })
+            .OrderByDescending(r => r.LastAt)  // ✅ Sort by LastAt descending (newest first)
             .ToListAsync();
 
         return list;
