@@ -28,4 +28,9 @@ public class SignalRPushService : IRealtimePushService
         => _hubContext.Clients
             .Group($"post_{evt.PostId}")
             .SendAsync("ReceiveReply", evt, cancellationToken);
+
+    public Task PushPostFavoriteChangedAsync(PostFavoriteChangedEvent evt, CancellationToken cancellationToken = default)
+        => _hubContext.Clients
+            .Group($"post_{evt.PostId}")
+            .SendAsync("ReceivePostFavoriteChanged", evt, cancellationToken);
 }

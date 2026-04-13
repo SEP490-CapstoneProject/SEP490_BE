@@ -27,6 +27,9 @@ public class RabbitMqCommunityEventPublisher : ICommunityEventPublisher
     public Task PublishReplyCreatedAsync(ReplyCreatedEvent evt, CancellationToken cancellationToken = default)
         => PublishAsync("post.reply.created", evt, cancellationToken);
 
+    public Task PublishPostFavoriteChangedAsync(PostFavoriteChangedEvent evt, CancellationToken cancellationToken = default)
+        => PublishAsync("post.favorite.changed", evt, cancellationToken);
+
     private async Task PublishAsync<T>(string routingKey, T evt, CancellationToken cancellationToken)
     {
         var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";

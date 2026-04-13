@@ -18,4 +18,6 @@ public interface IConnectionRepository
     Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId);
     // Bulk mark-by-ids removed (auto mark on join used). Keep mark-room for auto behavior.
     Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId);
+    Task<IEnumerable<(int Id, int UserIdFrom, int UserIdTo)>> GetRoomUsersAsync(int roomId);
+    Task<int> GetUnreadMessageCountAsync(int roomId, int userId);
 }

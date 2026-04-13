@@ -278,6 +278,48 @@ namespace Portfolio.Infrastructure.Migrations
                     b.ToTable("PortfolioBlock", (string)null);
                 });
 
+            modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioFollow", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FollowedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("DATEADD(HOUR, 7, GETUTCDATE())");
+
+                    b.Property<string>("InterestLevel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("PortfolioId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .HasDatabaseName("IX_PortfolioFollow_CompanyId");
+
+                    b.HasIndex("PortfolioId")
+                        .HasDatabaseName("IX_PortfolioFollow_PortfolioId");
+
+                    b.HasIndex("CompanyId", "PortfolioId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PortfolioFollow_Company_Portfolio");
+
+                    b.ToTable("PortfolioFollow", (string)null);
+                });
+
             modelBuilder.Entity("Portfolio.Domain.Entities.Compliment", b =>
                 {
                     b.HasOne("Portfolio.Domain.Entities.Portfolio", "Portfolio")
@@ -308,6 +350,17 @@ namespace Portfolio.Infrastructure.Migrations
                     b.Navigation("Portfolio");
                 });
 
+            modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioFollow", b =>
+                {
+                    b.HasOne("Portfolio.Domain.Entities.Portfolio", "Portfolio")
+                        .WithMany("Follows")
+                        .HasForeignKey("PortfolioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Portfolio");
+                });
+
             modelBuilder.Entity("Portfolio.Domain.Entities.BlockType", b =>
                 {
                     b.Navigation("PortfolioBlocks");
@@ -318,6 +371,8 @@ namespace Portfolio.Infrastructure.Migrations
                     b.Navigation("Blocks");
 
                     b.Navigation("Compliments");
+
+                    b.Navigation("Follows");
                 });
 #pragma warning restore 612, 618
         }

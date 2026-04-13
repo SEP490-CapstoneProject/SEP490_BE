@@ -32,7 +32,7 @@ public class CurrentUserService : ICurrentUserService
         return int.TryParse(claim, out var id) ? id : 0;
     }
 
-    public bool IsEmployee() => User?.IsInRole("employee") ?? false;
+    public bool IsEmployee() => User?.IsInRole("USER") ?? false;
 
-    public bool IsCompany() => User?.IsInRole("company") ?? false;
+    public bool IsCompany() => User?.IsInRole("RECRUITER") ?? false;
 }

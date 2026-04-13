@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using RabbitMQ.Client;
 using StackExchange.Redis;
 using Subscription.API.Middleware;
@@ -38,7 +39,29 @@ builder.Configuration.AddAzureKeyVault();
 // Add services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Subscription Service API", Version = "v1" });
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "Nhập JWT token (không cần gõ 'Bearer').",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 // Add DbContext
 builder.Services.AddDbContext<SubscriptionDbContext>(options =>
@@ -148,6 +171,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app/",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

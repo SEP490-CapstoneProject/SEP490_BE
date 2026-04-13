@@ -70,6 +70,21 @@ public class CompanyPostController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Get saved job posts of current user</summary>
+    [HttpGet("saved")]
+    [Authorize]
+    public async Task<IActionResult> GetSavedPosts(
+        [FromQuery] DateTime? cursor,
+        [FromQuery] int limit = 10)
+    {
+        int userId;
+        try { userId = GetRequiredUserId(); }
+        catch { return Unauthorized(new { message = "Authentication required" }); }
+
+        var result = await _service.GetSavedPostsAsync(cursor, limit, userId);
+        return Ok(result);
+    }
+
     /// <summary>Get job post detail with all media</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetDetail(int id)

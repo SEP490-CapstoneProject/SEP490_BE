@@ -10,12 +10,14 @@ COPY ["src/Services/Portfolio/Portfolio.API/Portfolio.API.csproj", "Services/Por
 COPY ["src/Services/Portfolio/Portfolio.Application/Portfolio.Application.csproj", "Services/Portfolio/Portfolio.Application/"]
 COPY ["src/Services/Portfolio/Portfolio.Domain/Portfolio.Domain.csproj", "Services/Portfolio/Portfolio.Domain/"]
 COPY ["src/Services/Portfolio/Portfolio.Infrastructure/Portfolio.Infrastructure.csproj", "Services/Portfolio/Portfolio.Infrastructure/"]
+COPY ["src/Shared/RecruitmentPlatform.Contracts/RecruitmentPlatform.Contracts.csproj", "Shared/RecruitmentPlatform.Contracts/"]
 
 # Restore dependencies
 RUN dotnet restore "Services/Portfolio/Portfolio.API/Portfolio.API.csproj"
 
 # Copy source
 COPY src/Services/Portfolio/ Services/Portfolio/
+COPY src/Shared/RecruitmentPlatform.Contracts/ Shared/RecruitmentPlatform.Contracts/
 
 # Build
 WORKDIR "/src/Services/Portfolio/Portfolio.API"

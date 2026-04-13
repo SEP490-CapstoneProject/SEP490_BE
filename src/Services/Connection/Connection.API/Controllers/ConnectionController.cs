@@ -1,4 +1,5 @@
 using Connection.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Connection.API.Controllers;
@@ -17,6 +18,7 @@ public class ConnectionController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize]
     public async Task<IActionResult> CreateConnection([FromBody] Connection.Application.DTOs.CreateConnectionRequest req)
     {
         var conn = new Connection.Domain.Entities.Connection
@@ -49,6 +51,7 @@ public class ConnectionController : ControllerBase
     public class UpdateStatusRequest { public string Status { get; set; } = string.Empty; }
 
     [HttpPut("{id}/status")]
+    [Authorize]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
     {
         if (string.IsNullOrEmpty(request?.Status)) return BadRequest(new { error = "Status is required" });
@@ -74,14 +77,15 @@ public class ConnectionController : ControllerBase
 
         foreach (var room in raw)
         {
-            string name = room.ProfileId.ToString();
+            int otherUserId = room.UserIdFrom == userId ? room.UserIdTo : room.UserIdFrom;
+            string name = otherUserId.ToString();
             string? avatar = null;
             string? cover = null;
             string role = "USER";
 
             try
             {
-                var res = await client.GetAsync($"/api/company/{room.ProfileId}");
+                var res = await client.GetAsync($"/api/company/by-user/{otherUserId}");
                 if (res.IsSuccessStatusCode)
                 {
                     var json = await res.Content.ReadAsStringAsync();
@@ -93,7 +97,7 @@ public class ConnectionController : ControllerBase
                 }
                 else
                 {
-                    var res2 = await client.GetAsync($"/api/employee/{room.ProfileId}");
+                    var res2 = await client.GetAsync($"/api/employee/by-user/{otherUserId}");
                     if (res2.IsSuccessStatusCode)
                     {
                         var json2 = await res2.Content.ReadAsStringAsync();
@@ -127,6 +131,7 @@ public class ConnectionController : ControllerBase
     }
 
     [HttpPost("rooms/{roomId}/messages")]
+    [Authorize]
     public async Task<IActionResult> CreateMessage(int roomId, [FromBody] Connection.Application.DTOs.CreateMessageRequest req)
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -168,6 +173,7 @@ public class ConnectionController : ControllerBase
     // Bulk tick-mark endpoint removed; messages are auto-marked READ when user joins a room (via SignalR JoinRoom)
 
     [HttpPost("rooms/{roomId}/mark-read")]
+    [Authorize]
     public async Task<IActionResult> MarkRoomRead(int roomId)
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;

@@ -64,6 +64,7 @@ builder.Services.AddDbContext<CommunityDbContext>(options =>
 builder.Services.AddScoped<ICommunityRepository, CommunityRepository>();
 builder.Services.AddScoped<ICommunityService, CommunityService>();
 builder.Services.AddScoped<ICommunityEventPublisher, RabbitMqCommunityEventPublisher>();
+builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
 
 // Add typed HttpClient for Media Service
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
@@ -114,6 +115,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app/",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

@@ -4,6 +4,7 @@ using Portfolio.Application.BlockHandlers;
 using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
+using RecruitmentPlatform.Contracts.Time;
 using System.Transactions;
 
 namespace Portfolio.Application.Services;
@@ -50,7 +51,7 @@ public class PortfolioService : IPortfolioService
             EmployeeId = employeeId,
             Name = request.Name,
             Status = "active",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = VietnamTime.Now()
         };
 
         var created = await _repo.CreateAsync(portfolio);
@@ -68,7 +69,7 @@ public class PortfolioService : IPortfolioService
 
         portfolio.Name = request.Name;
         portfolio.Status = request.Status;
-        portfolio.UpdatedAt = DateTime.UtcNow;
+        portfolio.UpdatedAt = VietnamTime.Now();
 
         var updated = await _repo.UpdateAsync(portfolio);
         return MapToDto(updated);
@@ -128,7 +129,7 @@ public class PortfolioService : IPortfolioService
         portfolio.Name = request.Name;
         if (!string.IsNullOrWhiteSpace(request.Status))
             portfolio.Status = request.Status;
-        portfolio.UpdatedAt = DateTime.UtcNow;
+        portfolio.UpdatedAt = VietnamTime.Now();
 
         // Remove all existing blocks
         portfolio.Blocks.Clear();
@@ -154,7 +155,7 @@ public class PortfolioService : IPortfolioService
             portfolio.Blocks.Add(block);
         }
 
-        _repo.AddAsync(portfolio);
+        // Entity already tracked by EF Core, just commit changes
         await _repo.CommitAsync();
 
         scope.Complete();
@@ -188,7 +189,7 @@ public class PortfolioService : IPortfolioService
             EmployeeId = request.EmployeeId,
             Name = request.Name,
             Status = "active",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = VietnamTime.Now()
         };
 
         foreach (var blockRequest in request.Blocks.OrderBy(b => b.Order))

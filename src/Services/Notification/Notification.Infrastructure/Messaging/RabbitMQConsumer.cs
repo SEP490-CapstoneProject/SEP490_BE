@@ -6,9 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Notification.Application.Interfaces;
+using Notification.Application.Services;
 using Notification.Domain.Entities;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RecruitmentPlatform.Contracts.Time;
 
 namespace Notification.Infrastructure.Messaging;
 
@@ -27,6 +29,12 @@ public class RabbitMQConsumer : BackgroundService
     private const string DlqQueue = "notification.events.dlq";
 
     private static readonly string[] BindingKeys = { "post.*", "connection.*", "portfolio.*", "job.*", "system.*" };
+    private static readonly HashSet<string> NotificationEventTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "post.favorite",
+        "post.comment.created",
+        "post.reply.created"
+    };
 
     public RabbitMQConsumer(
         IServiceScopeFactory scopeFactory,
@@ -129,7 +137,56 @@ public class RabbitMQConsumer : BackgroundService
                 return;
             }
 
+            // Realtime-only counter event: never create notification (prevents unlike => like notification bug)
+            if (string.Equals(evt.EventType, "post.favorite.changed", StringComparison.OrdinalIgnoreCase))
+            {
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
+
+            if (!NotificationEventTypes.Contains(evt.EventType))
+            {
+                _logger.LogDebug("Skip non-notification event type {EventType}", evt.EventType);
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(evt.Type) ||
+                string.IsNullOrWhiteSpace(evt.Title) ||
+                string.IsNullOrWhiteSpace(evt.Content))
+            {
+                _logger.LogWarning(
+                    "Skip invalid notification event payload. EventType={EventType}, UserId={UserId}, Type={Type}",
+                    evt.EventType, evt.UserId, evt.Type);
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
+
             using var scope = _scopeFactory.CreateScope();
+
+            // Check if this is a post.favorite event for aggregation
+            if (evt.EventType == "post.favorite")
+            {
+                var aggregationService = scope.ServiceProvider.GetService<FavoriteAggregationService>();
+                if (aggregationService != null)
+                {
+                    var actorName = ExtractActorNameFromContent(evt.Content);
+                    var isAggregated = await aggregationService.TryAggregateAsync(
+                        int.Parse(evt.ObjectId ?? "0"), 
+                        evt.UserId, 
+                        evt.ActorId ?? "", 
+                        actorName);
+
+                    if (isAggregated)
+                    {
+                        // Event was aggregated, don't create notification yet
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
+                    }
+                    // If not aggregated, fall through to create notification immediately
+                }
+            }
+
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
             var eventPublisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
 
@@ -142,7 +199,7 @@ public class RabbitMQConsumer : BackgroundService
                 ObjectId = evt.ObjectId,
                 ActorId = evt.ActorId,
                 ActorType = evt.ActorType,
-                CreatedAt = evt.CreatedAt == default ? DateTime.UtcNow : evt.CreatedAt
+                CreatedAt = evt.CreatedAt == default ? VietnamTime.Now() : evt.CreatedAt
             };
 
             await notificationService.CreateNotificationAsync(entity);
@@ -165,6 +222,17 @@ public class RabbitMQConsumer : BackgroundService
             _logger.LogError(ex, "Error processing notification event, sending to DLQ");
             await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
         }
+    }
+
+    private static string ExtractActorNameFromContent(string content)
+    {
+        // Extract actor name from content like "John Doe đã thích bài viết của bạn"
+        var index = content.IndexOf(" đã thích");
+        if (index > 0)
+        {
+            return content.Substring(0, index).Trim();
+        }
+        return "Ai đó";
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

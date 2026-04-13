@@ -8,12 +8,20 @@ namespace Application.Infrastructure.Clients;
 
 public class UserProfileClient : IUserProfileClient
 {
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient _userProfileClient;
+    private readonly HttpClient _companyClient;
+    private readonly HttpClient _portfolioClient;
     private readonly ILogger<UserProfileClient> _logger;
 
-    public UserProfileClient(HttpClient httpClient, ILogger<UserProfileClient> logger)
+    public UserProfileClient(
+        HttpClient userProfileClient,
+        HttpClient companyClient,
+        HttpClient portfolioClient,
+        ILogger<UserProfileClient> logger)
     {
-        _httpClient = httpClient;
+        _userProfileClient = userProfileClient;
+        _companyClient = companyClient;
+        _portfolioClient = portfolioClient;
         _logger = logger;
     }
 
@@ -21,7 +29,7 @@ public class UserProfileClient : IUserProfileClient
     {
         try
         {
-            var response = await _httpClient.GetAsync($"/api/employees/{employeeId}");
+            var response = await _userProfileClient.GetAsync($"/api/employee/{employeeId}");
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<EmployeeDto>();
@@ -37,7 +45,7 @@ public class UserProfileClient : IUserProfileClient
     {
         try
         {
-            var response = await _httpClient.GetAsync($"/api/companies/{companyId}");
+            var response = await _userProfileClient.GetAsync($"/api/company/{companyId}");
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<CompanyExternalDto>();
@@ -53,7 +61,7 @@ public class UserProfileClient : IUserProfileClient
     {
         try
         {
-            var response = await _httpClient.GetAsync($"/api/posts/{companyPostId}");
+            var response = await _companyClient.GetAsync($"/api/company-posts/{companyPostId}");
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<CompanyPostDto>();
@@ -69,8 +77,11 @@ public class UserProfileClient : IUserProfileClient
     {
         try
         {
-            var response = await _httpClient.GetAsync($"/api/portfolios/{portfolioId}/owner/{employeeId}");
-            return response.IsSuccessStatusCode;
+            var response = await _portfolioClient.GetAsync($"/api/portfolio/{portfolioId}");
+            if (!response.IsSuccessStatusCode) return false;
+            
+            var portfolio = await response.Content.ReadFromJsonAsync<PortfolioDto>();
+            return portfolio?.EmployeeId == employeeId;
         }
         catch (Exception ex)
         {
@@ -86,7 +97,7 @@ public class UserProfileClient : IUserProfileClient
         try
         {
             var ids = string.Join(",", employeeIds);
-            var response = await _httpClient.GetAsync($"/api/employees?ids={ids}");
+            var response = await _userProfileClient.GetAsync($"/api/employee?ids={ids}");
             response.EnsureSuccessStatusCode();
             var employees = await response.Content.ReadFromJsonAsync<List<EmployeeDto>>() ?? new List<EmployeeDto>();
             return employees.ToDictionary(e => e.EmployeeId);
@@ -105,7 +116,7 @@ public class UserProfileClient : IUserProfileClient
         try
         {
             var ids = string.Join(",", companyIds);
-            var response = await _httpClient.GetAsync($"/api/companies?ids={ids}");
+            var response = await _userProfileClient.GetAsync($"/api/company?ids={ids}");
             response.EnsureSuccessStatusCode();
             var companies = await response.Content.ReadFromJsonAsync<List<CompanyExternalDto>>() ?? new List<CompanyExternalDto>();
             return companies.ToDictionary(c => c.CompanyId);
@@ -124,7 +135,7 @@ public class UserProfileClient : IUserProfileClient
         try
         {
             var ids = string.Join(",", postIds);
-            var response = await _httpClient.GetAsync($"/api/posts?ids={ids}");
+            var response = await _companyClient.GetAsync($"/api/company-posts?ids={ids}");
             response.EnsureSuccessStatusCode();
             var posts = await response.Content.ReadFromJsonAsync<List<CompanyPostDto>>() ?? new List<CompanyPostDto>();
             return posts.ToDictionary(p => p.PostId);

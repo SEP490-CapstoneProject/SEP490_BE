@@ -10,9 +10,48 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddAzureKeyVault();
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Prevent circular reference errors when serializing entities with navigation properties
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.WriteIndented = false;
+    });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Connection.API",
+        Version = "v1",
+        Description = "Connection Service — Matching & messaging"
+    });
+
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header. Enter your token (without 'Bearer' prefix).",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 builder.Services.AddSignalR();
 
 // HttpClient to call UserProfile service
@@ -48,6 +87,19 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"].FirstOrDefault();
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))  // ✅ Changed from /hubs/chat to /hubs/realtime
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -62,11 +114,13 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app/",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials());
+
 });
 
 var app = builder.Build();
@@ -75,7 +129,24 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<Connection.Infrastructure.Data.ConnectionDbContext>();
-    db.Database.Migrate();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        logger.LogInformation("Starting database migration...");
+        db.Database.Migrate();
+        logger.LogInformation("✅ Database migration completed successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "❌ Database migration failed at startup.");
+        logger.LogError("Connection String: {ConnectionString}", 
+            builder.Configuration.GetConnectionString("DefaultConnection"));
+        logger.LogError("This may indicate:");
+        logger.LogError("  1. Database server is not reachable");
+        logger.LogError("  2. Connection string is incorrect");
+        logger.LogError("  3. Insufficient permissions to create database");
+        throw;
+    }
 }
 
 // AutoMapper not used; mapping done manually
@@ -88,11 +159,25 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
+// Global exception handler - return JSON error instead of empty 500
+app.UseExceptionHandler(errApp =>
+{
+    errApp.Run(async ctx =>
+    {
+        ctx.Response.StatusCode = 500;
+        ctx.Response.ContentType = "application/json";
+        var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        var message = ex?.Error?.Message ?? "An unexpected error occurred";
+        var inner = ex?.Error?.InnerException?.Message;
+        await ctx.Response.WriteAsJsonAsync(new { error = message, inner });
+    });
+});
+
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<Connection.API.Hubs.ChatHub>("/hubs/chat");
+app.MapHub<Connection.API.Hubs.ChatHub>("/hubs/chat");  // ✅ Changed from /hubs/chat to /hubs/realtime
 
 app.Run();
 

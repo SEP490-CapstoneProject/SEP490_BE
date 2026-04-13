@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 namespace Notification.Application.DTOs;
 
 public class UserNotificationDto
@@ -15,9 +16,11 @@ public class UserNotificationDto
 
 public class ActorDto
 {
-    public string Id { get; set; } = default!;
+    public int Id { get; set; }
     public string Name { get; set; } = default!;
-    public string? AvatarUrl { get; set; }
+    public string Avatar { get; set; } = string.Empty;
+    [JsonPropertyName("Role")]
+    public string Role { get; set; } = "USER";
 }
 
 public class CursorPagedResult<T>

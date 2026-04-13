@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Connection.Domain\Connection.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

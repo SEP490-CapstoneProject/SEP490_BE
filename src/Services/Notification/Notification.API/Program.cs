@@ -11,6 +11,7 @@ using Notification.Infrastructure.Configuration;
 using Notification.Infrastructure.Data;
 using Notification.Infrastructure.Messaging;
 using Notification.Infrastructure.Repositories;
+using Notification.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,11 +51,12 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Notification Service API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Enter: Bearer {token}",
+        Description = "Nhập JWT token (không cần gõ 'Bearer').",
         Name = "Authorization",
         In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
@@ -75,6 +77,14 @@ if (!string.IsNullOrEmpty(redisConn))
 {
     builder.Services.AddStackExchangeRedisCache(options =>
         options.Configuration = redisConn);
+    
+    // Add IConnectionMultiplexer for AggregationFlushService
+    builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+    {
+        var configuration = sp.GetService<IConfiguration>();
+        var connectionString = configuration!.GetConnectionString("Redis") ?? redisConn;
+        return StackExchange.Redis.ConnectionMultiplexer.Connect(connectionString);
+    });
 }
 else
 {
@@ -88,6 +98,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app/",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
@@ -106,8 +117,10 @@ builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
+builder.Services.AddScoped<FavoriteAggregationService>();
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
+builder.Services.AddHostedService<AggregationFlushService>();
 
 builder.Services.AddControllers();
 

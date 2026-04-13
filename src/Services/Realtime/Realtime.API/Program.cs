@@ -78,6 +78,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app/",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
@@ -119,6 +120,7 @@ builder.Services.AddSingleton<IRealtimePushService, SignalRPushService>();
 builder.Services.AddHostedService<CommentEventConsumer>();
 builder.Services.AddHostedService<ReplyEventConsumer>();
 builder.Services.AddHostedService<NotificationEventConsumer>();
+builder.Services.AddHostedService<PostFavoriteEventConsumer>();
 
 var app = builder.Build();
 

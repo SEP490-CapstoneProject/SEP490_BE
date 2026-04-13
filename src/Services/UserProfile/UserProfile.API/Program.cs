@@ -90,9 +90,18 @@ builder.Services.AddHttpClient("MediaService", client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
+// Add HttpClient for Auth Service (service-to-service)
+builder.Services.AddHttpClient("AuthService", client =>
+{
+    var authServiceUrl = builder.Configuration["ServiceUrls:AuthService"] ?? "http://auth-service:8080";
+    client.BaseAddress = new Uri(authServiceUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
 // Add DI
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
+builder.Services.AddScoped<IAuthUserClient, AuthUserClient>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 
@@ -104,6 +113,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app/",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

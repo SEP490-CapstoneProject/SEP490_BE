@@ -16,6 +16,13 @@ public class ChatHub : Hub
     public override async Task OnConnectedAsync()
     {
         await base.OnConnectedAsync();
+
+        // Subscribe user to personal notification group for Home & Room List
+        var userIdClaim = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(userIdClaim, out var userId))
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+        }
     }
 
     public async Task JoinRoom(int roomId)
@@ -67,7 +74,50 @@ public class ChatHub : Hub
 
         var created = await _service.CreateMessageAsync(message);
 
-        // Broadcast to group
-        await Clients.Group(roomId.ToString()).SendAsync("ReceiveMessage", created);
+        // Broadcast DTO (not entity) to avoid circular reference serialization errors
+        var dto = new Connection.Application.DTOs.MessageDto
+        {
+            Id = created.Id,
+            MessageRoomId = created.MessageRoomId,
+            UserId = created.UserId,
+            Content = created.Content,
+            CreatedAt = created.CreatedAt,
+            Status = created.Status == 1 ? "READ" : created.Status == 2 ? "DELIVERED" : "UNREAD"
+        };
+
+        // 3️⃣ Broadcast to users INSIDE the room (viewing chat)
+        await Clients.Group(roomId.ToString()).SendAsync("ReceiveMessage", dto);
+
+        // 2️⃣ & 1️⃣ Notify users NOT in the room (room list + home)
+        // Get room & connection info for RoomSummary structure
+        var room = await _service.GetRoomByIdAsync(roomId);
+        if (room == null) return;
+
+        var roomUsers = await _service.GetRoomUsersAsync(roomId);
+        if (roomUsers != null)
+        {
+            foreach (var user in roomUsers)
+            {
+                // Don't notify the sender
+                if (user.Id != senderId)
+                {
+                    var unreadCount = await _service.GetUnreadMessageCountAsync(roomId, user.Id);
+
+                    // Send full room summary structure matching API response
+                    await Clients.Group($"user_{user.Id}").SendAsync("RoomUpdated",
+                        new
+                        {
+                            roomId,
+                            profileId = room.Connection?.ProfileId ?? 0,
+                            connectionId = room.ConnectionId,
+                            userIdFrom = user.UserIdFrom,
+                            userIdTo = user.UserIdTo,
+                            lastContent = dto.Content,
+                            lastAt = dto.CreatedAt,
+                            unreadCount
+                        });
+                }
+            }
+        }
     }
 }
