@@ -77,14 +77,15 @@ public class ConnectionController : ControllerBase
 
         foreach (var room in raw)
         {
-            string name = room.ProfileId.ToString();
+            int otherUserId = room.UserIdFrom == userId ? room.UserIdTo : room.UserIdFrom;
+            string name = otherUserId.ToString();
             string? avatar = null;
             string? cover = null;
             string role = "USER";
 
             try
             {
-                var res = await client.GetAsync($"/api/company/{room.ProfileId}");
+                var res = await client.GetAsync($"/api/company/by-user/{otherUserId}");
                 if (res.IsSuccessStatusCode)
                 {
                     var json = await res.Content.ReadAsStringAsync();
@@ -96,7 +97,7 @@ public class ConnectionController : ControllerBase
                 }
                 else
                 {
-                    var res2 = await client.GetAsync($"/api/employee/{room.ProfileId}");
+                    var res2 = await client.GetAsync($"/api/employee/by-user/{otherUserId}");
                     if (res2.IsSuccessStatusCode)
                     {
                         var json2 = await res2.Content.ReadAsStringAsync();

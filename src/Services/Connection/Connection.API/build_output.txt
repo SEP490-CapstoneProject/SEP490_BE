@@ -1,0 +1,27 @@
+  Determining projects to restore...
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-m5vv-6r4h-3vj9 [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.API\Connection.API.csproj]
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-wvxc-855f-jvrv [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.API\Connection.API.csproj]
+  All projects are up-to-date for restore.
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-m5vv-6r4h-3vj9
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-wvxc-855f-jvrv
+  RecruitmentPlatform.Common -> C:\Users\cungt\source\repos\SEP490_BE\src\Shared\RecruitmentPlatform.Common\bin\Debug\net8.0\RecruitmentPlatform.Common.dll
+  RecruitmentPlatform.Contracts -> C:\Users\cungt\source\repos\SEP490_BE\src\Shared\RecruitmentPlatform.Contracts\bin\Debug\net8.0\RecruitmentPlatform.Contracts.dll
+  Connection.Domain -> C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Domain\bin\Debug\net8.0\Connection.Domain.dll
+  Connection.Application -> C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Application\bin\Debug\net8.0\Connection.Application.dll
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Repositories\ConnectionRepository.cs(69,25): warning CS8602: Dereference of a possibly null reference. [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj]
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Repositories\ConnectionRepository.cs(144,27): warning CS8602: Dereference of a possibly null reference. [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj]
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Repositories\ConnectionRepository.cs(144,26): error CS8143: An expression tree may not contain a tuple literal. [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj]
+
+Build FAILED.
+
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-m5vv-6r4h-3vj9 [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.API\Connection.API.csproj]
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-wvxc-855f-jvrv [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.API\Connection.API.csproj]
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-m5vv-6r4h-3vj9
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj : warning NU1902: Package 'Azure.Identity' 1.10.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-wvxc-855f-jvrv
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Repositories\ConnectionRepository.cs(69,25): warning CS8602: Dereference of a possibly null reference. [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj]
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Repositories\ConnectionRepository.cs(144,27): warning CS8602: Dereference of a possibly null reference. [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj]
+C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Repositories\ConnectionRepository.cs(144,26): error CS8143: An expression tree may not contain a tuple literal. [C:\Users\cungt\source\repos\SEP490_BE\src\Services\Connection\Connection.Infrastructure\Connection.Infrastructure.csproj]
+    6 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:01.54

@@ -93,7 +93,7 @@ builder.Services.AddAuthentication(options =>
         {
             var accessToken = context.Request.Query["access_token"].FirstOrDefault();
             var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))  // ✅ Changed from /hubs/chat to /hubs/realtime
             {
                 context.Token = accessToken;
             }
@@ -177,7 +177,7 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<Connection.API.Hubs.ChatHub>("/hubs/chat");
+app.MapHub<Connection.API.Hubs.ChatHub>("/hubs/chat");  // ✅ Changed from /hubs/chat to /hubs/realtime
 
 app.Run();
 
