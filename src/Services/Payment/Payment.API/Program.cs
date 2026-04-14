@@ -31,7 +31,7 @@ builder.Configuration.AddAzureKeyVault();
 
 // Database
 builder.Services.AddDbContext<PaymentDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("PaymentDb")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Repositories
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
@@ -68,21 +68,23 @@ builder.Services.AddHttpClient<IPlanPriceProvider, HttpPlanPriceProvider>(client
 });
 
 // RabbitMQ
-builder.Services.AddSingleton<IConnection>(sp =>
-{
-    var factory = new ConnectionFactory
-    {
-        HostName = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq",
-        Port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672"),
-        UserName = builder.Configuration["RabbitMQ:Username"] ?? "guest",
-        Password = builder.Configuration["RabbitMQ:Password"] ?? "guest",
-        AutomaticRecoveryEnabled = true,
-        NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
-    };
-    return factory.CreateConnection();
-});
+// builder.Services.AddSingleton<IConnection>(sp =>
+// {
+//     var factory = new ConnectionFactory
+//     {
+//         HostName = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq",
+//         Port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672"),
+//         UserName = builder.Configuration["RabbitMQ:Username"] ?? "guest",
+//         Password = builder.Configuration["RabbitMQ:Password"] ?? "guest",
+//         AutomaticRecoveryEnabled = true,
+//         NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
+//     };
+//     return factory.CreateConnection();
+// });
 
-builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublisher>();
+// builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublisher>();
+builder.Services.AddSingleton<IPaymentEventPublisher, FakePaymentEventPublisher>();
+
 
 // Metrics & Alerting
 builder.Services.AddSingleton<IPaymentMetricsService, PaymentMetricsService>();
@@ -92,7 +94,7 @@ builder.Services.AddSingleton<IAlertingService, AlertingService>();
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<PaymentExpirationService>();
 builder.Services.AddHostedService<ReconciliationService>();
-builder.Services.AddHostedService<DLQMonitoringService>();
+// builder.Services.AddHostedService<DLQMonitoringService>();
 
 // Validate required secrets in Production
 if (!builder.Environment.IsDevelopment())
