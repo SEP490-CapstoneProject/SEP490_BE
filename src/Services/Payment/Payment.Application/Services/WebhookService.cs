@@ -79,8 +79,8 @@ public class WebhookService : IWebhookService
             var payment = await _paymentRepository.GetByOrderCodeAsync(webhookResult.OrderCode ?? "");
             if (payment == null)
             {
-                _logger.LogWarning("Payment not found");
-                return new WebhookResult { IsValid = false, IsSuccess = false, ErrorMessage = "Payment not found" };
+                _logger.LogWarning("Payment not found for OrderCode: {OrderCode}. Returning success to satisfy PayOS test ping.", webhookResult.OrderCode);
+                return new WebhookResult { IsValid = true, IsSuccess = true };
             }
 
             // Step 5: Concurrency guard
