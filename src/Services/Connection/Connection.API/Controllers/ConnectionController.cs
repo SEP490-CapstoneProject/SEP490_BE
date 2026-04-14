@@ -1,6 +1,7 @@
 using Connection.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Connection.API.Controllers;
 
@@ -10,11 +11,13 @@ public class ConnectionController : ControllerBase
 {
     private readonly IConnectionService _service;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> _hubContext;
 
-    public ConnectionController(IConnectionService service, IHttpClientFactory httpClientFactory)
+    public ConnectionController(IConnectionService service, IHttpClientFactory httpClientFactory, Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> hubContext)
     {
         _service = service;
         _httpClientFactory = httpClientFactory;
+        _hubContext = hubContext;
     }
 
     [HttpPost]
@@ -183,6 +186,22 @@ public class ConnectionController : ControllerBase
         }
 
         var updated = await _service.MarkRoomMessagesAsReadAsync(roomId, currentUserId);
+        
+        if (updated != null && updated.Any())
+        {
+            // notify group about read receipts
+            await _hubContext.Clients.Group(roomId.ToString()).SendAsync("MessagesRead", new { roomId, userId = currentUserId, messageIds = updated });
+
+            // notify the specific other user
+            var roomUsers = await _service.GetRoomUsersAsync(roomId);
+            var roomConn = roomUsers.FirstOrDefault();
+            if (roomConn != default)
+            {
+                var otherUserId = roomConn.UserIdFrom == currentUserId ? roomConn.UserIdTo : roomConn.UserIdFrom;
+                await _hubContext.Clients.Group($"user_{otherUserId}").SendAsync("MessagesRead", new { roomId, userId = currentUserId, messageIds = updated });
+            }
+        }
+
         return Ok(new { updated = updated?.Count ?? 0 });
     }
 }

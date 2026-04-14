@@ -17,6 +17,15 @@ public class WebhookController : ControllerBase
     }
 
     /// <summary>
+    /// PayOS webhook verification ping (GET) - returns 200 OK so PayOS accepts the URL
+    /// </summary>
+    [HttpGet("payos")]
+    public IActionResult PayOSWebhookPing()
+    {
+        return Ok(new { code = "00", message = "Webhook endpoint ready" });
+    }
+
+    /// <summary>
     /// PayOS webhook endpoint (POST JSON)
     /// CRITICAL: Must read raw body BEFORE parsing for signature validation
     /// </summary>
@@ -39,7 +48,8 @@ public class WebhookController : ControllerBase
             {
                 _logger.LogWarning("PayOS webhook missing signature header. CorrelationId: {CorrelationId}", 
                     correlationId);
-                return BadRequest(new { code = "01", message = "Missing signature" });
+                // Still return 200 so PayOS accepts the webhook URL
+                return Ok(new { code = "01", message = "Missing signature" });
             }
 
             _logger.LogInformation("PayOS webhook received. CorrelationId: {CorrelationId}, BodyLength: {Length}", 
@@ -56,12 +66,13 @@ public class WebhookController : ControllerBase
             _logger.LogWarning("PayOS webhook failed. Reason: {Reason}, CorrelationId: {CorrelationId}",
                 result.ErrorMessage, correlationId);
 
-            return BadRequest(new { code = "99", message = result.ErrorMessage });
+            // Return 200 with non-zero code so PayOS doesn't retry endlessly
+            return Ok(new { code = "99", message = result.ErrorMessage });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "PayOS webhook exception. CorrelationId: {CorrelationId}", correlationId);
-            return StatusCode(500, new { code = "99", message = "Internal error" });
+            return Ok(new { code = "99", message = "Internal error" });
         }
     }
 }
