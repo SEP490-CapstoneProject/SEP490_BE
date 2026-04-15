@@ -32,12 +32,18 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.EmployeeId).IsRequired();
             e.Property(x => x.Name).HasMaxLength(255).IsRequired();
             e.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("active");
+            e.Property(x => x.IsMain).HasDefaultValue(false);
+            e.Property(x => x.IsPublic).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
             e.Property(x => x.UpdatedAt).IsRequired(false);
             e.Property(x => x.ComplimentCount).HasDefaultValue(0);
             e.Property(x => x.ApprovedComplimentCount).HasDefaultValue(0);
             e.Property(x => x.AverageScore).HasColumnType("decimal(3,2)").IsRequired(false);
             e.HasIndex(x => x.EmployeeId).HasDatabaseName("IX_Portfolio_EmployeeId");
+            e.HasIndex(x => new { x.EmployeeId, x.IsMain })
+                .HasDatabaseName("UX_Portfolio_EmployeeId_IsMain")
+                .IsUnique()
+                .HasFilter("[IsMain] = 1");
         });
 
         // BlockType
@@ -92,28 +98,27 @@ public class PortfolioDbContext : DbContext
         {
             e.ToTable("Compliment");
             e.HasKey(x => x.Id);
-            e.Property(x => x.Content).HasColumnType("nvarchar(max)").IsRequired();
+            e.Property(x => x.Content).HasColumnType("nvarchar(max)").IsRequired(false);
             e.Property(x => x.State).HasDefaultValue(ComplimentState.Pending);
-            e.Property(x => x.IsDeleted).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
             e.Property(x => x.Score).IsRequired(false);
             e.Property(x => x.UpdatedAt).IsRequired(false);
             e.Property(x => x.UpdatedBy).IsRequired(false);
 
-            // Filtered UNIQUE: one active compliment per company per portfolio
-            e.HasIndex(x => new { x.PortfolioId, x.CompanyId })
-             .HasDatabaseName("UX_Compliment_Portfolio_Company_Active")
-             .HasFilter("[IsDeleted] = 0")
+            // Filtered UNIQUE: one active compliment per user per portfolio
+            e.HasIndex(x => new { x.PortfolioId, x.UserId })
+             .HasDatabaseName("UX_Compliment_Portfolio_User_Active")
+             .HasFilter("[State] <> 3")
              .IsUnique();
 
-            e.HasIndex(x => new { x.PortfolioId, x.CompanyId, x.State })
-             .HasDatabaseName("IX_Compliment_Portfolio_Company_State");
+            e.HasIndex(x => new { x.PortfolioId, x.UserId, x.State })
+             .HasDatabaseName("IX_Compliment_Portfolio_User_State");
 
-            // Global query filter: multi-tenant isolation + soft delete
+            // Global query filter: multi-tenant isolation + state-based deletion
             e.HasQueryFilter(c =>
-                !c.IsDeleted &&
+                c.State != ComplimentState.Deleted &&
                 (_currentUser.IsAdmin ||
-                 (_currentUser.HasCompany && c.CompanyId == _currentUser.CompanyId)));
+                 (_currentUser.UserId > 0 && c.UserId == _currentUser.UserId)));
 
             e.HasOne(x => x.Portfolio)
              .WithMany(x => x.Compliments)

@@ -51,6 +51,11 @@ public class CompanyPostService : ICompanyPostService
         return result;
     }
 
+    public async Task<List<CompanyPostDetailDto>> GetPostsByIdsAsync(List<int> postIds, int? userId)
+    {
+        return await _repository.GetPostsByIdsAsync(postIds, userId);
+    }
+
     public async Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId)
     {
         var detail = await _repository.GetPostDetailAsync(postId, userId);
@@ -94,45 +99,8 @@ public class CompanyPostService : ICompanyPostService
 
         var created = await _repository.CreatePostAsync(post);
 
-        // Upload cover image first
-        if (!string.IsNullOrEmpty(request.CoverImageKey) &&
-            fileMap.TryGetValue(request.CoverImageKey, out var coverFile))
-        {
-            var coverResult = await _mediaUploadClient.UploadAsync(coverFile, "company/posts/cover");
-            if (coverResult != null)
-            {
-                created.CoverImageVideo = coverResult.Url;
-                await _repository.UpdatePostAsync(created);
-            }
-            else
-            {
-                _logger.LogWarning("Cover image upload failed for post {PostId}", created.PostId);
-            }
-        }
-
-        // Upload remaining media files
-        foreach (var (filename, file) in fileMap)
-        {
-            if (!string.IsNullOrEmpty(request.CoverImageKey) &&
-                string.Equals(filename, request.CoverImageKey, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var result = await _mediaUploadClient.UploadAsync(file, "company/posts");
-            if (result == null)
-            {
-                _logger.LogWarning("Media upload failed for file {Filename} on post {PostId}", filename, created.PostId);
-                continue;
-            }
-
-            var mediaType = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? "video" : "image";
-            await _repository.AddPostMediaAsync(new CompanyPostMedia
-            {
-                CompanyPostId = created.PostId,
-                Type = mediaType,
-                Name = result.PublicId ?? filename,
-                Address = result.Url
-            });
-        }
+        await UploadPostMediaAsync(created, request.CoverImageKey, fileMap, replaceAllMedia: false);
+        await _repository.UpdatePostAsync(created);
 
         var detail = await _repository.GetPostDetailAsync(created.PostId, companyId);
         if (detail != null)
@@ -167,6 +135,40 @@ public class CompanyPostService : ICompanyPostService
             CreatedAt = detail.CreatedAt
         };
 
+        await _repository.UpdatePostAsync(post);
+        return await _repository.GetPostDetailAsync(postId, requesterId);
+    }
+
+    public async Task<CompanyPostDetailDto?> UpdatePostFullAsync(int postId, UpdatePostFullRequest request, int requesterId, Dictionary<string, IFormFile> fileMap)
+    {
+        var detail = await _repository.GetPostDetailAsync(postId, null);
+        if (detail == null || detail.CompanyId != requesterId) return null;
+
+        if (string.IsNullOrWhiteSpace(request.Position))
+        {
+            throw new InvalidOperationException("Position is required.");
+        }
+
+        var post = new CompanyPost
+        {
+            PostId = postId,
+            CompanyId = detail.CompanyId,
+            Position = request.Position,
+            Address = request.Address,
+            Salary = request.Salary,
+            EmploymentType = request.EmploymentType,
+            ExperienceYear = request.ExperienceYear,
+            Quantity = request.Quantity,
+            JobDescription = request.JobDescription,
+            RequirementsMandatory = request.RequirementsMandatory,
+            RequirementsPreferred = request.RequirementsPreferred,
+            Benefits = request.Benefits,
+            Status = request.Status,
+            CoverImageVideo = detail.CoverImageUrl,
+            CreatedAt = detail.CreatedAt
+        };
+
+        await UploadPostMediaAsync(post, request.CoverImageKey, fileMap, replaceAllMedia: true);
         await _repository.UpdatePostAsync(post);
         return await _repository.GetPostDetailAsync(postId, requesterId);
     }
@@ -234,6 +236,53 @@ public class CompanyPostService : ICompanyPostService
 
         detail.CompanyName = profile.CompanyName;
         detail.CompanyAvatar = profile.Avatar;
+    }
+
+    private async Task UploadPostMediaAsync(CompanyPost post, string? coverImageKey, Dictionary<string, IFormFile> fileMap, bool replaceAllMedia)
+    {
+        if (!string.IsNullOrWhiteSpace(coverImageKey) &&
+            fileMap.TryGetValue(coverImageKey, out var coverFile))
+        {
+            var coverResult = await _mediaUploadClient.UploadAsync(coverFile, "company/posts/cover");
+            if (coverResult != null)
+            {
+                post.CoverImageVideo = coverResult.Url;
+            }
+            else
+            {
+                _logger.LogWarning("Cover image upload failed for post {PostId}", post.PostId);
+            }
+        }
+
+        if (replaceAllMedia)
+        {
+            await _repository.RemovePostMediaAsync(post.PostId);
+        }
+
+        foreach (var (filename, file) in fileMap)
+        {
+            if (!string.IsNullOrWhiteSpace(coverImageKey) &&
+                string.Equals(filename, coverImageKey, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var result = await _mediaUploadClient.UploadAsync(file, "company/posts");
+            if (result == null)
+            {
+                _logger.LogWarning("Media upload failed for file {Filename} on post {PostId}", filename, post.PostId);
+                continue;
+            }
+
+            var mediaType = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? "video" : "image";
+            await _repository.AddPostMediaAsync(new CompanyPostMedia
+            {
+                CompanyPostId = post.PostId,
+                Type = mediaType,
+                Name = result.PublicId ?? filename,
+                Address = result.Url
+            });
+        }
     }
 }
 

@@ -38,7 +38,9 @@ public class PortfolioController : ControllerBase
         [FromQuery] string? status = null,
         [FromQuery] bool includeCompliments = false,
         [FromQuery] ComplimentState? complimentState = null,
-        [FromQuery] bool? hasCompliment = null)
+        [FromQuery] bool? hasCompliment = null,
+        [FromQuery] PortfolioRankBy rankBy = PortfolioRankBy.average,
+        [FromQuery] PortfolioSortMode sort = PortfolioSortMode.newest)
     {
         // Use compliment filter path when any compliment param is specified
         if (includeCompliments || complimentState.HasValue || hasCompliment.HasValue)
@@ -50,13 +52,22 @@ public class PortfolioController : ControllerBase
                 Status = status,
                 IncludeCompliments = includeCompliments,
                 ComplimentState = complimentState,
-                HasCompliment = hasCompliment
+                HasCompliment = hasCompliment,
+                RankBy = rankBy,
+                Sort = sort
             };
             var filteredResult = await _portfolioService.GetAllWithComplimentFilterAsync(queryParams);
+
+            foreach (var p in filteredResult.Items)
+            {
+                var blocks = await _blockRepo.GetByPortfolioIdAsync(p.Id);
+                p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+            }
+
             return Ok(filteredResult);
         }
 
-        var result = await _portfolioService.GetAllAsync(page, pageSize, status);
+        var result = await _portfolioService.GetAllAsync(page, pageSize, status, sort, rankBy);
 
         foreach (var p in result.Items)
         {
@@ -147,6 +158,19 @@ public class PortfolioController : ControllerBase
         return Ok(portfolios);
     }
 
+    [HttpGet("employee/{employeeId:int}/main")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetMainByEmployee(int employeeId)
+    {
+        var portfolio = await _portfolioService.GetMainByEmployeeIdAsync(employeeId);
+        if (portfolio == null) return NotFound(new { error = $"Main portfolio for employee {employeeId} not found" });
+
+        var blocks = await _blockRepo.GetByPortfolioIdAsync(portfolio.PortfolioId);
+        portfolio.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+
+        return Ok(portfolio);
+    }
+
     [HttpGet("me")]
     public async Task<IActionResult> GetMine()
     {
@@ -178,6 +202,46 @@ public class PortfolioController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating portfolio {Id}", id);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    [HttpPatch("{id:int}/toggle-main")]
+    public async Task<IActionResult> ToggleMain(int id)
+    {
+        var employeeId = GetEmployeeId();
+        if (employeeId == null) return Unauthorized(new { error = "EmployeeId claim not found" });
+
+        try
+        {
+            var portfolio = await _portfolioService.ToggleMainAsync(id, employeeId.Value);
+            return Ok(portfolio);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error toggling main for portfolio {Id}", id);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    [HttpPatch("{id:int}/toggle-public")]
+    public async Task<IActionResult> TogglePublic(int id)
+    {
+        var employeeId = GetEmployeeId();
+        if (employeeId == null) return Unauthorized(new { error = "EmployeeId claim not found" });
+
+        try
+        {
+            var portfolio = await _portfolioService.TogglePublicAsync(id, employeeId.Value);
+            return Ok(portfolio);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error toggling public for portfolio {Id}", id);
             return StatusCode(500, new { error = "Internal server error" });
         }
     }

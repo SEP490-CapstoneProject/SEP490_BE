@@ -101,9 +101,11 @@ builder.Services.AddHttpClient("AuthService", client =>
 // Add DI
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
+builder.Services.AddScoped<IExpertRepository, ExpertRepository>();
 builder.Services.AddScoped<IAuthUserClient, AuthUserClient>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<ICompanyService, CompanyService>();
+builder.Services.AddScoped<IExpertService, ExpertService>();
 
 // Add CORS
 builder.Services.AddCors(options =>

@@ -7,7 +7,7 @@ namespace Portfolio.API.Controllers;
 
 [ApiController]
 [Route("api/compliments")]
-[Authorize(Roles = "RECRUITER")]
+[Authorize(Roles = "RECRUITER,ADMIN,MODERATOR,EXPERT")]
 public class ComplimentController : ControllerBase
 {
     private readonly IComplimentService _service;
@@ -27,6 +27,7 @@ public class ComplimentController : ControllerBase
             var result = await _service.CreateAsync(request);
             return StatusCode(201, result);
         }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
         catch (UnauthorizedAccessException) { return Forbid(); }
         catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
         catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
@@ -61,6 +62,7 @@ public class ComplimentController : ControllerBase
             var result = await _service.UpdateAsync(id, request);
             return Ok(result);
         }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
         catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
         catch (UnauthorizedAccessException) { return Forbid(); }
         catch (Exception ex)

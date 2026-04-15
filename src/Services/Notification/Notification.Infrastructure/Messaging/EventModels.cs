@@ -14,4 +14,15 @@ public class NotificationEvent
     public string Content { get; set; } = default!;
     public string Type { get; set; } = default!;
     public DateTime CreatedAt { get; set; } = VietnamTime.Now();
+    public NotificationEventUser? Author { get; set; }
+    public NotificationEventUser? ReplyToUser { get; set; }
+    public int? ReplyToUserId { get; set; }
+}
+
+public class NotificationEventUser
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Avatar { get; set; } = string.Empty;
+    public string Role { get; set; } = "USER";
 }

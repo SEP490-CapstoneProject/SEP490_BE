@@ -86,6 +86,32 @@ public class CompanyPostController : ControllerBase
     }
 
     /// <summary>Get job post detail with all media</summary>
+    [HttpGet("batch")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetByIds([FromQuery] string ids)
+    {
+        if (string.IsNullOrWhiteSpace(ids))
+        {
+            return BadRequest(new { message = "ids is required" });
+        }
+
+        var postIds = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(id => int.TryParse(id, out var parsed) ? parsed : (int?)null)
+            .Where(id => id.HasValue && id.Value > 0)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        if (postIds.Count == 0)
+        {
+            return Ok(new List<CompanyPostDetailDto>());
+        }
+
+        var result = await _service.GetPostsByIdsAsync(postIds, GetUserId());
+        return Ok(result);
+    }
+
+    /// <summary>Get job post detail with all media</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetDetail(int id)
     {
@@ -151,6 +177,52 @@ public class CompanyPostController : ControllerBase
         var result = await _service.UpdatePostAsync(id, request, userId);
         if (result == null) return NotFound(new { message = "Post not found or unauthorized" });
         return Ok(result);
+    }
+
+    /// <summary>Full update job post with optional media files (owner only)</summary>
+    [HttpPut("{id:int}/full")]
+    [Authorize]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UpdatePostFull(
+        int id,
+        [FromForm] string postJson,
+        [FromForm] List<IFormFile>? files)
+    {
+        int companyId;
+        try { companyId = GetRequiredCompanyId(); }
+        catch { return Unauthorized(new { message = "Authentication required" }); }
+
+        if (string.IsNullOrWhiteSpace(postJson))
+            return BadRequest(new { message = "postJson is required" });
+
+        UpdatePostFullRequest? request;
+        try
+        {
+            request = System.Text.Json.JsonSerializer.Deserialize<UpdatePostFullRequest>(postJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = "Invalid postJson", detail = ex.Message });
+        }
+
+        if (request == null) return BadRequest(new { message = "Invalid postJson" });
+
+        var fileMap = files != null && files.Count > 0
+            ? files.GroupBy(f => Path.GetFileName(f.FileName))
+                   .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, IFormFile>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var result = await _service.UpdatePostFullAsync(id, request, companyId, fileMap);
+            if (result == null) return NotFound(new { message = "Post not found or unauthorized" });
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>Soft-delete a job post (owner only)</summary>
