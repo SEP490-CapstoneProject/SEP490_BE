@@ -1,19 +1,32 @@
+using System.Text.Json.Serialization;
+
 namespace Application.Application.DTOs;
 
 public class EmployeeDto
 {
-    public int EmployeeId { get; set; }
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
     public int UserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Avatar { get; set; } = string.Empty;
     public string CoverImage { get; set; } = string.Empty;
+    public int EmployeeId => Id;
 }
 
 public class CompanyExternalDto
 {
-    public int CompanyId { get; set; }
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
     public string CompanyName { get; set; } = string.Empty;
-    public string Logo { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("avatar")]
+    public string Avatar { get; set; } = string.Empty;
+    [JsonPropertyName("avatarUrl")]
+    public string AvatarUrl { get; set; } = string.Empty;
+    public int CompanyId => Id;
+    public string Logo => !string.IsNullOrWhiteSpace(Avatar) ? Avatar : AvatarUrl;
 }
 
 public class CompanyPostDto

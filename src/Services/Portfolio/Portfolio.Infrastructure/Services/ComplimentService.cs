@@ -28,17 +28,19 @@ public class ComplimentService : IComplimentService
 
     public async Task<ComplimentDto> CreateAsync(CreateComplimentRequest request)
     {
-        if (!_currentUser.HasCompany)
-            throw new UnauthorizedAccessException("Company identity required.");
+        if (!_currentUser.CanScorePortfolio || _currentUser.UserId <= 0)
+            throw new UnauthorizedAccessException("Scoring role identity required.");
+        if (!request.Score.HasValue)
+            throw new ArgumentException("Score is required for compliment scoring.");
 
         var compliment = new Compliment
         {
             PortfolioId = request.PortfolioId,
-            CompanyId = _currentUser.CompanyId,
+            UserId = _currentUser.UserId,
             Content = request.Content,
             Score = request.Score,
             State = ComplimentState.Pending,
-            CreatedBy = _currentUser.CompanyId,
+            CreatedBy = _currentUser.UserId,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -54,16 +56,16 @@ public class ComplimentService : IComplimentService
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
         {
             await tx.RollbackAsync();
-            throw new InvalidOperationException("This company has already complimented this portfolio.");
+            throw new InvalidOperationException("This user has already complimented this portfolio.");
         }
     }
 
     public async Task<List<ComplimentDto>> GetByPortfolioAsync(int portfolioId)
     {
-        if (!_currentUser.HasCompany && !_currentUser.IsAdmin)
+        if (!_currentUser.CanScorePortfolio || _currentUser.UserId <= 0)
             throw new UnauthorizedAccessException("Authentication required.");
 
-        var list = await _repo.GetByPortfolioAndCompanyAsync(portfolioId, _currentUser.CompanyId);
+        var list = await _repo.GetByPortfolioAndUserAsync(portfolioId, _currentUser.UserId, _currentUser.IsAdmin);
         return list.Select(MapToDto).ToList();
     }
 
@@ -71,14 +73,16 @@ public class ComplimentService : IComplimentService
     {
         var compliment = await _repo.GetByIdAsync(id)
             ?? throw new KeyNotFoundException($"Compliment {id} not found.");
+        if (!request.Score.HasValue)
+            throw new ArgumentException("Score is required for compliment scoring.");
 
-        if (!_currentUser.IsAdmin && compliment.CompanyId != _currentUser.CompanyId)
+        if (!_currentUser.IsAdmin && compliment.UserId != _currentUser.UserId)
             throw new UnauthorizedAccessException("You do not own this compliment.");
 
         compliment.Content = request.Content;
         compliment.Score = request.Score;
         compliment.UpdatedAt = DateTime.UtcNow;
-        compliment.UpdatedBy = _currentUser.CompanyId;
+        compliment.UpdatedBy = _currentUser.UserId;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         var updated = await _repo.UpdateAsync(compliment);
@@ -93,12 +97,12 @@ public class ComplimentService : IComplimentService
         var compliment = await _repo.GetByIdAsync(id)
             ?? throw new KeyNotFoundException($"Compliment {id} not found.");
 
-        if (!_currentUser.IsAdmin && compliment.CompanyId != _currentUser.CompanyId)
+        if (!_currentUser.IsAdmin && compliment.UserId != _currentUser.UserId)
             throw new UnauthorizedAccessException("You do not own this compliment.");
 
         compliment.State = request.State;
         compliment.UpdatedAt = DateTime.UtcNow;
-        compliment.UpdatedBy = _currentUser.CompanyId;
+        compliment.UpdatedBy = _currentUser.UserId;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         var updated = await _repo.UpdateAsync(compliment);
@@ -113,11 +117,11 @@ public class ComplimentService : IComplimentService
         var compliment = await _repo.GetByIdAsync(id)
             ?? throw new KeyNotFoundException($"Compliment {id} not found.");
 
-        if (!_currentUser.IsAdmin && compliment.CompanyId != _currentUser.CompanyId)
+        if (!_currentUser.IsAdmin && compliment.UserId != _currentUser.UserId)
             throw new UnauthorizedAccessException("You do not own this compliment.");
 
         await using var tx = await _db.Database.BeginTransactionAsync();
-        await _repo.SoftDeleteAsync(id);
+        await _repo.MarkDeletedAsync(id, _currentUser.UserId);
         await RecalculateAggregatesAsync(compliment.PortfolioId);
         await tx.CommitAsync();
     }
@@ -126,15 +130,15 @@ public class ComplimentService : IComplimentService
     {
         var count = await _db.Compliments
             .IgnoreQueryFilters()
-            .CountAsync(c => c.PortfolioId == portfolioId && !c.IsDeleted);
+            .CountAsync(c => c.PortfolioId == portfolioId && c.State != ComplimentState.Deleted);
 
         var approvedCount = await _db.Compliments
             .IgnoreQueryFilters()
-            .CountAsync(c => c.PortfolioId == portfolioId && !c.IsDeleted && c.State == ComplimentState.Approved);
+            .CountAsync(c => c.PortfolioId == portfolioId && c.State != ComplimentState.Deleted && c.State == ComplimentState.Approved);
 
         var avgScore = await _db.Compliments
             .IgnoreQueryFilters()
-            .Where(c => c.PortfolioId == portfolioId && !c.IsDeleted && c.Score != null)
+            .Where(c => c.PortfolioId == portfolioId && c.State != ComplimentState.Deleted && c.Score != null)
             .Select(c => (decimal?)c.Score)
             .AverageAsync();
 
@@ -155,7 +159,7 @@ public class ComplimentService : IComplimentService
     {
         Id = c.Id,
         PortfolioId = c.PortfolioId,
-        CompanyId = c.CompanyId,
+        UserId = c.UserId,
         Content = c.Content,
         Score = c.Score,
         State = c.State,

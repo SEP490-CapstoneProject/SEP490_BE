@@ -6,6 +6,8 @@ public class Portfolio
     public int EmployeeId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
+    public bool IsMain { get; set; } = false;
+    public bool IsPublic { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 

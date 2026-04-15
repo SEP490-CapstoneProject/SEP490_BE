@@ -13,11 +13,13 @@ public class ComplimentRepository : IComplimentRepository
 
     public async Task<Compliment?> GetByIdAsync(int id)
         => await _context.Compliments.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+            .FirstOrDefaultAsync(c => c.Id == id && c.State != ComplimentState.Deleted);
 
-    public async Task<List<Compliment>> GetByPortfolioAndCompanyAsync(int portfolioId, int companyId)
-        => await _context.Compliments
-            .Where(c => c.PortfolioId == portfolioId)
+    public async Task<List<Compliment>> GetByPortfolioAndUserAsync(int portfolioId, int userId, bool isAdmin)
+        => await _context.Compliments.IgnoreQueryFilters()
+            .Where(c => c.PortfolioId == portfolioId
+                        && c.State != ComplimentState.Deleted
+                        && (isAdmin || c.UserId == userId))
             .ToListAsync();
 
     public async Task<Compliment> CreateAsync(Compliment compliment)
@@ -34,10 +36,13 @@ public class ComplimentRepository : IComplimentRepository
         return compliment;
     }
 
-    public async Task SoftDeleteAsync(int id)
+    public async Task MarkDeletedAsync(int id, int updatedBy)
     {
         await _context.Compliments.IgnoreQueryFilters()
             .Where(c => c.Id == id)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.IsDeleted, true));
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.State, ComplimentState.Deleted)
+                .SetProperty(c => c.UpdatedAt, DateTime.UtcNow)
+                .SetProperty(c => c.UpdatedBy, updatedBy));
     }
 }
