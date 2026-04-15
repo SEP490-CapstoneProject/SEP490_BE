@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Portfolio.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Portfolio.Infrastructure.Data;
 namespace Portfolio.Infrastructure.Migrations
 {
     [DbContext(typeof(PortfolioDbContext))]
-    partial class PortfolioDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260413123601_AddMainAndPublicToPortfolio")]
+    partial class AddMainAndPublicToPortfolio
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -133,7 +136,11 @@ namespace Portfolio.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Content")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAt")
@@ -143,6 +150,11 @@ namespace Portfolio.Infrastructure.Migrations
 
                     b.Property<int>("CreatedBy")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<int>("PortfolioId")
                         .HasColumnType("int");
@@ -161,18 +173,15 @@ namespace Portfolio.Infrastructure.Migrations
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
 
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("PortfolioId", "UserId")
+                    b.HasIndex("PortfolioId", "CompanyId")
                         .IsUnique()
-                        .HasDatabaseName("UX_Compliment_Portfolio_User_Active")
-                        .HasFilter("[State] <> 3");
+                        .HasDatabaseName("UX_Compliment_Portfolio_Company_Active")
+                        .HasFilter("[IsDeleted] = 0");
 
-                    b.HasIndex("PortfolioId", "UserId", "State")
-                        .HasDatabaseName("IX_Compliment_Portfolio_User_State");
+                    b.HasIndex("PortfolioId", "CompanyId", "State")
+                        .HasDatabaseName("IX_Compliment_Portfolio_Company_State");
 
                     b.ToTable("Compliment", (string)null);
                 });

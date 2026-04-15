@@ -11,6 +11,7 @@ public class UserProfileDbContext : DbContext
 
     public DbSet<Employee> Employees { get; set; }
     public DbSet<Company> Companies { get; set; }
+    public DbSet<Expert> Experts { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +52,21 @@ public class UserProfileDbContext : DbContext
 
             // Unique index on userId
             entity.HasIndex(c => c.UserId).IsUnique().HasDatabaseName("IX_company_userId");
+        });
+
+        modelBuilder.Entity<Expert>(entity =>
+        {
+            entity.ToTable("expert");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id).HasColumnName("expertId");
+            entity.Property(e => e.UserId).HasColumnName("userId").IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Phone).HasColumnName("phone").HasMaxLength(50);
+            entity.Property(e => e.CoverImage).HasColumnName("coverImage").HasMaxLength(500);
+            entity.Property(e => e.Avatar).HasColumnName("avatar").HasMaxLength(500);
+
+            entity.HasIndex(e => e.UserId).IsUnique().HasDatabaseName("IX_expert_userId");
         });
     }
 }

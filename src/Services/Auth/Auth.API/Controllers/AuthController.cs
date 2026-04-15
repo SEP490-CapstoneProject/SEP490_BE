@@ -107,6 +107,21 @@ public class AuthController : ControllerBase
         }
     }
 
+    [HttpPut("unlock-user/{id}")]
+    [Authorize(Roles = "ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> UnlockUser(int id)
+    {
+        try
+        {
+            await _authService.UnlockUserAsync(id);
+            return Ok(ApiResponse<object>.SuccessResponse(null, "User unlocked successfully"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+        }
+    }
+
     [HttpGet("users")]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<IEnumerable<UserDto>>>> GetAllUsers()

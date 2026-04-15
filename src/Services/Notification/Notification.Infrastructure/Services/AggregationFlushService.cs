@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Notification.Application.Helpers;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,46 +63,76 @@ public class AggregationFlushService : BackgroundService
         var db = _redis.GetDatabase();
         var server = _redis.GetServer(_redis.GetEndPoints().First());
 
-        // Scan for favorite aggregation keys using Scan instead of ScanAsync
-        var keys = server.Keys(pattern: "favorite_agg:*");
-        
-        foreach (var key in keys)
+        foreach (var key in server.Keys(pattern: "favorite_agg:*"))
         {
             if (cancellationToken.IsCancellationRequested) break;
+            await ProcessFavoriteAggregationKeyAsync(db, key, cancellationToken);
+        }
 
-            try
-            {
-                // FavoriteAggregationService writes via IDistributedCache (StackExchangeRedisCache),
-                // which stores payload in Redis hash field "data".
-                var rawData = await db.HashGetAsync(key, "data");
-                if (!rawData.HasValue) continue;
-
-                var bytes = (byte[]?)rawData;
-                if (bytes == null || bytes.Length == 0) continue;
-
-                var json = Encoding.UTF8.GetString(bytes);
-                var data = JsonSerializer.Deserialize<AggregationData>(json);
-                if (data == null) continue;
-
-                // Check if aggregation window has expired
-                var age = GetVietnamTime() - data.FirstAt;
-                if (age >= _aggregationWindow)
-                {
-                    await CreateAggregatedNotificationAsync(data, cancellationToken);
-                    await db.KeyDeleteAsync(key);
-                    
-                    _logger.LogInformation("Flushed aggregation for post {PostId}, owner {OwnerId}, count {Count}", 
-                        data.PostId, data.OwnerId, data.Count);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing aggregation key {Key}", key.ToString());
-            }
+        foreach (var key in server.Keys(pattern: "comment_reply_agg:*"))
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            await ProcessCommentReplyAggregationKeyAsync(db, key, cancellationToken);
         }
     }
 
-    private async Task CreateAggregatedNotificationAsync(AggregationData data, CancellationToken cancellationToken)
+    private async Task ProcessFavoriteAggregationKeyAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rawData = await db.HashGetAsync(key, "data");
+            if (!rawData.HasValue) return;
+
+            var bytes = (byte[]?)rawData;
+            if (bytes == null || bytes.Length == 0) return;
+
+            var json = Encoding.UTF8.GetString(bytes);
+            var data = JsonSerializer.Deserialize<AggregationData>(json);
+            if (data == null) return;
+
+            if (GetVietnamTime() - data.FirstAt < _aggregationWindow) return;
+
+            await CreateFavoriteAggregatedNotificationAsync(data, cancellationToken);
+            await db.KeyDeleteAsync(key);
+
+            _logger.LogInformation("Flushed favorite aggregation for post {PostId}, owner {OwnerId}, count {Count}",
+                data.PostId, data.OwnerId, data.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing favorite aggregation key {Key}", key.ToString());
+        }
+    }
+
+    private async Task ProcessCommentReplyAggregationKeyAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rawData = await db.HashGetAsync(key, "data");
+            if (!rawData.HasValue) return;
+
+            var bytes = (byte[]?)rawData;
+            if (bytes == null || bytes.Length == 0) return;
+
+            var json = Encoding.UTF8.GetString(bytes);
+            var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
+            if (data == null) return;
+
+            if (GetVietnamTime() - data.FirstAt < _aggregationWindow) return;
+
+            await CreateCommentReplyAggregatedNotificationAsync(data, cancellationToken);
+            await db.KeyDeleteAsync(key);
+
+            _logger.LogInformation("Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}",
+                data.ObjectId, data.OwnerId, data.Count, data.EventType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing comment/reply aggregation key {Key}", key.ToString());
+        }
+    }
+
+    private async Task CreateFavoriteAggregatedNotificationAsync(AggregationData data, CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
@@ -123,12 +154,56 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+    }
+
+    private async Task CreateCommentReplyAggregatedNotificationAsync(CommentReplyAggregationData data, CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+        var isReplyEvent = string.Equals(data.EventType, "post.reply.created", StringComparison.OrdinalIgnoreCase);
+        var title = isReplyEvent ? "Trả lời mới" : "Bình luận mới";
+        var content = isReplyEvent
+            ? (data.Count == 1
+                ? NotificationContentTemplates.PostReply.NewReply(data.FirstActorName)
+                : NotificationContentTemplates.PostReply.MultipleReplies(data.Count))
+            : (data.Count == 1
+                ? NotificationContentTemplates.PostComment.NewComment(data.FirstActorName)
+                : NotificationContentTemplates.PostComment.MultipleComments(data.Count));
+
+        var entity = new NotificationEntity
+        {
+            UserId = data.OwnerId,
+            Title = title,
+            Content = content,
+            Type = "COMMUNITY",
+            ObjectId = data.ObjectId,
+            ActorId = data.Count == 1 ? data.FirstActorId : null,
+            ActorType = data.Count == 1 ? "USER" : "SYSTEM",
+            CreatedAt = GetVietnamTime(),
+            IsRead = false
+        };
+
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+    }
+
+    private static async Task PublishNotificationAsync(
+        IServiceProvider services,
+        INotificationService notificationService,
+        NotificationEntity entity)
+    {
         await notificationService.CreateNotificationAsync(entity);
 
-        // Create notification event for realtime
         var createdEvent = await notificationService.BuildCreatedEventAsync(entity);
-        var eventPublisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+        var eventPublisher = services.GetRequiredService<INotificationEventPublisher>();
         await eventPublisher.PublishNotificationCreatedAsync(createdEvent);
+
+        var cache = services.GetService<IDistributedCache>();
+        if (cache != null)
+        {
+            await cache.RemoveAsync($"unread:{entity.UserId}");
+        }
     }
 
     private static DateTime GetVietnamTime()

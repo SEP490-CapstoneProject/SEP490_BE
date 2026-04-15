@@ -462,6 +462,19 @@ public class CommunityService : ICommunityService
         var post = await _repository.GetPostByIdAsync(postId);
         if (post is not null)
         {
+            var recipientUserId = post.UserId;
+            if (recipientUserId == userId)
+            {
+                return new PostCommentDto
+                {
+                    Id = created.Id,
+                    Author = new CommentUserDto { Id = authorDto.Id, Name = authorDto.Name, Avatar = authorDto.Avatar, Role = authorDto.Role },
+                    Content = created.Content,
+                    CreatedAt = created.CreatedAt.ToString("o"),
+                    Replies = new List<ReplyCommentDto>()
+                };
+            }
+
             var evt = new CommentCreatedEvent
             {
                 EventId = Guid.NewGuid().ToString("N"),
@@ -469,7 +482,7 @@ public class CommunityService : ICommunityService
                 Version = 1,
                 PostId = postId,
                 CommentId = created.Id,
-                UserId = post.UserId.ToString(),
+                UserId = recipientUserId.ToString(),
                 ActorId = userId.ToString(),
                 ActorType = "USER",
                 ObjectId = postId.ToString(),
@@ -540,34 +553,38 @@ public class CommunityService : ICommunityService
         var comment = await _repository.GetCommentByIdAsync(commentId);
         if (comment is not null)
         {
-            var evt = new ReplyCreatedEvent
+            var recipientUserId = replyToUserId ?? comment.UserId;
+            if (recipientUserId != userId)
             {
-                EventId = Guid.NewGuid().ToString("N"),
-                EventType = "post.reply.created",
-                Version = 1,
-                PostId = comment.CommunityPostId,
-                CommentId = commentId,
-                ParentCommentId = commentId,
-                UserId = comment.UserId.ToString(),
-                ActorId = userId.ToString(),
-                ActorType = "USER",
-                ObjectId = comment.CommunityPostId.ToString(),
-                Title = "Trả lời bình luận",
-                Type = "COMMUNITY",
-                ReplyToUserId = replyToUserId,
-                Content = created.Content,
-                CreatedAt = created.CreatedAt,
-                Author = new RealtimeUserDto
+                var evt = new ReplyCreatedEvent
                 {
-                    Id = authorDto.Id.ToString(),
-                    Name = authorDto.Name,
-                    Avatar = authorDto.Avatar,
-                    Role = authorDto.Role
-                },
-                ReplyToUser = replyToUserEventDto
-            };
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "post.reply.created",
+                    Version = 1,
+                    PostId = comment.CommunityPostId,
+                    CommentId = commentId,
+                    ParentCommentId = commentId,
+                    UserId = recipientUserId.ToString(),
+                    ActorId = userId.ToString(),
+                    ActorType = "USER",
+                    ObjectId = comment.CommunityPostId.ToString(),
+                    Title = "Trả lời bình luận",
+                    Type = "COMMUNITY",
+                    ReplyToUserId = replyToUserId,
+                    Content = created.Content,
+                    CreatedAt = created.CreatedAt,
+                    Author = new RealtimeUserDto
+                    {
+                        Id = authorDto.Id.ToString(),
+                        Name = authorDto.Name,
+                        Avatar = authorDto.Avatar,
+                        Role = authorDto.Role
+                    },
+                    ReplyToUser = replyToUserEventDto
+                };
 
-            await _eventPublisher.PublishReplyCreatedAsync(evt);
+                await _eventPublisher.PublishReplyCreatedAsync(evt);
+            }
         }
 
         return new ReplyCommentDto

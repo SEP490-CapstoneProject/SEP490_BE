@@ -134,6 +134,16 @@ builder.Services.AddHttpClient<IEmployeeServiceClient, EmployeeServiceClient>(cl
     client.BaseAddress = new Uri(serviceUrls["UserProfileService"] ?? "http://userprofile-service:8080");
 });
 
+builder.Services.AddHttpClient<IReviewerProfileClient, ReviewerProfileClient>(client =>
+{
+    client.BaseAddress = new Uri(serviceUrls["UserProfileService"] ?? "http://userprofile-service:8080");
+});
+
+builder.Services.AddHttpClient<IAuthServiceClient, AuthServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(serviceUrls["AuthService"] ?? "http://auth-service:8080");
+});
+
 // CORS
 builder.Services.AddCors(options =>
 {
