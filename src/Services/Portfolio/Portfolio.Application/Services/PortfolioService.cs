@@ -13,17 +13,23 @@ public class PortfolioService : IPortfolioService
 {
     private readonly IPortfolioRepository _repo;
     private readonly IEmployeeServiceClient _employeeClient;
+    private readonly IAuthServiceClient _authServiceClient;
+    private readonly IReviewerProfileClient _reviewerProfileClient;
     private readonly IEnumerable<IBlockHandler> _handlers;
     private readonly ILogger<PortfolioService> _logger;
 
     public PortfolioService(
         IPortfolioRepository repo,
         IEmployeeServiceClient employeeClient,
+        IAuthServiceClient authServiceClient,
+        IReviewerProfileClient reviewerProfileClient,
         IEnumerable<IBlockHandler> handlers,
         ILogger<PortfolioService> logger)
     {
         _repo = repo;
         _employeeClient = employeeClient;
+        _authServiceClient = authServiceClient;
+        _reviewerProfileClient = reviewerProfileClient;
         _handlers = handlers;
         _logger = logger;
     }
@@ -40,6 +46,12 @@ public class PortfolioService : IPortfolioService
         return list.Select(MapToDto);
     }
 
+    public async Task<PortfolioDto?> GetMainByEmployeeIdAsync(int employeeId)
+    {
+        var portfolio = await _repo.GetMainByEmployeeIdAsync(employeeId);
+        return portfolio == null ? null : MapToDto(portfolio);
+    }
+
     public async Task<PortfolioDto> CreateAsync(int employeeId, CreatePortfolioRequest request)
     {
         var valid = await _employeeClient.ValidateEmployeeAsync(employeeId);
@@ -51,10 +63,17 @@ public class PortfolioService : IPortfolioService
             EmployeeId = employeeId,
             Name = request.Name,
             Status = "active",
+            IsMain = request.IsMain,
+            IsPublic = request.IsPublic,
             CreatedAt = VietnamTime.Now()
         };
 
         var created = await _repo.CreateAsync(portfolio);
+        if (request.IsMain)
+        {
+            await _repo.SetMainPortfolioAsync(employeeId, created.Id);
+            created.IsMain = true;
+        }
         _logger.LogInformation("Portfolio {Id} created for employee {EmpId}", created.Id, employeeId);
         return MapToDto(created);
     }
@@ -69,6 +88,51 @@ public class PortfolioService : IPortfolioService
 
         portfolio.Name = request.Name;
         portfolio.Status = request.Status;
+        if (request.IsPublic.HasValue)
+            portfolio.IsPublic = request.IsPublic.Value;
+        if (request.IsMain.HasValue)
+            portfolio.IsMain = request.IsMain.Value;
+        portfolio.UpdatedAt = VietnamTime.Now();
+
+        if (request.IsMain == true)
+            await _repo.SetMainPortfolioAsync(employeeId, portfolio.Id);
+
+        var updated = await _repo.UpdateAsync(portfolio);
+        return MapToDto(updated);
+    }
+
+    public async Task<PortfolioDto> ToggleMainAsync(int id, int employeeId)
+    {
+        var portfolio = await _repo.GetByIdAsync(id)
+            ?? throw new KeyNotFoundException($"Portfolio {id} not found");
+
+        if (portfolio.EmployeeId != employeeId)
+            throw new UnauthorizedAccessException("You do not own this portfolio");
+
+        if (portfolio.IsMain)
+        {
+            portfolio.IsMain = false;
+            portfolio.UpdatedAt = VietnamTime.Now();
+            var updated = await _repo.UpdateAsync(portfolio);
+            return MapToDto(updated);
+        }
+
+        await _repo.SetMainPortfolioAsync(employeeId, portfolio.Id);
+        portfolio.IsMain = true;
+        portfolio.UpdatedAt = VietnamTime.Now();
+        var saved = await _repo.UpdateAsync(portfolio);
+        return MapToDto(saved);
+    }
+
+    public async Task<PortfolioDto> TogglePublicAsync(int id, int employeeId)
+    {
+        var portfolio = await _repo.GetByIdAsync(id)
+            ?? throw new KeyNotFoundException($"Portfolio {id} not found");
+
+        if (portfolio.EmployeeId != employeeId)
+            throw new UnauthorizedAccessException("You do not own this portfolio");
+
+        portfolio.IsPublic = !portfolio.IsPublic;
         portfolio.UpdatedAt = VietnamTime.Now();
 
         var updated = await _repo.UpdateAsync(portfolio);
@@ -86,16 +150,30 @@ public class PortfolioService : IPortfolioService
         return await _repo.DeleteAsync(id);
     }
 
-    public async Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status)
+    public async Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 10;
         if (pageSize > 100) pageSize = 100;
 
-        var (items, total) = await _repo.GetAllAsync(page, pageSize, status);
+        var (items, total, rankingMap) = await _repo.GetAllAsync(page, pageSize, status, sort, rankBy);
+        var mappedItems = items.Select(MapToDto).ToList();
+        foreach (var item in mappedItems)
+        {
+            var hasRanking = rankingMap.TryGetValue(item.PortfolioId, out var ranking);
+            item.Ranking = new RankingDto
+            {
+                TotalScore = hasRanking ? ranking.TotalScore : 0m,
+                AverageScore = hasRanking ? ranking.AverageScore : 0m,
+                RankPosition = hasRanking ? ranking.RankPosition : 0
+            };
+        }
+
+        await PopulateReviewersAsync(mappedItems, mappedItems.Select(x => x.PortfolioId));
+
         return new PagedResult<PortfolioDto>
         {
-            Items = items.Select(MapToDto).ToList(),
+            Items = mappedItems,
             Total = total,
             Page = page,
             PageSize = pageSize
@@ -129,7 +207,14 @@ public class PortfolioService : IPortfolioService
         portfolio.Name = request.Name;
         if (!string.IsNullOrWhiteSpace(request.Status))
             portfolio.Status = request.Status;
+        if (request.IsPublic.HasValue)
+            portfolio.IsPublic = request.IsPublic.Value;
+        if (request.IsMain.HasValue)
+            portfolio.IsMain = request.IsMain.Value;
         portfolio.UpdatedAt = VietnamTime.Now();
+
+        if (request.IsMain == true)
+            await _repo.SetMainPortfolioAsync(employeeId, portfolio.Id);
 
         // Remove all existing blocks
         portfolio.Blocks.Clear();
@@ -189,6 +274,8 @@ public class PortfolioService : IPortfolioService
             EmployeeId = request.EmployeeId,
             Name = request.Name,
             Status = "active",
+            IsMain = request.IsMain,
+            IsPublic = request.IsPublic,
             CreatedAt = VietnamTime.Now()
         };
 
@@ -216,6 +303,11 @@ public class PortfolioService : IPortfolioService
 
         _repo.AddAsync(portfolio);
         await _repo.CommitAsync();
+        if (request.IsMain)
+        {
+            await _repo.SetMainPortfolioAsync(request.EmployeeId, portfolio.Id);
+            portfolio.IsMain = true;
+        }
 
         scope.Complete();
 
@@ -246,10 +338,122 @@ public class PortfolioService : IPortfolioService
         EmployeeId = p.EmployeeId,
         PortfolioName = p.Name,
         Status = p.Status,
+        IsMain = p.IsMain,
+        IsPublic = p.IsPublic,
         CreatedAt = p.CreatedAt,
         UpdatedAt = p.UpdatedAt,
         Blocks = new List<BlockDto>()
     };
+
+    private async Task PopulateReviewersAsync(List<PortfolioDto> items, IEnumerable<int> portfolioIds)
+    {
+        if (items.Count == 0) return;
+
+        var reviewerUserIdsByPortfolio = await _repo.GetReviewerUserIdsByPortfolioIdsAsync(portfolioIds);
+        var allUserIds = reviewerUserIdsByPortfolio.Values.SelectMany(x => x).Distinct().ToList();
+        if (allUserIds.Count == 0) return;
+
+        var authUsers = await _authServiceClient.GetUsersByIdsAsync(allUserIds);
+        var recruiterUserIds = authUsers.Values
+            .Where(u => string.Equals(u.Role, "RECRUITER", StringComparison.OrdinalIgnoreCase))
+            .Select(u => u.Id)
+            .ToList();
+        var expertUserIds = authUsers.Values
+            .Where(u => string.Equals(u.Role, "EXPERT", StringComparison.OrdinalIgnoreCase))
+            .Select(u => u.Id)
+            .ToList();
+
+        var recruiterProfiles = await _reviewerProfileClient.GetCompanyProfilesByUserIdsAsync(recruiterUserIds);
+        var expertProfiles = await _reviewerProfileClient.GetExpertProfilesByUserIdsAsync(expertUserIds);
+
+        foreach (var item in items)
+        {
+            if (!reviewerUserIdsByPortfolio.TryGetValue(item.PortfolioId, out var userIds))
+            {
+                item.Reviewers = new List<PortfolioReviewerDto>();
+                continue;
+            }
+
+            item.Reviewers = BuildReviewers(userIds, authUsers, recruiterProfiles, expertProfiles);
+        }
+    }
+
+    private async Task PopulateReviewersAsync(List<PortfolioWithComplimentDto> items, IEnumerable<int> portfolioIds)
+    {
+        if (items.Count == 0) return;
+
+        var reviewerUserIdsByPortfolio = await _repo.GetReviewerUserIdsByPortfolioIdsAsync(portfolioIds);
+        var allUserIds = reviewerUserIdsByPortfolio.Values.SelectMany(x => x).Distinct().ToList();
+        if (allUserIds.Count == 0) return;
+
+        var authUsers = await _authServiceClient.GetUsersByIdsAsync(allUserIds);
+        var recruiterUserIds = authUsers.Values
+            .Where(u => string.Equals(u.Role, "RECRUITER", StringComparison.OrdinalIgnoreCase))
+            .Select(u => u.Id)
+            .ToList();
+        var expertUserIds = authUsers.Values
+            .Where(u => string.Equals(u.Role, "EXPERT", StringComparison.OrdinalIgnoreCase))
+            .Select(u => u.Id)
+            .ToList();
+
+        var recruiterProfiles = await _reviewerProfileClient.GetCompanyProfilesByUserIdsAsync(recruiterUserIds);
+        var expertProfiles = await _reviewerProfileClient.GetExpertProfilesByUserIdsAsync(expertUserIds);
+
+        foreach (var item in items)
+        {
+            if (!reviewerUserIdsByPortfolio.TryGetValue(item.Id, out var userIds))
+            {
+                item.Reviewers = new List<PortfolioReviewerDto>();
+                continue;
+            }
+
+            item.Reviewers = BuildReviewers(userIds, authUsers, recruiterProfiles, expertProfiles);
+        }
+    }
+
+    private static List<PortfolioReviewerDto> BuildReviewers(
+        IEnumerable<int> userIds,
+        Dictionary<int, AuthInternalUserDto> authUsers,
+        Dictionary<int, ReviewerProfileDto> recruiterProfiles,
+        Dictionary<int, ReviewerProfileDto> expertProfiles)
+    {
+        return userIds
+            .Select(userId =>
+            {
+                if (!authUsers.TryGetValue(userId, out var authUser))
+                {
+                    return null;
+                }
+
+                var role = authUser.Role;
+                if (!string.Equals(role, "RECRUITER", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(role, "EXPERT", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                ReviewerProfileDto? profile = null;
+                if (string.Equals(role, "RECRUITER", StringComparison.OrdinalIgnoreCase))
+                {
+                    recruiterProfiles.TryGetValue(userId, out profile);
+                }
+                else
+                {
+                    expertProfiles.TryGetValue(userId, out profile);
+                }
+
+                return new PortfolioReviewerDto
+                {
+                    UserId = userId,
+                    Role = role,
+                    Name = profile?.Name,
+                    Avatar = profile?.Avatar
+                };
+            })
+            .Where(x => x != null)
+            .Cast<PortfolioReviewerDto>()
+            .ToList();
+    }
 
     public async Task<PagedResult<PortfolioWithComplimentDto>> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams)
     {
@@ -258,6 +462,7 @@ public class PortfolioService : IPortfolioService
         if (queryParams.PageSize > 100) queryParams.PageSize = 100;
 
         var (items, total) = await _repo.GetAllWithComplimentFilterAsync(queryParams);
+        await PopulateReviewersAsync(items, items.Select(x => x.Id));
         return new PagedResult<PortfolioWithComplimentDto>
         {
             Items = items,

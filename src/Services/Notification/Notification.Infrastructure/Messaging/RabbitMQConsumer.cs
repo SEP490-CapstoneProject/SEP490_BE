@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Notification.Application.Helpers;
 using Notification.Application.Interfaces;
 using Notification.Application.Services;
 using Notification.Domain.Entities;
@@ -28,7 +29,7 @@ public class RabbitMQConsumer : BackgroundService
     private const string DlxExchange = "skillsnap.events.dlx";
     private const string DlqQueue = "notification.events.dlq";
 
-    private static readonly string[] BindingKeys = { "post.*", "connection.*", "portfolio.*", "job.*", "system.*" };
+    private static readonly string[] BindingKeys = { "post.#", "connection.*", "portfolio.*", "job.*", "system.*" };
     private static readonly HashSet<string> NotificationEventTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "post.favorite",
@@ -136,6 +137,13 @@ public class RabbitMQConsumer : BackgroundService
                 await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 return;
             }
+            
+            if (!string.IsNullOrWhiteSpace(evt.ActorId) &&
+                string.Equals(evt.UserId, evt.ActorId, StringComparison.OrdinalIgnoreCase))
+            {
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
 
             // Realtime-only counter event: never create notification (prevents unlike => like notification bug)
             if (string.Equals(evt.EventType, "post.favorite.changed", StringComparison.OrdinalIgnoreCase))
@@ -152,8 +160,7 @@ public class RabbitMQConsumer : BackgroundService
             }
 
             if (string.IsNullOrWhiteSpace(evt.Type) ||
-                string.IsNullOrWhiteSpace(evt.Title) ||
-                string.IsNullOrWhiteSpace(evt.Content))
+                string.IsNullOrWhiteSpace(evt.Title))
             {
                 _logger.LogWarning(
                     "Skip invalid notification event payload. EventType={EventType}, UserId={UserId}, Type={Type}",
@@ -186,15 +193,37 @@ public class RabbitMQConsumer : BackgroundService
                     // If not aggregated, fall through to create notification immediately
                 }
             }
+            else if (evt.EventType == "post.comment.created" || evt.EventType == "post.reply.created")
+            {
+                var aggregationService = scope.ServiceProvider.GetService<CommentReplyAggregationService>();
+                if (aggregationService != null && !string.IsNullOrWhiteSpace(evt.ActorId))
+                {
+                    var actorName = !string.IsNullOrWhiteSpace(evt.Author?.Name) ? evt.Author.Name : "Ai đó";
+                    var objectId = string.IsNullOrWhiteSpace(evt.ObjectId) ? "0" : evt.ObjectId;
+                    var isAggregated = await aggregationService.TryAggregateAsync(
+                        evt.EventType,
+                        objectId,
+                        evt.UserId,
+                        evt.ActorId,
+                        actorName);
+
+                    if (isAggregated)
+                    {
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
+                    }
+                }
+            }
 
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
             var eventPublisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+            var actorNameForContent = !string.IsNullOrWhiteSpace(evt.Author?.Name) ? evt.Author.Name : "Ai đó";
 
             var entity = new NotificationEntity
             {
                 UserId = evt.UserId,
                 Title = evt.Title,
-                Content = evt.Content,
+                Content = ResolveNotificationContent(evt, actorNameForContent),
                 Type = evt.Type,
                 ObjectId = evt.ObjectId,
                 ActorId = evt.ActorId,
@@ -233,6 +262,21 @@ public class RabbitMQConsumer : BackgroundService
             return content.Substring(0, index).Trim();
         }
         return "Ai đó";
+    }
+
+    private static string ResolveNotificationContent(NotificationEvent evt, string actorName)
+    {
+        if (string.Equals(evt.EventType, "post.comment.created", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotificationContentTemplates.PostComment.NewComment(actorName);
+        }
+
+        if (string.Equals(evt.EventType, "post.reply.created", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotificationContentTemplates.PostReply.NewReply(actorName);
+        }
+
+        return evt.Content;
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

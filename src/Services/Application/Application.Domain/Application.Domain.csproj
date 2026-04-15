@@ -6,12 +6,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-<<<<<<< HEAD:src/Services/Advertisement/Advertisement.API/Advertisement.API.csproj
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
-  </ItemGroup>
-
-=======
->>>>>>> 52bc06426d6e7755e66ecdaab8d748db4b31d45e:src/Services/Application/Application.Domain/Application.Domain.csproj
 </Project>

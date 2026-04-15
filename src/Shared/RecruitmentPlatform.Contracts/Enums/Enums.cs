@@ -5,7 +5,8 @@ public enum UserRole
     USER = 1,
     RECRUITER = 2,
     ADMIN = 3,
-    MODERATOR = 4
+    MODERATOR = 4,
+    EXPERT = 5
 }
 
 public enum UserStatus

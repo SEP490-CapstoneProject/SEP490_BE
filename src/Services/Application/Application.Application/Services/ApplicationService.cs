@@ -257,7 +257,7 @@ public class ApplicationService : IApplicationService
     private static CompanyDto MapCompanyDto(CompanyExternalDto? company) => company == null ? new CompanyDto() : new CompanyDto
     {
         CompanyId = company.CompanyId,
-        CompanyName = company.CompanyName,
+        CompanyName = !string.IsNullOrWhiteSpace(company.CompanyName) ? company.CompanyName : company.Name,
         Logo = company.Logo
     };
 
