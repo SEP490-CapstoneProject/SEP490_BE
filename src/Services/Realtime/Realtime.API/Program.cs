@@ -117,10 +117,16 @@ else
 
 builder.Services.AddSingleton<IRealtimePushService, SignalRPushService>();
 
+// Debouncer: gom tin nhắn trong 2 giây rồi push 1 lần — tránh spam notification
+builder.Services.AddSingleton<Realtime.Infrastructure.Messaging.NewMessageDebouncer>();
+
 builder.Services.AddHostedService<CommentEventConsumer>();
 builder.Services.AddHostedService<ReplyEventConsumer>();
 builder.Services.AddHostedService<NotificationEventConsumer>();
 builder.Services.AddHostedService<PostFavoriteEventConsumer>();
+builder.Services.AddHostedService<ConnectionRequestedEventConsumer>();
+builder.Services.AddHostedService<ConnectionAcceptedEventConsumer>();
+builder.Services.AddHostedService<NewMessageNotificationEventConsumer>();
 
 var app = builder.Build();
 

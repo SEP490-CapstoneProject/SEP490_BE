@@ -1,0 +1,93 @@
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+using Realtime.Application.Interfaces;
+using RecruitmentPlatform.Contracts.Realtime;
+
+namespace Realtime.Infrastructure.Messaging;
+
+/// <summary>
+/// Debounces NewMessageNotificationEvent theo từng user (toUserId).
+/// Gom TẤT CẢ tin nhắn mới từ mọi room trong cửa sổ 2 giây thành 1 push duy nhất.
+/// 
+/// Ví dụ: Room A gửi 2 tin, Room B gửi 3 tin trong 2 giây
+///   → Push 1 lần: { toUserId: X, totalNewMessages: 5 }
+/// </summary>
+public sealed class NewMessageDebouncer : IDisposable
+{
+    private sealed class PendingBatch
+    {
+        public int   ToUserId    { get; }
+        public int   TotalCount  { get; set; }
+        public Timer? Timer      { get; set; }
+
+        public PendingBatch(int toUserId) => ToUserId = toUserId;
+    }
+
+    private static readonly TimeSpan DebounceWindow = TimeSpan.FromSeconds(2);
+
+    private readonly IRealtimePushService _pushService;
+    private readonly ILogger<NewMessageDebouncer> _logger;
+    private readonly ConcurrentDictionary<int, PendingBatch> _pending = new();
+
+    public NewMessageDebouncer(IRealtimePushService pushService, ILogger<NewMessageDebouncer> logger)
+    {
+        _pushService = pushService;
+        _logger      = logger;
+    }
+
+    /// <summary>
+    /// Đăng ký 1 tin nhắn mới. Cộng dồn vào batch của toUserId và reset/bắt đầu timer 2s.
+    /// </summary>
+    public void Add(NewMessageNotificationEvent evt)
+    {
+        var batch = _pending.GetOrAdd(evt.ToUserId, uid => new PendingBatch(uid));
+
+        lock (batch)
+        {
+            batch.TotalCount++;
+
+            if (batch.Timer == null)
+            {
+                // Tin nhắn đầu tiên trong window — bắt đầu đếm ngược
+                batch.Timer = new Timer(OnTimerFired, evt.ToUserId, DebounceWindow, Timeout.InfiniteTimeSpan);
+            }
+            else
+            {
+                // Tin nhắn tiếp theo — reset timer
+                batch.Timer.Change(DebounceWindow, Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        _logger.LogDebug(
+            "Debouncer: buffered msg for user {ToUserId}, total pending={Total}",
+            evt.ToUserId, batch.TotalCount);
+    }
+
+    private void OnTimerFired(object? state)
+    {
+        if (state is not int toUserId) return;
+
+        if (!_pending.TryRemove(toUserId, out var batch)) return;
+
+        Timer? timer;
+        lock (batch)
+        {
+            timer       = batch.Timer;
+            batch.Timer = null;
+        }
+        timer?.Dispose();
+
+        _logger.LogInformation(
+            "Debouncer: push {Total} new message(s) to user {ToUserId}",
+            batch.TotalCount, toUserId);
+
+        _ = _pushService.PushNewMessageNotificationAsync(toUserId, batch.TotalCount);
+    }
+
+    public void Dispose()
+    {
+        foreach (var batch in _pending.Values)
+            lock (batch) { batch.Timer?.Dispose(); }
+        _pending.Clear();
+    }
+}
