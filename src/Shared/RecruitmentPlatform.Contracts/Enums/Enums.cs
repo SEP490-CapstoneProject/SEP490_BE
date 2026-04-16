@@ -41,7 +41,8 @@ public enum ConnectionStatus
 {
     PENDING,
     MATCHED,
-    REJECTED
+    STORED,
+    BLOCK
 }
 
 public enum CommunityPostStatus
