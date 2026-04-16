@@ -12,12 +12,18 @@ public class ConnectionController : ControllerBase
     private readonly IConnectionService _service;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> _hubContext;
+    private readonly IConnectionEventPublisher _eventPublisher;
 
-    public ConnectionController(IConnectionService service, IHttpClientFactory httpClientFactory, Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> hubContext)
+    public ConnectionController(
+        IConnectionService service,
+        IHttpClientFactory httpClientFactory,
+        Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> hubContext,
+        IConnectionEventPublisher eventPublisher)
     {
         _service = service;
         _httpClientFactory = httpClientFactory;
         _hubContext = hubContext;
+        _eventPublisher = eventPublisher;
     }
 
     [HttpPost]
@@ -33,6 +39,23 @@ public class ConnectionController : ControllerBase
         };
 
         var created = await _service.CreateConnectionAsync(conn);
+
+        // 1) Realtime via ChatHub (direct — for users connected to this service)
+        await _hubContext.Clients.Group($"user_{created.UserIdTo}").SendAsync("ConnectionRequested", new
+        {
+            connectionId = created.Id,
+            fromUserId   = created.UserIdFrom,
+            toUserId     = created.UserIdTo,
+            profileId    = created.ProfileId,
+            status       = created.Status,
+            createdAt    = created.CreateAt
+        });
+
+        // 2) Realtime via Realtime Service (for users connected to /hubs/realtime)
+        _ = _eventPublisher.PublishConnectionRequestedAsync(
+            created.Id, created.UserIdFrom, created.UserIdTo,
+            created.ProfileId, created.CreateAt);
+
         return CreatedAtAction(nameof(GetConnectionById), new { id = created.Id }, created);
     }
 
@@ -64,12 +87,62 @@ public class ConnectionController : ControllerBase
             return BadRequest(new { error = "Invalid status value" });
         }
 
-        var updated = await _service.UpdateConnectionStatusAsync(id, status);
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int currentUserId))
+        {
+            return Unauthorized(new { error = "Invalid or missing user ID in token" });
+        }
+
+        var updated = await _service.UpdateConnectionStatusAsync(id, status, currentUserId);
         if (updated == null) return NotFound();
+
+        // Realtime notifications based on the new status
+        if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED)
+        {
+            // 1) Via ChatHub (direct)
+            await _hubContext.Clients.Group($"user_{updated.UserIdFrom}").SendAsync("ConnectionAccepted", new
+            {
+                connectionId = updated.Id,
+                fromUserId   = updated.UserIdFrom,
+                toUserId     = updated.UserIdTo,
+                status       = updated.Status
+            });
+
+            // 2) Via Realtime Service
+            _ = _eventPublisher.PublishConnectionAcceptedAsync(
+                updated.Id, updated.UserIdFrom, updated.UserIdTo,
+                updated.ConnectionAt ?? DateTime.UtcNow);
+        }
+        else if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.BLOCK)
+        {
+            // Notify the other party that the connection was blocked
+            int blockedUserId = updated.UserIdFrom == currentUserId ? updated.UserIdTo : updated.UserIdFrom;
+            await _hubContext.Clients.Group($"user_{blockedUserId}").SendAsync("ConnectionBlocked", new
+            {
+                connectionId = updated.Id,
+                blockedBy    = currentUserId,
+                status       = updated.Status
+            });
+        }
+
         return Ok(updated);
     }
 
     // Room creation is handled automatically when a Connection is matched; manual room endpoints removed
+
+    /// <summary>
+    /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED).
+    /// Trả về: { status: "PENDING" | "MATCHED" | "BLOCK" } hoặc { status: null } nếu không tìm thấy.
+    /// </summary>
+    [HttpGet("status/by-users")]
+    public async Task<IActionResult> GetConnectionStatusByUsers([FromQuery] int userId1, [FromQuery] int userId2)
+    {
+        if (userId1 <= 0 || userId2 <= 0)
+            return BadRequest(new { error = "userId1 and userId2 are required" });
+
+        var status = await _service.GetConnectionStatusByUsersAsync(userId1, userId2);
+        return Ok(new { status });
+    }
 
     [HttpGet("rooms/summary/{userId}")]
     public async Task<IActionResult> GetRoomSummaries(int userId)
