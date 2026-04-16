@@ -19,11 +19,13 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Connection.Domain\Connection.Domain.csproj" />
     <ProjectReference Include="..\Connection.Application\Connection.Application.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
