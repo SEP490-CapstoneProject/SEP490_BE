@@ -7,11 +7,13 @@ namespace Connection.API.Hubs;
 public class ChatHub : Hub
 {
     private readonly IConnectionService _service;
+    private readonly IConnectionEventPublisher _eventPublisher;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int RoomId, int UserId)> ActiveRoomConnections = new();
 
-    public ChatHub(IConnectionService service)
+    public ChatHub(IConnectionService service, IConnectionEventPublisher eventPublisher)
     {
         _service = service;
+        _eventPublisher = eventPublisher;
     }
 
     public override async Task OnConnectedAsync()
@@ -138,6 +140,11 @@ public class ChatHub : Hub
                         lastAt = dto.CreatedAt,
                         unreadCount
                     });
+
+                // Publish to Realtime Service (for users on /hubs/realtime)
+                _ = _eventPublisher.PublishNewMessageNotificationAsync(
+                    created.Id, roomId, senderId, targetUserId,
+                    dto.Content, dto.CreatedAt);
             }
         }
     }

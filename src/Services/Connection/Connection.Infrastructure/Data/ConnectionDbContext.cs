@@ -23,6 +23,7 @@ public class ConnectionDbContext : DbContext
             entity.Property(e => e.UserIdTo).IsRequired();
             entity.Property(e => e.ProfileId);
             entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.BlockId).HasDefaultValue(0);
             entity.Property(e => e.CreateAt).HasDefaultValueSql("GETDATE()");
             entity.Property(e => e.ConnectionAt);
         });
