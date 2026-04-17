@@ -39,6 +39,13 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.ComplimentCount).HasDefaultValue(0);
             e.Property(x => x.ApprovedComplimentCount).HasDefaultValue(0);
             e.Property(x => x.AverageScore).HasColumnType("decimal(3,2)").IsRequired(false);
+            e.Property(x => x.Embedding).HasColumnType("nvarchar(max)").IsRequired(false);
+            e.Property(x => x.EmbeddingVersion).HasDefaultValue(0);
+            e.Property(x => x.EmbeddingUpdatedAt).IsRequired(false);
+            e.Property(x => x.EmbeddingStatus).HasMaxLength(20).HasDefaultValue("Pending");
+            e.Property(x => x.ModerationStatus).HasMaxLength(20).HasDefaultValue("PendingReview");
+            e.Property(x => x.ModerationReason).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.ModeratedAt).IsRequired(false);
             e.HasIndex(x => x.EmployeeId).HasDatabaseName("IX_Portfolio_EmployeeId");
             e.HasIndex(x => new { x.EmployeeId, x.IsMain })
                 .HasDatabaseName("UX_Portfolio_EmployeeId_IsMain")

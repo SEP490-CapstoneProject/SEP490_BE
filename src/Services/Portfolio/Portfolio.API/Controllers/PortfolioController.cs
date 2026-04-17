@@ -143,6 +143,28 @@ public class PortfolioController : ControllerBase
         return Ok(portfolio);
     }
 
+    [HttpGet("{id:int}/match-jobs")]
+    [AllowAnonymous]
+    public async Task<IActionResult> MatchJobs(
+        int id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _portfolioService.MatchJobsForPortfolioAsync(id, page, pageSize, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("internal/matching-candidates")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetMatchingCandidates(
+        [FromQuery] int limit = 150,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _portfolioService.GetMatchingCandidatesAsync(limit, cancellationToken);
+        return Ok(result);
+    }
+
     [HttpGet("employee/{employeeId:int}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetByEmployee(int employeeId)

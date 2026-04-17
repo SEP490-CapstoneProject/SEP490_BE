@@ -10,7 +10,9 @@ using Portfolio.Application.Services;
 using Portfolio.Infrastructure.Repositories;
 using Portfolio.Infrastructure.Clients;
 using Portfolio.Infrastructure.Services;
+using Portfolio.Infrastructure.Messaging;
 using Portfolio.Application.BlockHandlers;
+using RecruitmentPlatform.AI.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -104,6 +106,9 @@ builder.Services.AddScoped<BlockService>(); // concrete registration for Portfol
 builder.Services.AddScoped<IBlockTypeService, BlockTypeService>();
 builder.Services.AddScoped<IComplimentService, ComplimentService>();
 builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
+builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
+builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
+builder.Services.AddHostedService<PortfolioEmbeddingConsumer>();
 
 // Block Handlers
 builder.Services.AddScoped<IBlockHandler, IntroBlockHandler>();
@@ -144,6 +149,12 @@ builder.Services.AddHttpClient<IAuthServiceClient, AuthServiceClient>(client =>
     client.BaseAddress = new Uri(serviceUrls["AuthService"] ?? "http://auth-service:8080");
 });
 
+builder.Services.AddHttpClient<ICompanyMatchingClient, CompanyMatchingClient>(client =>
+{
+    client.BaseAddress = new Uri(serviceUrls["CompanyService"] ?? "http://company-service:8080");
+    client.Timeout = TimeSpan.FromSeconds(2);
+});
+
 // CORS
 builder.Services.AddCors(options =>
 {
@@ -168,6 +179,21 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PortfolioDbContext>();
     db.Database.Migrate();
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('Portfolio', 'Embedding') IS NULL
+    ALTER TABLE [Portfolio] ADD [Embedding] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Portfolio', 'EmbeddingVersion') IS NULL
+    ALTER TABLE [Portfolio] ADD [EmbeddingVersion] INT NOT NULL CONSTRAINT DF_Portfolio_EmbeddingVersion DEFAULT 0;
+IF COL_LENGTH('Portfolio', 'EmbeddingUpdatedAt') IS NULL
+    ALTER TABLE [Portfolio] ADD [EmbeddingUpdatedAt] DATETIME2 NULL;
+IF COL_LENGTH('Portfolio', 'EmbeddingStatus') IS NULL
+    ALTER TABLE [Portfolio] ADD [EmbeddingStatus] NVARCHAR(20) NOT NULL CONSTRAINT DF_Portfolio_EmbeddingStatus DEFAULT 'Pending';
+IF COL_LENGTH('Portfolio', 'ModerationStatus') IS NULL
+    ALTER TABLE [Portfolio] ADD [ModerationStatus] NVARCHAR(20) NOT NULL CONSTRAINT DF_Portfolio_ModerationStatus DEFAULT 'PendingReview';
+IF COL_LENGTH('Portfolio', 'ModerationReason') IS NULL
+    ALTER TABLE [Portfolio] ADD [ModerationReason] NVARCHAR(500) NULL;
+IF COL_LENGTH('Portfolio', 'ModeratedAt') IS NULL
+    ALTER TABLE [Portfolio] ADD [ModeratedAt] DATETIME2 NULL;");
 }
 
 // Pipeline - Enable Swagger in all environments

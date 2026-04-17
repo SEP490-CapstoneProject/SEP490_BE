@@ -15,6 +15,13 @@ public class Portfolio
     public int ComplimentCount { get; set; } = 0;
     public int ApprovedComplimentCount { get; set; } = 0;
     public decimal? AverageScore { get; set; }
+    public string? Embedding { get; set; }
+    public int EmbeddingVersion { get; set; }
+    public DateTime? EmbeddingUpdatedAt { get; set; }
+    public string EmbeddingStatus { get; set; } = "Pending";
+    public string ModerationStatus { get; set; } = "PendingReview";
+    public string? ModerationReason { get; set; }
+    public DateTime? ModeratedAt { get; set; }
 
     public ICollection<PortfolioBlock> Blocks { get; set; } = new List<PortfolioBlock>();
     public ICollection<Compliment> Compliments { get; set; } = new List<Compliment>();
