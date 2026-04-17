@@ -228,16 +228,14 @@ WHERE [EmployeeId] = {employeeId}
             .Select(p => p.Id)
             .ToListAsync();
 
-        var rankSource = publicPortfolioIds
-            .Select(id =>
+        var publicPortfolioIdSet = publicPortfolioIds.ToHashSet();
+        var rankSource = scoreMap
+            .Where(x => publicPortfolioIdSet.Contains(x.Key))
+            .Select(x => new
             {
-                var hasScore = scoreMap.TryGetValue(id, out var score);
-                return new
-                {
-                    PortfolioId = id,
-                    TotalScore = hasScore ? score.TotalScore : 0m,
-                    AverageScore = hasScore ? score.AverageScore : 0m
-                };
+                PortfolioId = x.Key,
+                TotalScore = x.Value.TotalScore,
+                AverageScore = x.Value.AverageScore
             });
 
         var orderedRankSource = rankBy == PortfolioRankBy.total
