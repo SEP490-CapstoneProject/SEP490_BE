@@ -22,4 +22,7 @@ public class CreatePaymentLinkRequest
     
     [JsonPropertyName("returnUrl")]
     public string? ReturnUrl { get; set; }
+
+    [JsonPropertyName("signature")]
+    public string Signature { get; set; } = null!;
 }

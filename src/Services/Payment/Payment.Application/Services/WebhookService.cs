@@ -181,7 +181,9 @@ public class WebhookService : IWebhookService
                         PaymentId = payment.Id,
                         SubscriptionId = payment.SubscriptionId,
                         UserId = payment.UserId,
+                        PlanId = payment.PlanId,
                         Amount = payment.Amount,
+                        Provider = payment.Provider.ToString(),
                         TransactionId = payment.TransactionId
                     }),
                     Status = OutboxStatus.Pending,
