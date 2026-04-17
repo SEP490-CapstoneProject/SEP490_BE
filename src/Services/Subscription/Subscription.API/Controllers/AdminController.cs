@@ -125,6 +125,25 @@ public class AdminController : ControllerBase
 
     #region Plan Features
 
+    [HttpGet("plans/{planId}/features")]
+    public async Task<IActionResult> GetPlanFeatures(int planId)
+    {
+        try
+        {
+            var result = await _adminService.GetPlanFeaturesAsync(planId);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting features for plan {PlanId}", planId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     [HttpPost("plans/{planId}/features")]
     public async Task<IActionResult> AddPlanFeature(int planId, [FromBody] CreatePlanFeatureRequest request)
     {

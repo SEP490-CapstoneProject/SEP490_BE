@@ -17,7 +17,7 @@ public class PaymentEventConsumer : BackgroundService
     private readonly ILogger<PaymentEventConsumer> _logger;
     private IModel? _channel;
     private const string QueueName = "subscription_payment_events";
-    private const string ExchangeName = "payment_events";
+    private const string ExchangeName = "skillsnap.events";
 
     public PaymentEventConsumer(
         IConnection connection,

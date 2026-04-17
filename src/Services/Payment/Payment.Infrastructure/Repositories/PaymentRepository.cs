@@ -111,7 +111,7 @@ public class PaymentRepository : IPaymentRepository
     public async Task<bool> UpdateStatusConditionalAsync(
         Guid paymentId, 
         PaymentStatus newStatus, 
-        byte[] expectedRowVersion)
+        int expectedRowVersion)
     {
         var payment = await _context.Payments
             .FirstOrDefaultAsync(p => p.Id == paymentId);
@@ -119,12 +119,13 @@ public class PaymentRepository : IPaymentRepository
         if (payment == null) return false;
 
         // Check RowVersion for optimistic concurrency
-        if (!payment.RowVersion.SequenceEqual(expectedRowVersion))
+        if (payment.RowVersion != expectedRowVersion)
         {
             return false; // Another process updated it
         }
 
         payment.Status = newStatus;
+        payment.RowVersion += 1;
         payment.UpdatedAt = DateTime.UtcNow;
 
         try

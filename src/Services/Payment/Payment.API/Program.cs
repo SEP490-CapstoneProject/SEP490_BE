@@ -63,27 +63,49 @@ builder.Services.AddHttpClient<PayOSHttpClient>(client =>
 // Plan Price Provider (HTTP client to Subscription Service)
 builder.Services.AddHttpClient<IPlanPriceProvider, HttpPlanPriceProvider>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "http://subscription-service:5008");
+    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "https://api-gateway.grayforest-11aba44e.southeastasia.azurecontainerapps.io");
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
 // RabbitMQ
-// builder.Services.AddSingleton<IConnection>(sp =>
-// {
-//     var factory = new ConnectionFactory
-//     {
-//         HostName = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq",
-//         Port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672"),
-//         UserName = builder.Configuration["RabbitMQ:Username"] ?? "guest",
-//         Password = builder.Configuration["RabbitMQ:Password"] ?? "guest",
-//         AutomaticRecoveryEnabled = true,
-//         NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
-//     };
-//     return factory.CreateConnection();
-// });
+builder.Services.AddSingleton<IConnection>(sp =>
+{
+    var host = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq";
+    var port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
+    var username = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+    var password = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+    var virtualHost = builder.Configuration["RabbitMQ:VirtualHost"] ?? "/";
+    var useSsl = bool.TryParse(builder.Configuration["RabbitMQ:UseSsl"], out var ssl) && ssl;
 
-// builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublisher>();
-builder.Services.AddSingleton<IPaymentEventPublisher, FakePaymentEventPublisher>();
+    if (!useSsl && port == 5671)
+    {
+        useSsl = true;
+    }
+
+    var factory = new ConnectionFactory
+    {
+        HostName = host,
+        Port = port,
+        UserName = username,
+        Password = password,
+        VirtualHost = virtualHost,
+        AutomaticRecoveryEnabled = true,
+        NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
+    };
+
+    if (useSsl)
+    {
+        factory.Ssl = new SslOption
+        {
+            Enabled = true,
+            ServerName = host
+        };
+    }
+
+    return factory.CreateConnection();
+});
+
+builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublisher>();
 
 
 // Metrics & Alerting
@@ -184,6 +206,25 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
     dbContext.Database.Migrate();
+    dbContext.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('Payments','Metadata') IS NULL
+    ALTER TABLE [Payments] ADD [Metadata] NVARCHAR(2000) NULL;
+
+IF COL_LENGTH('OutboxEvents','NextRetryAt') IS NULL
+    ALTER TABLE [OutboxEvents] ADD [NextRetryAt] DATETIME2 NULL;
+
+IF COL_LENGTH('OutboxEvents','LastError') IS NULL
+    ALTER TABLE [OutboxEvents] ADD [LastError] NVARCHAR(2000) NULL;
+
+IF COL_LENGTH('ProcessedEvents','EventHash') IS NULL
+    ALTER TABLE [ProcessedEvents] ADD [EventHash] NVARCHAR(64) NULL;
+
+IF COL_LENGTH('ProcessedEvents','OrderCode') IS NULL
+    ALTER TABLE [ProcessedEvents] ADD [OrderCode] NVARCHAR(50) NULL;
+
+IF COL_LENGTH('ProcessedEvents','CorrelationId') IS NULL
+    ALTER TABLE [ProcessedEvents] ADD [CorrelationId] NVARCHAR(100) NULL;
+");
 }
 
 // Configure HTTP pipeline - Enable Swagger in all environments
