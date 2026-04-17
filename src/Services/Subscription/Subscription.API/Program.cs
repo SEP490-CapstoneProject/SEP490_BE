@@ -18,21 +18,6 @@ using Subscription.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-<<<<<<< HEAD
-// Add services to the container.
-// Configure OpenAPI/Swagger
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-=======
 // Add Azure Key Vault configuration
 builder.Configuration.AddAzureKeyVault();
 
@@ -185,7 +170,6 @@ var app = builder.Build();
 // Configure pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
->>>>>>> 52bc06426d6e7755e66ecdaab8d748db4b31d45e
 
 app.UseCors("AllowAll");
 app.UseAuthentication();

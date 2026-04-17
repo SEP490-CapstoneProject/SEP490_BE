@@ -76,12 +76,12 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         if (plan == null)
             throw new KeyNotFoundException($"Plan with ID {planId} not found");
 
-        // Check if plan has active subscriptions
-        var hasActiveSubscriptions = await _context.Subscriptions
-            .AnyAsync(s => s.PlanId == planId && s.Status == Domain.Enums.SubscriptionStatus.Active);
+        // Prevent FK violation: plan cannot be removed when any subscription references it
+        var hasAnySubscriptions = await _context.Subscriptions
+            .AnyAsync(s => s.PlanId == planId);
 
-        if (hasActiveSubscriptions)
-            throw new InvalidOperationException("Cannot delete plan with active subscriptions");
+        if (hasAnySubscriptions)
+            throw new InvalidOperationException("Cannot delete plan because it is referenced by existing subscriptions");
 
         var oldValues = JsonSerializer.Serialize(plan);
 
@@ -125,6 +125,20 @@ public class AdminSubscriptionService : IAdminSubscriptionService
     }
 
     // Plan Feature CRUD Operations
+    public async Task<IEnumerable<Subscription.Application.DTOs.Admin.PlanFeatureDto>> GetPlanFeaturesAsync(int planId)
+    {
+        var planExists = await _context.Plans.AnyAsync(p => p.Id == planId);
+        if (!planExists)
+            throw new KeyNotFoundException($"Plan with ID {planId} not found");
+
+        var features = await _context.PlanFeatures
+            .Where(f => f.PlanId == planId)
+            .OrderBy(f => f.Id)
+            .ToListAsync();
+
+        return features.Select(MapToPlanFeatureDto);
+    }
+
     public async Task<Subscription.Application.DTOs.Admin.PlanFeatureDto> AddPlanFeatureAsync(int planId, CreatePlanFeatureRequest request)
     {
         // Check if plan exists

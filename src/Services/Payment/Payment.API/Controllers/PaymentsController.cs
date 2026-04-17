@@ -61,6 +61,23 @@ public class PaymentsController : ControllerBase
         return Ok(payment);
     }
 
+    [HttpGet("by-order/{orderCode}")]
+    public async Task<IActionResult> GetPaymentByOrderCode(string orderCode)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+            return Unauthorized(new { message = "Invalid user token" });
+
+        var payment = await _paymentService.GetPaymentByOrderCodeAsync(orderCode);
+        if (payment == null)
+            return NotFound(new { message = "Payment not found" });
+
+        if (payment.UserId != userId.Value && !User.IsInRole("Admin"))
+            return Forbid();
+
+        return Ok(payment);
+    }
+
     [HttpGet("my-history")]
     public async Task<IActionResult> GetMyPaymentHistory([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
