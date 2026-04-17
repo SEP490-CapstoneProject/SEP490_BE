@@ -18,4 +18,6 @@ public interface IPortfolioService
     Task<bool> DeleteAsync(int id, int employeeId);
     Task<CreatePortfolioResponse> CreatePortfolioAsync(CreatePortfolioRequest request, Dictionary<string, IFormFile> fileMap);
     Task<PagedResult<PortfolioWithComplimentDto>> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams);
+    Task<JobMatchPagedResult> MatchJobsForPortfolioAsync(int portfolioId, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default);
 }

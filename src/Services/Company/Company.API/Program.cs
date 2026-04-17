@@ -6,9 +6,11 @@ using Company.Infrastructure.Clients;
 using Company.Infrastructure.Configuration;
 using Company.Infrastructure.Data;
 using Company.Infrastructure.Repositories;
+using Company.Infrastructure.Messaging;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using RecruitmentPlatform.AI.DependencyInjection;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -58,6 +60,9 @@ builder.Services.AddDbContext<CompanyDbContext>(options =>
 builder.Services.AddScoped<ICompanyPostRepository, CompanyPostRepository>();
 builder.Services.AddScoped<ICompanyPostService, CompanyPostService>();
 builder.Services.AddScoped<ICompanyCacheRepository, CompanyCacheRepository>();
+builder.Services.AddScoped<ICompanyEmbeddingEventPublisher, CompanyEmbeddingEventPublisher>();
+builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
+builder.Services.AddHostedService<CompanyEmbeddingConsumer>();
 
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
 builder.Services.AddHttpClient<IMediaUploadClient, MediaUploadClient>(client =>
@@ -71,6 +76,13 @@ builder.Services.AddHttpClient<ICompanyProfileClient, UserProfileCompanyClient>(
 {
     client.BaseAddress = new Uri(userProfileServiceUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+var portfolioServiceUrl = builder.Configuration["ServiceUrls:PortfolioService"] ?? "http://portfolio-service:8080";
+builder.Services.AddHttpClient<IPortfolioMatchingClient, PortfolioMatchingClient>(client =>
+{
+    client.BaseAddress = new Uri(portfolioServiceUrl);
+    client.Timeout = TimeSpan.FromSeconds(2);
 });
 
 var jwtSecret = builder.Configuration["JwtSettings:Secret"];
@@ -117,6 +129,15 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CompanyDbContext>();
     db.Database.Migrate();
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embedding') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embedding] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingVersion') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingVersion] INT NOT NULL CONSTRAINT DF_CompanyPost_EmbeddingVersion DEFAULT 0;
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingUpdatedAt') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingUpdatedAt] DATETIME2 NULL;
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingStatus') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingStatus] NVARCHAR(20) NOT NULL CONSTRAINT DF_CompanyPost_EmbeddingStatus DEFAULT 'Pending';");
 }
 
 // Enable Swagger in all environments

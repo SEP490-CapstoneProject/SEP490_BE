@@ -10,13 +10,4 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Remove="Class1.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Company.Domain\Company.Domain.csproj" />
-    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.AI\RecruitmentPlatform.AI.csproj" />
-  </ItemGroup>
-
 </Project>

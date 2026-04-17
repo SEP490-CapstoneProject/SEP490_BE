@@ -304,4 +304,29 @@ WHERE [EmployeeId] = {employeeId}
             _ => source.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
         };
     }
+
+    public async Task<List<Portfolio.Domain.Entities.Portfolio>> GetPublicPortfoliosForMatchingAsync(int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 150);
+        return await _context.Portfolios
+            .AsNoTracking()
+            .Include(p => p.Blocks)
+            .Where(p => p.IsPublic)
+            .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.UpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Take(safeLimit)
+            .ToListAsync();
+    }
+
+    public async Task UpdateEmbeddingAsync(int portfolioId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus)
+    {
+        var portfolio = await _context.Portfolios.FirstOrDefaultAsync(p => p.Id == portfolioId);
+        if (portfolio == null) return;
+
+        portfolio.Embedding = embedding;
+        portfolio.EmbeddingVersion = embeddingVersion;
+        portfolio.EmbeddingUpdatedAt = embeddingUpdatedAt;
+        portfolio.EmbeddingStatus = embeddingStatus;
+        await _context.SaveChangesAsync();
+    }
 }

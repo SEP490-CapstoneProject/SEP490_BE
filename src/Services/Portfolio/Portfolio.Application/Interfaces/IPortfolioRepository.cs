@@ -19,4 +19,6 @@ public interface IPortfolioRepository
     Task<Dictionary<string, BlockType>> GetBlockTypesAsync();
     Task<Dictionary<int, List<int>>> GetReviewerUserIdsByPortfolioIdsAsync(IEnumerable<int> portfolioIds);
     Task<(List<PortfolioWithComplimentDto> Items, int Total)> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams);
+    Task<List<Portfolio.Domain.Entities.Portfolio>> GetPublicPortfoliosForMatchingAsync(int limit);
+    Task UpdateEmbeddingAsync(int portfolioId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus);
 }
