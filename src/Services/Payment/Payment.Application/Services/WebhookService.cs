@@ -139,7 +139,7 @@ public class WebhookService : IWebhookService
         string eventHash,
         string correlationId)
     {
-        var transaction = await _paymentRepository.BeginTransactionAsync();
+        using var transaction = await _paymentRepository.BeginTransactionAsync();
 
         try
         {
@@ -194,13 +194,13 @@ public class WebhookService : IWebhookService
                 });
             }
 
-            await ((dynamic)transaction).CommitAsync();
+            transaction.Commit();
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Transaction failed");
-            await ((dynamic)transaction).RollbackAsync();
+            transaction.Rollback();
             return false;
         }
     }

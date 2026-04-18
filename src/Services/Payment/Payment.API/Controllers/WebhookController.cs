@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Payment.Application.Interfaces;
+using System.Linq;
 using System.Text.Json;
 
 namespace Payment.API.Controllers;
@@ -43,12 +44,12 @@ public class WebhookController : ControllerBase
             var rawBody = await reader.ReadToEndAsync();
             Request.Body.Position = 0;
 
-            // Step 2: Get signature (header first, then fallback from body.signature)
-            var signature = Request.Headers["x-payos-signature"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(signature))
-            {
-                signature = TryExtractSignatureFromBody(rawBody);
-            }
+            // Step 2: Select signature source (prefer PayOS standard body.signature)
+            var headerSignature = Request.Headers["x-signature"].FirstOrDefault();
+            var payosHeaderSignature = Request.Headers["x-payos-signature"].FirstOrDefault();
+            var bodySignature = TryExtractSignatureFromBody(rawBody);
+
+            var signature = SelectSignature(bodySignature, headerSignature, payosHeaderSignature, out var signatureSource);
 
             if (string.IsNullOrEmpty(signature))
             {
@@ -60,6 +61,13 @@ public class WebhookController : ControllerBase
 
             _logger.LogInformation("PayOS webhook received. CorrelationId: {CorrelationId}, BodyLength: {Length}", 
                 correlationId, rawBody.Length);
+            _logger.LogInformation(
+                "PayOS webhook signature source selected. CorrelationId: {CorrelationId}, Source: {Source}, BodySig: {BodySig}, XSig: {XSig}, XPayOSSig: {XPayOSSig}",
+                correlationId,
+                signatureSource,
+                DescribeSignature(bodySignature),
+                DescribeSignature(headerSignature),
+                DescribeSignature(payosHeaderSignature));
 
             // Step 3: Process webhook (validates, verifies, processes in transaction)
             var result = await _webhookService.ProcessWebhookAsync(rawBody, signature, correlationId);
@@ -104,5 +112,44 @@ public class WebhookController : ControllerBase
         }
 
         return null;
+    }
+
+    private static string? SelectSignature(
+        string? bodySignature,
+        string? xSignature,
+        string? xPayOSSignature,
+        out string source)
+    {
+        if (!string.IsNullOrWhiteSpace(bodySignature))
+        {
+            source = "body.signature";
+            return bodySignature;
+        }
+
+        if (!string.IsNullOrWhiteSpace(xSignature))
+        {
+            source = "x-signature";
+            return xSignature;
+        }
+
+        if (!string.IsNullOrWhiteSpace(xPayOSSignature))
+        {
+            source = "x-payos-signature";
+            return xPayOSSignature;
+        }
+
+        source = "missing";
+        return null;
+    }
+
+    private static string DescribeSignature(string? signature)
+    {
+        if (string.IsNullOrWhiteSpace(signature))
+        {
+            return "none";
+        }
+
+        var isHex = signature.All(Uri.IsHexDigit);
+        return $"len={signature.Length},hex={(isHex ? "yes" : "no")}";
     }
 }
