@@ -4,6 +4,7 @@ using Payment.Application.DTOs;
 using Payment.Application.Interfaces;
 using Payment.Domain.Entities;
 using Payment.Infrastructure.Providers.PayOS.Models;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -85,19 +86,26 @@ public class PayOSProvider : IPaymentProvider
         _logger.LogDebug("Validating PayOS webhook signature. Signature: {Signature}",
             signature.Length > 10 ? signature[..10] + "..." : signature);
 
-        var isValid = PayOSSignatureValidator.Validate(rawBody, signature, _settings.ChecksumKey);
+        var validator = new PayOSSignatureValidator(_settings.ChecksumKey);
+        var validation = validator.ValidateSignatureWithDetails(rawBody, signature);
+        var candidateHashes = validator.ComputeCanonicalCandidateHashesForDebug(rawBody);
 
-        if (!isValid)
+        if (!validation.IsValid)
         {
-            _logger.LogWarning("PayOS webhook signature validation FAILED. Signature: {Signature}",
-                signature.Length > 10 ? signature[..10] + "..." : signature);
+            _logger.LogWarning(
+                "PayOS webhook signature validation FAILED. Signature: {Signature}, RawHash: {RawHash}, CanonicalHash: {CanonicalHash}, Tried: {TriedStrategies}, Candidates: {Candidates}",
+                signature.Length > 10 ? signature[..10] + "..." : signature,
+                validator.ComputeRawBodyHashForDebug(rawBody),
+                validator.ComputeCanonicalHashForDebug(rawBody),
+                string.Join(",", validation.TriedStrategies),
+                string.Join(",", candidateHashes.Select(kv => $"{kv.Key}:{kv.Value}")));
         }
         else
         {
-            _logger.LogDebug("PayOS webhook signature validation PASSED");
+            _logger.LogInformation("PayOS webhook signature validation PASSED. Strategy: {Strategy}", validation.MatchedStrategy);
         }
 
-        return isValid;
+        return validation.IsValid;
     }
 
     /// <summary>

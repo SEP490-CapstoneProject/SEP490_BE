@@ -26,7 +26,7 @@ public class OutboxEventRepository : IOutboxEventRepository
     public async Task<List<OutboxEvent>> GetPendingEventsAsync(int batchSize = 10)
     {
         return await _context.OutboxEvents
-            .Where(e => e.Status == OutboxStatus.Pending)
+            .Where(e => e.Status == OutboxStatus.Pending && e.EventType == "PaymentSucceeded")
             .OrderBy(e => e.CreatedAt)
             .Take(batchSize)
             .ToListAsync();
