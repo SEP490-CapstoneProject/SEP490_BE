@@ -76,6 +76,12 @@ PayOS return/cancel URL đang cấu hình về FE:
 1. `https://sep-490-web-fork.vercel.app/payment/result`
 2. `https://sep-490-web-fork.vercel.app/payment/cancel`
 
+Backend sẽ tự gắn thêm query params vào return/cancel URL:
+
+1. `paymentId`
+2. `subscriptionId`
+3. `orderCode`
+
 Tại các trang này, FE nên gọi lại API để đọc trạng thái thật từ backend (không tin trạng thái chỉ từ query param redirect).
 
 ## 6) Poll/check trạng thái sau thanh toán
@@ -87,6 +93,10 @@ Tại các trang này, FE nên gọi lại API để đọc trạng thái thật
 - `Pending` / `Processing`: tiếp tục polling.
 - `Succeeded`: thanh toán thành công.
 - `Failed` / `Cancelled` / `Expired`: hiển thị thất bại và cho phép thanh toán lại.
+
+Fallback nếu không có `paymentId` nhưng có `orderCode`:
+
+`GET /api/payments/by-order/{orderCode}` (Bearer)
 
 ### 6.2 Subscription active check
 
@@ -113,6 +123,7 @@ Dùng để cập nhật feature gate trong UI.
 2. `400` ở create payment: hiển thị message backend trả về.
 3. `409` ở subscribe (nếu có subscription active): điều hướng user về trang quản lý gói hiện tại.
 4. Network timeout: giữ `subscriptionId` + `paymentId` ở local state để user resume flow.
+5. Nếu trang `pay.payos.vn/.../success` bị `application error`, FE vẫn xử lý bình thường bằng polling backend ở trang return/cancel của FE.
 
 ## 9) Lưu ý tích hợp
 

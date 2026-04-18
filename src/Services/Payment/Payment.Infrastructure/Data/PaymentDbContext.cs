@@ -121,7 +121,7 @@ public class PaymentDbContext : DbContext
         modelBuilder.Entity<ProcessedEvent>(entity =>
         {
             entity.ToTable("ProcessedEvents");
-            entity.HasKey(e => e.Id);
+            entity.HasKey(e => e.EventId);
 
             entity.Property(e => e.EventId)
                 .HasMaxLength(100)

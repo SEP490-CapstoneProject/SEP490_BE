@@ -11,12 +11,16 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
 {
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
+    private readonly string _embeddingModel;
     private readonly ILogger<OpenAiEmbeddingService> _logger;
 
     public OpenAiEmbeddingService(HttpClient httpClient, IConfiguration configuration, ILogger<OpenAiEmbeddingService> logger)
     {
         _httpClient = httpClient;
         _apiKey = configuration["OpenAI:ApiKey"] ?? string.Empty;
+        _embeddingModel = string.IsNullOrWhiteSpace(configuration["OpenAI:EmbeddingModel"])
+            ? "text-embedding-3-small"
+            : configuration["OpenAI:EmbeddingModel"]!;
         _logger = logger;
     }
 
@@ -36,7 +40,7 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
         request.Content = JsonContent.Create(new
         {
-            model = "text-embedding-3-small",
+            model = _embeddingModel,
             input = text
         });
 

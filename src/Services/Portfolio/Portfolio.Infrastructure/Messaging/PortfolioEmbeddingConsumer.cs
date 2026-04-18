@@ -41,20 +41,60 @@ public sealed class PortfolioEmbeddingConsumer : BackgroundService
             Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
         };
 
-        _connection = await factory.CreateConnectionAsync(stoppingToken);
-        _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                _connection = await factory.CreateConnectionAsync(stoppingToken);
+                _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-        const string exchange = "skillsnap.events";
-        const string queue = "portfolio.embedding.generate";
-        await _channel.ExchangeDeclareAsync(exchange, ExchangeType.Topic, durable: true, cancellationToken: stoppingToken);
-        await _channel.QueueDeclareAsync(queue, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
-        await _channel.QueueBindAsync(queue, exchange, "portfolio.changed", cancellationToken: stoppingToken);
+                const string exchange = "skillsnap.events";
+                const string queue = "portfolio.embedding.generate";
+                await _channel.ExchangeDeclareAsync(exchange, ExchangeType.Topic, durable: true, cancellationToken: stoppingToken);
+                await _channel.QueueDeclareAsync(queue, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
+                await _channel.QueueBindAsync(queue, exchange, "portfolio.changed", cancellationToken: stoppingToken);
 
-        var consumer = new AsyncEventingBasicConsumer(_channel);
-        consumer.ReceivedAsync += HandleMessageAsync;
-        await _channel.BasicConsumeAsync(queue, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
+                var consumer = new AsyncEventingBasicConsumer(_channel);
+                consumer.ReceivedAsync += HandleMessageAsync;
+                await _channel.BasicConsumeAsync(queue, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
 
-        await Task.Delay(Timeout.Infinite, stoppingToken);
+                await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Portfolio embedding consumer failed to connect RabbitMQ, retrying in 15 seconds.");
+
+                try
+                {
+                    if (_channel is not null)
+                    {
+                        await _channel.CloseAsync(stoppingToken);
+                    }
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    if (_connection is not null)
+                    {
+                        await _connection.CloseAsync(stoppingToken);
+                    }
+                }
+                catch
+                {
+                }
+
+                _channel = null;
+                _connection = null;
+                await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
+            }
+        }
     }
 
     private async Task HandleMessageAsync(object sender, BasicDeliverEventArgs args)
