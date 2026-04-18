@@ -76,15 +76,21 @@ public class PayOSProvider : IPaymentProvider
     /// </summary>
     public bool ValidateSignature(string rawBody, string signature, string? clientId = null)
     {
+        if (string.IsNullOrWhiteSpace(signature))
+        {
+            _logger.LogWarning("PayOS webhook signature is empty");
+            return false;
+        }
+
         _logger.LogDebug("Validating PayOS webhook signature. Signature: {Signature}",
-            signature?.Substring(0, 10) + "...");
+            signature.Length > 10 ? signature[..10] + "..." : signature);
 
         var isValid = PayOSSignatureValidator.Validate(rawBody, signature, _settings.ChecksumKey);
 
         if (!isValid)
         {
             _logger.LogWarning("PayOS webhook signature validation FAILED. Signature: {Signature}",
-                signature?.Substring(0, 10) + "...");
+                signature.Length > 10 ? signature[..10] + "..." : signature);
         }
         else
         {

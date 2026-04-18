@@ -14,6 +14,9 @@ namespace Company.Infrastructure.Messaging;
 
 public sealed class CompanyEmbeddingConsumer : BackgroundService
 {
+    private const int RetryDelaySeconds = 15;
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<CompanyEmbeddingConsumer> _logger;
@@ -40,20 +43,36 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
             Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
         };
 
-        _connection = await factory.CreateConnectionAsync(stoppingToken);
-        _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                _connection = await factory.CreateConnectionAsync(stoppingToken);
+                _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-        const string exchange = "skillsnap.events";
-        const string queue = "company.embedding.generate";
-        await _channel.ExchangeDeclareAsync(exchange, ExchangeType.Topic, durable: true, cancellationToken: stoppingToken);
-        await _channel.QueueDeclareAsync(queue, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
-        await _channel.QueueBindAsync(queue, exchange, "company.post.changed", cancellationToken: stoppingToken);
+                const string exchange = "skillsnap.events";
+                const string queue = "company.embedding.generate";
+                await _channel.ExchangeDeclareAsync(exchange, ExchangeType.Topic, durable: true, cancellationToken: stoppingToken);
+                await _channel.QueueDeclareAsync(queue, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
+                await _channel.QueueBindAsync(queue, exchange, "company.post.changed", cancellationToken: stoppingToken);
 
-        var consumer = new AsyncEventingBasicConsumer(_channel);
-        consumer.ReceivedAsync += HandleMessageAsync;
-        await _channel.BasicConsumeAsync(queue, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
+                var consumer = new AsyncEventingBasicConsumer(_channel);
+                consumer.ReceivedAsync += HandleMessageAsync;
+                await _channel.BasicConsumeAsync(queue, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
 
-        await Task.Delay(Timeout.Infinite, stoppingToken);
+                await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Company embedding consumer failed to connect RabbitMQ, retrying in {RetryDelaySeconds} seconds.", RetryDelaySeconds);
+                await CleanupRabbitMqAsync(stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(RetryDelaySeconds), stoppingToken);
+            }
+        }
     }
 
     private async Task HandleMessageAsync(object sender, BasicDeliverEventArgs args)
@@ -63,8 +82,8 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
         try
         {
             var body = Encoding.UTF8.GetString(args.Body.ToArray());
-            using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("PostId", out var idElement) || !idElement.TryGetInt32(out var postId))
+            var payload = JsonSerializer.Deserialize<CompanyPostChangedEvent>(body, JsonOptions);
+            if (payload is null || payload.PostId <= 0)
             {
                 await _channel.BasicAckAsync(args.DeliveryTag, false);
                 return;
@@ -75,7 +94,7 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
             var textNormalizer = scope.ServiceProvider.GetRequiredService<ITextNormalizer>();
             var embeddingService = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
 
-            var post = await repo.GetPostEntityByIdAsync(postId);
+            var post = await repo.GetPostEntityByIdAsync(payload.PostId);
             if (post == null)
             {
                 await _channel.BasicAckAsync(args.DeliveryTag, false);
@@ -94,7 +113,7 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
             var embedding = await embeddingService.CreateEmbeddingAsync(text);
             var serialized = JsonSerializer.Serialize(embedding);
             var version = Math.Max(1, post.EmbeddingVersion + 1);
-            await repo.UpdateEmbeddingAsync(postId, serialized, version, DateTime.UtcNow, embedding.Length > 0 ? "Ready" : "Failed");
+            await repo.UpdateEmbeddingAsync(payload.PostId, serialized, version, DateTime.UtcNow, embedding.Length > 0 ? "Ready" : "Failed");
 
             await _channel.BasicAckAsync(args.DeliveryTag, false);
         }
@@ -107,9 +126,38 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_channel is not null) await _channel.CloseAsync(cancellationToken);
-        if (_connection is not null) await _connection.CloseAsync(cancellationToken);
+        await CleanupRabbitMqAsync(cancellationToken);
         await base.StopAsync(cancellationToken);
+    }
+
+    private async Task CleanupRabbitMqAsync(CancellationToken cancellationToken)
+    {
+        if (_channel is not null)
+        {
+            try
+            {
+                await _channel.CloseAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Ignoring channel close failure during cleanup.");
+            }
+        }
+
+        if (_connection is not null)
+        {
+            try
+            {
+                await _connection.CloseAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Ignoring connection close failure during cleanup.");
+            }
+        }
+
+        _channel = null;
+        _connection = null;
     }
 
     private static List<string> ExtractSkills(params string?[] textParts)
@@ -130,5 +178,10 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
             .Where(x => x.Length > 1)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private sealed class CompanyPostChangedEvent
+    {
+        public int PostId { get; init; }
     }
 }

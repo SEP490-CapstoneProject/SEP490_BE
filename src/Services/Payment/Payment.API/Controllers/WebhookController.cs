@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Payment.Application.Interfaces;
+using System.Text.Json;
 
 namespace Payment.API.Controllers;
 
@@ -42,11 +43,16 @@ public class WebhookController : ControllerBase
             var rawBody = await reader.ReadToEndAsync();
             Request.Body.Position = 0;
 
-            // Step 2: Get signature from header
+            // Step 2: Get signature (header first, then fallback from body.signature)
             var signature = Request.Headers["x-payos-signature"].FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(signature))
+            {
+                signature = TryExtractSignatureFromBody(rawBody);
+            }
+
             if (string.IsNullOrEmpty(signature))
             {
-                _logger.LogWarning("PayOS webhook missing signature header. CorrelationId: {CorrelationId}", 
+                _logger.LogWarning("PayOS webhook missing signature in both header and body. CorrelationId: {CorrelationId}",
                     correlationId);
                 // Still return 200 so PayOS accepts the webhook URL
                 return Ok(new { code = "01", message = "Missing signature" });
@@ -74,5 +80,29 @@ public class WebhookController : ControllerBase
             _logger.LogError(ex, "PayOS webhook exception. CorrelationId: {CorrelationId}", correlationId);
             return Ok(new { code = "99", message = "Internal error" });
         }
+    }
+
+    private static string? TryExtractSignatureFromBody(string rawBody)
+    {
+        if (string.IsNullOrWhiteSpace(rawBody))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawBody);
+            if (document.RootElement.TryGetProperty("signature", out var signatureElement) &&
+                signatureElement.ValueKind == JsonValueKind.String)
+            {
+                return signatureElement.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
     }
 }

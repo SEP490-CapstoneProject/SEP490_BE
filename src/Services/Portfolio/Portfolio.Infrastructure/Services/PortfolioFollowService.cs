@@ -128,6 +128,7 @@ public class PortfolioFollowService : IPortfolioFollowService
             var blockDto = _blockService.MapBlockToDto(firstBlock);
             preview = new PortfolioPreviewDto
             {
+                BlockId = firstBlock.Id,
                 Type = blockDto.Type,
                 Variant = blockDto.Variant,
                 Data = blockDto.Data

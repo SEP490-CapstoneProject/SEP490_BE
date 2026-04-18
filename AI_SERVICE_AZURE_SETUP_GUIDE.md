@@ -62,7 +62,9 @@ Thành phần chính:
 | `ConnectionStrings__DefaultConnection` | Yes | SQL Server connection string |
 | `OpenAI__BaseUrl` | Yes | `https://api.openai.com` |
 | `OpenAI__ApiKey` | Yes | OpenAI API key thật |
-| `RabbitMQ__HostName` | Yes | hostname RabbitMQ (internal) |
+| `OpenAI__EmbeddingModel` | Yes | `text-embedding-3-small` (khuyến nghị) |
+| `RabbitMQ__HostName` | Yes | hostname RabbitMQ (ưu tiên key này) |
+| `RabbitMQ__Host` | Optional | fallback tương thích nếu môi trường cũ dùng `Host` |
 | `RabbitMQ__UserName` | Yes | user RabbitMQ |
 | `RabbitMQ__Password` | Yes | password RabbitMQ |
 | `RabbitMQ__VirtualHost` | Yes | `/` hoặc vhost riêng |
@@ -87,6 +89,28 @@ Thành phần chính:
 
 > Khuyến nghị dùng Azure Key Vault + Managed Identity để nạp secrets.
 
+### 3.4 Config contract RabbitMQ (chuẩn hóa)
+
+- Ưu tiên đặt đầy đủ theo contract mới:
+  - `RabbitMQ__HostName`
+  - `RabbitMQ__UserName`
+  - `RabbitMQ__Password`
+  - `RabbitMQ__VirtualHost`
+  - `RabbitMQ__Port`
+- Chỉ dùng `RabbitMQ__Host`/`RabbitMQ__Username` như fallback tương thích; không dùng làm cấu hình chính cho môi trường mới.
+
+### 3.5 OpenAI model + key setup (public API)
+
+- Service đang gọi OpenAI public API endpoint `/v1/embeddings`.
+- Model embedding đã được cấu hình qua env:
+  - `OpenAI__EmbeddingModel` (ví dụ: `text-embedding-3-small`)
+- API key bắt buộc:
+  - `OpenAI__ApiKey`
+- Base URL:
+  - `OpenAI__BaseUrl=https://api.openai.com`
+
+> Nếu chưa set `OpenAI__EmbeddingModel`, service sẽ fallback về `text-embedding-3-small` để tương thích ngược; vẫn nên set explicit trên production để tránh drift giữa môi trường.
+
 ---
 
 ## 4. Checklist deploy Azure
@@ -97,9 +121,12 @@ Thành phần chính:
    - portfolio-service
    - company-service
 4. Verify startup log:
-   - không lỗi OpenAI key
-   - không lỗi RabbitMQ connection
-   - consumer queue đã bắt đầu listen
+    - không lỗi OpenAI key
+   - model OpenAI load đúng từ config (`OpenAI__EmbeddingModel`)
+   - nếu RabbitMQ lỗi: service **vẫn start API core**, consumer retry theo chu kỳ (non-fatal startup)
+   - khi RabbitMQ sẵn sàng: consumer queue bắt đầu listen bình thường
+5. Verify build context:
+   - image phải include shared AI module (`src/Shared/RecruitmentPlatform.AI`) cho service có AI integration.
 
 ---
 
@@ -109,6 +136,8 @@ Thành phần chính:
 
 - Portfolio swagger: `/swagger`
 - Company swagger: `/swagger`
+
+> Readiness policy: health endpoint của service phản ánh khả dụng API core; trạng thái AI consumer theo dõi qua log/metric riêng.
 
 ## 5.2 Test API matching
 
@@ -139,6 +168,7 @@ Kỳ vọng:
 
 ### 6.1 `EmbeddingStatus` không lên `Ready`
 - Kiểm tra `OpenAI__ApiKey` hợp lệ.
+- Kiểm tra `OpenAI__EmbeddingModel` đúng tên model OpenAI public API.
 - Kiểm tra outbound network tới OpenAI.
 - Kiểm tra log consumer RabbitMQ của service tương ứng.
 
@@ -152,6 +182,7 @@ Kỳ vọng:
 - Verify exchange `skillsnap.events` và routing key:
   - `portfolio.changed`
   - `company.post.changed`
+- Nếu log báo retry RabbitMQ nhưng API vẫn healthy: đây là expected behavior sau hardening (consumer non-fatal).
 
 ### 6.4 Cache stale
 - Cache key đang version-aware:
@@ -165,6 +196,7 @@ Kỳ vọng:
 
 - Không gọi AI trong runtime matching.
 - Embedding chỉ tạo khi create/update + async event xử lý lại.
+- Portfolio/Company embedding consumers đã harden theo hướng retry + non-fatal startup để không block API rollout khi MQ tạm thời lỗi.
 - Nếu muốn giảm chi phí OpenAI:
   - batch update ngoài giờ cao điểm
   - hạn chế update không cần thiết trên portfolio/job content.

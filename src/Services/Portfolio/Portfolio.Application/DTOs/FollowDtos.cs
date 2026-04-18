@@ -13,6 +13,7 @@ public class UpdatePortfolioFollowRequest
 
 public class PortfolioPreviewDto
 {
+    public int BlockId { get; set; }
     public string Type { get; set; } = string.Empty;
     public string Variant { get; set; } = string.Empty;
     public object Data { get; set; } = new();
