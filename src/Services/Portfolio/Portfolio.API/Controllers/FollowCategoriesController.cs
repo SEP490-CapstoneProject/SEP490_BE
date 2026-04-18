@@ -6,61 +6,60 @@ using Portfolio.Application.Interfaces;
 namespace Portfolio.API.Controllers;
 
 [ApiController]
-[Route("api/follows")]
+[Route("api/follow-categories")]
 [Authorize(Roles = "RECRUITER")]
-public class FollowsController : ControllerBase
+public class FollowCategoriesController : ControllerBase
 {
-    private readonly IPortfolioFollowService _followService;
-    private readonly ILogger<FollowsController> _logger;
+    private readonly IPortfolioFollowCategoryService _categoryService;
+    private readonly ILogger<FollowCategoriesController> _logger;
 
-    public FollowsController(IPortfolioFollowService followService, ILogger<FollowsController> logger)
+    public FollowCategoriesController(
+        IPortfolioFollowCategoryService categoryService,
+        ILogger<FollowCategoriesController> logger)
     {
-        _followService = followService;
+        _categoryService = categoryService;
         _logger = logger;
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreatePortfolioFollowRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateFollowCategoryRequest request)
     {
         try
         {
-            var result = await _followService.CreateAsync(request);
+            var result = await _categoryService.CreateAsync(request);
             return StatusCode(201, result);
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
         catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
-        catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating follow for portfolio {PortfolioId}", request.PortfolioId);
+            _logger.LogError(ex, "Error creating follow category");
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetMyFollows([FromQuery] int? categoryId = null)
+    public async Task<IActionResult> GetMyCategories()
     {
         try
         {
-            var result = await _followService.GetMyFollowsAsync(categoryId);
+            var result = await _categoryService.GetMyCategoriesAsync();
             return Ok(result);
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
-        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting followed portfolios");
+            _logger.LogError(ex, "Error getting follow categories");
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
 
-    [HttpPut("{portfolioId:int}")]
-    public async Task<IActionResult> UpdateInterest(int portfolioId, [FromBody] UpdatePortfolioFollowRequest request)
+    [HttpPut("{categoryId:int}")]
+    public async Task<IActionResult> Update(int categoryId, [FromBody] UpdateFollowCategoryRequest request)
     {
         try
         {
-            var result = await _followService.UpdateInterestAsync(portfolioId, request);
+            var result = await _categoryService.UpdateAsync(categoryId, request);
             return Ok(result);
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
@@ -68,24 +67,25 @@ public class FollowsController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating follow for portfolio {PortfolioId}", portfolioId);
+            _logger.LogError(ex, "Error updating follow category {CategoryId}", categoryId);
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
 
-    [HttpDelete("{portfolioId:int}")]
-    public async Task<IActionResult> Delete(int portfolioId)
+    [HttpDelete("{categoryId:int}")]
+    public async Task<IActionResult> Delete(int categoryId)
     {
         try
         {
-            await _followService.DeleteAsync(portfolioId);
+            await _categoryService.DeleteAsync(categoryId);
             return NoContent();
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting follow for portfolio {PortfolioId}", portfolioId);
+            _logger.LogError(ex, "Error deleting follow category {CategoryId}", categoryId);
             return StatusCode(500, new { error = "Internal server error" });
         }
     }

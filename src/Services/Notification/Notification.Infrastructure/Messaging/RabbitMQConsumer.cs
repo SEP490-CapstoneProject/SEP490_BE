@@ -34,7 +34,9 @@ public class RabbitMQConsumer : BackgroundService
     {
         "post.favorite",
         "post.comment.created",
-        "post.reply.created"
+        "post.reply.created",
+        "post.report.removed",
+        "post.report.created"
     };
 
     public RabbitMQConsumer(
@@ -132,7 +134,22 @@ public class RabbitMQConsumer : BackgroundService
             var body = Encoding.UTF8.GetString(ea.Body.ToArray());
             var evt = JsonSerializer.Deserialize<NotificationEvent>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (evt is null || string.IsNullOrEmpty(evt.UserId))
+            if (evt is null)
+            {
+                await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+
+            if (string.Equals(evt.EventType, "post.report.created", StringComparison.OrdinalIgnoreCase))
+            {
+                await HandlePostReportCreatedAsync(scope.ServiceProvider, evt);
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(evt.UserId))
             {
                 await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 return;
@@ -168,8 +185,6 @@ public class RabbitMQConsumer : BackgroundService
                 await _channel.BasicAckAsync(ea.DeliveryTag, false);
                 return;
             }
-
-            using var scope = _scopeFactory.CreateScope();
 
             // Check if this is a post.favorite event for aggregation
             if (evt.EventType == "post.favorite")
@@ -277,6 +292,74 @@ public class RabbitMQConsumer : BackgroundService
         }
 
         return evt.Content;
+    }
+
+    private async Task HandlePostReportCreatedAsync(IServiceProvider services, NotificationEvent evt)
+    {
+        if (string.IsNullOrWhiteSpace(evt.ObjectId) || !int.TryParse(evt.ObjectId, out var postId))
+        {
+            _logger.LogWarning("Skip post.report.created because ObjectId is invalid. ObjectId={ObjectId}", evt.ObjectId);
+            return;
+        }
+
+        var targetRoles = evt.TargetRoles is { Length: > 0 }
+            ? evt.TargetRoles
+            : ["ADMIN", "MODERATOR"];
+
+        var recipientResolver = services.GetRequiredService<IRecipientResolverClient>();
+        var recipients = await recipientResolver.GetActiveUserIdsByRolesAsync(targetRoles);
+        if (recipients.Count == 0)
+        {
+            _logger.LogInformation("No recipients found for post.report.created. PostId={PostId}, Roles={Roles}", postId, string.Join(",", targetRoles));
+            return;
+        }
+
+        var aggregation = services.GetRequiredService<PostReportAggregationService>();
+        var notificationService = services.GetRequiredService<INotificationService>();
+        var eventPublisher = services.GetRequiredService<INotificationEventPublisher>();
+        var cache = services.GetService<IDistributedCache>();
+
+        foreach (var recipientUserId in recipients)
+        {
+            if (!string.IsNullOrWhiteSpace(evt.ActorId) &&
+                string.Equals(recipientUserId, evt.ActorId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var tracking = await aggregation.TrackReportAsync(postId, recipientUserId);
+            if (!tracking.SendImmediateNotification)
+            {
+                continue;
+            }
+
+            var entity = new NotificationEntity
+            {
+                UserId = recipientUserId,
+                Title = "Bài đăng bị báo cáo",
+                Content = $"Bài đăng #{postId} có báo cáo mới cần được kiểm duyệt.",
+                Type = "COMMUNITY_REPORT_REVIEW",
+                ObjectId = postId.ToString(),
+                ActorId = evt.ActorId,
+                ActorType = string.IsNullOrWhiteSpace(evt.ActorType) ? "USER" : evt.ActorType,
+                CreatedAt = evt.CreatedAt == default ? VietnamTime.Now() : evt.CreatedAt,
+                IsRead = false
+            };
+
+            await notificationService.CreateNotificationAsync(entity);
+            var createdEvent = await notificationService.BuildCreatedEventAsync(entity);
+            if (!string.IsNullOrWhiteSpace(evt.EventId))
+            {
+                createdEvent.EventId = evt.EventId;
+            }
+
+            if (cache != null)
+            {
+                await cache.RemoveAsync($"unread:{recipientUserId}");
+            }
+
+            await eventPublisher.PublishNotificationCreatedAsync(createdEvent);
+        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

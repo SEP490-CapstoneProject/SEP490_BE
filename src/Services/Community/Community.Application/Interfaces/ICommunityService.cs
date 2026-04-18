@@ -15,10 +15,14 @@ public interface ICommunityService
     // Post operations
     Task<CommunityPost?> GetPostByIdAsync(int id);
     Task<IEnumerable<CommunityPost>> GetAllPostsAsync();
+    Task<OffsetPagedResult<AdminCommunityPostDto>> GetAdminPostsAsync(AdminPostFilter filter, int? currentUserId);
     Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId);
     Task<CommunityPostDto> CreatePostAsync(CreatePostRequest request, int userId, Dictionary<string, IFormFile> fileMap);
     Task UpdatePostAsync(CommunityPost post);
-    Task DeletePostAsync(int id);
+    Task DeletePostAsync(int id, int actorUserId, string? actorRole);
+    Task<CommunityPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request);
+    Task<List<CommunityPostReportDto>> GetPostReportsAsync(AdminPostReportFilter filter);
+    Task<CommunityPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request);
 
     // Ownership checks
     Task<int?> GetCommentOwnerAsync(int commentId);

@@ -31,10 +31,23 @@ public class CommunityPostDto
     public string CreatedAt { get; set; } = string.Empty;
 }
 
+public class AdminCommunityPostDto : CommunityPostDto
+{
+    public int Status { get; set; }
+}
+
 public class CursorPagedResult<T>
 {
     public List<T> Items { get; set; } = new();
     public int? NextCursor { get; set; }
+    public bool HasMore { get; set; }
+}
+
+public class OffsetPagedResult<T>
+{
+    public List<T> Items { get; set; } = new();
+    public int PageNumber { get; set; }
+    public int PageSize { get; set; }
     public bool HasMore { get; set; }
 }
 
