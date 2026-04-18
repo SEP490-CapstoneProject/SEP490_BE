@@ -4,6 +4,7 @@ using Community.Application.Helpers;
 using Community.Application.Interfaces;
 using Community.Application.Models.Events;
 using Community.Domain.Entities;
+using Community.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using RecruitmentPlatform.Contracts.Realtime;
@@ -12,6 +13,10 @@ namespace Community.Application.Services;
 
 public class CommunityService : ICommunityService
 {
+    private const int DeletedPostStatus = 0;
+    private const int ActivePostStatus = 1;
+    private const int RemovedByModerationStatus = 2;
+
     private readonly ICommunityRepository _repository;
     private readonly IUserInfoClient _userInfoClient;
     private readonly IPortfolioPreviewClient _portfolioPreviewClient;
@@ -207,9 +212,115 @@ public class CommunityService : ICommunityService
 
     public async Task<CommunityPost?> GetPostByIdAsync(int id) => await _repository.GetPostByIdAsync(id);
     public async Task<IEnumerable<CommunityPost>> GetAllPostsAsync() => await _repository.GetAllPostsAsync();
+    public async Task<OffsetPagedResult<AdminCommunityPostDto>> GetAdminPostsAsync(AdminPostFilter filter, int? currentUserId)
+    {
+        var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
+        var pageSize = filter.PageSize < 1 ? 20 : filter.PageSize;
+        if (pageSize > 100)
+        {
+            pageSize = 100;
+        }
+
+        int? status = null;
+        if (!string.IsNullOrWhiteSpace(filter.Status))
+        {
+            if (!int.TryParse(filter.Status, out var parsedStatus))
+            {
+                throw new ArgumentException("Status must be a valid integer.");
+            }
+
+            status = parsedStatus;
+        }
+
+        var posts = await _repository.GetAdminPostsAsync(status, pageNumber, pageSize + 1);
+        var hasMore = posts.Count > pageSize;
+        if (hasMore)
+        {
+            posts = posts.Take(pageSize).ToList();
+        }
+
+        if (posts.Count == 0)
+        {
+            return new OffsetPagedResult<AdminCommunityPostDto>
+            {
+                Items = new(),
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                HasMore = false
+            };
+        }
+
+        var postIds = posts.Select(p => p.Id).ToList();
+        var uniqueUserIds = posts.Select(p => p.UserId).Distinct().ToList();
+
+        var countsTask = _repository.GetFeedCountsAsync(postIds, currentUserId);
+        var authorsTask = _userInfoClient.GetAuthorsBatchAsync(uniqueUserIds);
+
+        await Task.WhenAll(countsTask, authorsTask);
+        var counts = countsTask.Result;
+        var authors = authorsTask.Result;
+
+        var portfolioIds = posts.Where(p => p.PortfolioId.HasValue)
+            .Select(p => p.PortfolioId!.Value)
+            .Distinct()
+            .ToList();
+
+        var previews = new Dictionary<int, PortfolioPreviewDto?>();
+        if (portfolioIds.Count > 0)
+        {
+            var previewTasks = portfolioIds.Select(async pid =>
+                (pid, preview: await _portfolioPreviewClient.GetPreviewAsync(pid)));
+            var previewResults = await Task.WhenAll(previewTasks);
+            foreach (var (pid, preview) in previewResults)
+            {
+                previews[pid] = preview;
+            }
+        }
+
+        return new OffsetPagedResult<AdminCommunityPostDto>
+        {
+            Items = posts.Select(p => MapToAdminDto(p, authors, counts, previews)).ToList(),
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            HasMore = hasMore
+        };
+    }
     public async Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId) => await _repository.GetPostsByUserIdAsync(userId);
     public async Task UpdatePostAsync(CommunityPost post) => await _repository.UpdatePostAsync(post);
-    public async Task DeletePostAsync(int id) => await _repository.DeletePostAsync(id);
+    public async Task DeletePostAsync(int id, int actorUserId, string? actorRole)
+    {
+        var post = await _repository.GetPostByIdAsync(id)
+            ?? throw new KeyNotFoundException($"Post {id} not found");
+
+        var wasDeleted = post.Status == DeletedPostStatus;
+        var now = DateTimeHelper.GetVietnamTime();
+        post.Status = DeletedPostStatus;
+        post.UpdatedAt = now;
+
+        await _repository.DeletePostAsync(post);
+
+        if (wasDeleted || post.UserId == actorUserId)
+        {
+            return;
+        }
+
+        var notificationEvt = new PostRemovedByModerationNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.report.removed",
+            Version = 1,
+            UserId = post.UserId.ToString(),
+            ActorId = actorUserId.ToString(),
+            ActorType = ResolveActorType(actorRole),
+            ObjectId = post.Id.ToString(),
+            Title = "Bài đăng đã bị xóa",
+            Content = "Bài đăng cộng đồng của bạn đã bị quản trị viên xóa.",
+            Type = "COMMUNITY_MODERATION",
+            CreatedAt = now
+        };
+
+        await _notificationPublisher.PublishPostRemovedByModerationNotificationAsync(notificationEvt);
+    }
 
     public async Task<CommunityPostDto> CreatePostAsync(
         CreatePostRequest request,
@@ -280,6 +391,170 @@ public class CommunityService : ICommunityService
         // Return DTO with all enriched data
         var postDto = await GetPostDtoAsync(created.Id, userId);
         return postDto!;
+    }
+
+    public async Task<CommunityPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request)
+    {
+        var post = await _repository.GetPostByIdAsync(postId)
+            ?? throw new KeyNotFoundException($"Post {postId} not found");
+
+        if (post.UserId == reporterUserId)
+        {
+            throw new InvalidOperationException("You cannot report your own post.");
+        }
+
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("Reason is required.");
+        }
+
+        if (reason.Length > 100)
+        {
+            throw new ArgumentException("Reason must not exceed 100 characters.");
+        }
+
+        var description = request.Description?.Trim();
+        if (description?.Length > 1000)
+        {
+            throw new ArgumentException("Description must not exceed 1000 characters.");
+        }
+
+        var existing = await _repository.GetPostReportByPostAndReporterAsync(postId, reporterUserId);
+        if (existing != null)
+        {
+            throw new InvalidOperationException("You have already reported this post.");
+        }
+
+        var report = new CommunityPostReport
+        {
+            CommunityPostId = postId,
+            ReporterUserId = reporterUserId,
+            Reason = reason,
+            Description = description,
+            Status = PostReportStatus.Pending,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        var created = await _repository.CreatePostReportAsync(report);
+        created.CommunityPost = post;
+
+        var reportCreatedEvent = new PostReportCreatedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.report.created",
+            Version = 1,
+            ActorId = reporterUserId.ToString(),
+            ActorType = "USER",
+            ObjectId = postId.ToString(),
+            Title = "Báo cáo bài đăng mới",
+            Content = $"Bài đăng #{postId} có báo cáo mới cần được kiểm duyệt.",
+            Type = "COMMUNITY_REPORT_REVIEW",
+            CreatedAt = DateTimeHelper.GetVietnamTime(),
+            PostId = postId,
+            ReportId = created.Id,
+            ReporterUserId = reporterUserId,
+            Reason = reason,
+            TargetRoles = ["ADMIN", "MODERATOR"]
+        };
+
+        await _notificationPublisher.PublishPostReportCreatedNotificationAsync(reportCreatedEvent);
+
+        return MapToReportDto(created);
+    }
+
+    public async Task<List<CommunityPostReportDto>> GetPostReportsAsync(AdminPostReportFilter filter)
+    {
+        var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
+        var pageSize = filter.PageSize < 1 ? 20 : filter.PageSize;
+        if (pageSize > 100)
+        {
+            pageSize = 100;
+        }
+
+        int? status = null;
+        if (!string.IsNullOrWhiteSpace(filter.Status))
+        {
+            if (!Enum.TryParse<PostReportStatus>(filter.Status, true, out var parsedStatus))
+            {
+                throw new ArgumentException("Status must be one of: Pending, Approved, Rejected.");
+            }
+
+            status = (int)parsedStatus;
+        }
+
+        var reports = await _repository.GetPostReportsAsync(
+            filter.PostId,
+            filter.ReporterUserId,
+            status,
+            pageNumber,
+            pageSize);
+
+        return reports.Select(MapToReportDto).ToList();
+    }
+
+    public async Task<CommunityPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request)
+    {
+        var report = await _repository.GetPostReportByIdAsync(reportId)
+            ?? throw new KeyNotFoundException($"Report {reportId} not found");
+
+        if (report.Status != PostReportStatus.Pending)
+        {
+            throw new InvalidOperationException("This report has already been reviewed.");
+        }
+
+        var action = request.Action?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            throw new ArgumentException("Action is required.");
+        }
+
+        var now = DateTimeHelper.GetVietnamTime();
+        report.ReviewedByUserId = reviewerUserId;
+        report.ReviewedAt = now;
+        report.ReviewNote = request.ReviewNote?.Trim();
+        report.UpdatedAt = now;
+
+        if (action == "approve_violation")
+        {
+            report.Status = PostReportStatus.Approved;
+
+            if (report.CommunityPost.Status == ActivePostStatus)
+            {
+                report.CommunityPost.Status = RemovedByModerationStatus;
+                report.CommunityPost.UpdatedAt = now;
+                await _repository.UpdatePostAsync(report.CommunityPost);
+            }
+
+            var notificationEvt = new PostRemovedByModerationNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.report.removed",
+                Version = 1,
+                UserId = report.CommunityPost.UserId.ToString(),
+                ActorId = reviewerUserId.ToString(),
+                ActorType = "ADMIN",
+                ObjectId = report.CommunityPostId.ToString(),
+                Title = "Bài đăng bị gỡ do vi phạm",
+                Content = "Bài đăng cộng đồng của bạn đã bị gỡ vì vi phạm tiêu chuẩn cộng đồng.",
+                Type = "COMMUNITY_MODERATION",
+                CreatedAt = now
+            };
+
+            await _notificationPublisher.PublishPostRemovedByModerationNotificationAsync(notificationEvt);
+        }
+        else if (action == "reject")
+        {
+            report.Status = PostReportStatus.Rejected;
+        }
+        else
+        {
+            throw new ArgumentException("Action must be one of: approve_violation, reject.");
+        }
+
+        await _repository.UpdatePostReportAsync(report);
+
+        return MapToReportDto(report);
     }
 
     // ─── Ownership checks ─────────────────────────────────────────────────────
@@ -626,6 +901,70 @@ public class CommunityService : ICommunityService
         };
     }
 
+    private static AdminCommunityPostDto MapToAdminDto(
+        CommunityPost p,
+        Dictionary<int, AuthorDto> authors,
+        FeedCountsResult counts,
+        Dictionary<int, PortfolioPreviewDto?> previews)
+    {
+        var dto = MapToDto(p, authors, counts, previews);
+        return new AdminCommunityPostDto
+        {
+            Id = dto.Id,
+            Author = dto.Author,
+            Description = dto.Description,
+            CoverImageUrl = dto.CoverImageUrl,
+            Media = dto.Media,
+            PortfolioId = dto.PortfolioId,
+            PortfolioPreview = dto.PortfolioPreview,
+            FavoriteCount = dto.FavoriteCount,
+            CommentCount = dto.CommentCount,
+            IsFavorited = dto.IsFavorited,
+            IsSaved = dto.IsSaved,
+            CreatedAt = dto.CreatedAt,
+            Status = p.Status
+        };
+    }
+
+    private static CommunityPostReportDto MapToReportDto(CommunityPostReport report)
+    {
+        return new CommunityPostReportDto
+        {
+            Id = report.Id,
+            CommunityPostId = report.CommunityPostId,
+            PostOwnerUserId = report.CommunityPost.UserId,
+            ReporterUserId = report.ReporterUserId,
+            Reason = report.Reason,
+            Description = report.Description,
+            Status = report.Status.ToString(),
+            ReviewedByUserId = report.ReviewedByUserId,
+            ReviewedAt = report.ReviewedAt,
+            ReviewNote = report.ReviewNote,
+            CreatedAt = report.CreatedAt,
+            UpdatedAt = report.UpdatedAt
+        };
+    }
+
     private static AuthorDto Fallback(int userId) => new() { Id = userId, Name = "Unknown", Avatar = string.Empty, Role = "USER" };
+
+    private static string ResolveActorType(string? role)
+    {
+        if (string.Equals(role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ADMIN";
+        }
+
+        if (string.Equals(role, "MODERATOR", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MODERATOR";
+        }
+
+        if (string.Equals(role, "COMPANY", StringComparison.OrdinalIgnoreCase))
+        {
+            return "COMPANY";
+        }
+
+        return "USER";
+    }
 }
 

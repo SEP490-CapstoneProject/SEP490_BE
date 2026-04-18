@@ -21,6 +21,7 @@ public class AggregationFlushService : BackgroundService
     private readonly ILogger<AggregationFlushService> _logger;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _aggregationWindow;
+    private readonly TimeSpan _postReportAggregationWindow;
 
     public AggregationFlushService(
         IServiceScopeFactory scopeFactory,
@@ -37,6 +38,9 @@ public class AggregationFlushService : BackgroundService
         
         var windowMinutes = configuration.GetValue<int?>("FavoriteAggregation:WindowMinutes") ?? 3;
         _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+
+        var postReportWindowMinutes = configuration.GetValue<int?>("PostReportAggregation:WindowMinutes") ?? 10;
+        _postReportAggregationWindow = TimeSpan.FromMinutes(postReportWindowMinutes);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -73,6 +77,12 @@ public class AggregationFlushService : BackgroundService
         {
             if (cancellationToken.IsCancellationRequested) break;
             await ProcessCommentReplyAggregationKeyAsync(db, key, cancellationToken);
+        }
+
+        foreach (var key in server.Keys(pattern: "post_report_agg:*"))
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            await ProcessPostReportAggregationKeyAsync(db, key, cancellationToken);
         }
     }
 
@@ -132,6 +142,40 @@ public class AggregationFlushService : BackgroundService
         }
     }
 
+    private async Task ProcessPostReportAggregationKeyAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rawData = await db.HashGetAsync(key, "data");
+            if (!rawData.HasValue) return;
+
+            var bytes = (byte[]?)rawData;
+            if (bytes == null || bytes.Length == 0) return;
+
+            var json = Encoding.UTF8.GetString(bytes);
+            var data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
+            if (data == null) return;
+
+            if (GetVietnamTime() - data.FirstAt < _postReportAggregationWindow) return;
+
+            if (data.AdditionalCount <= 0)
+            {
+                await db.KeyDeleteAsync(key);
+                return;
+            }
+
+            await CreatePostReportAggregatedNotificationAsync(data, cancellationToken);
+            await db.KeyDeleteAsync(key);
+
+            _logger.LogInformation("Flushed post report aggregation for post {PostId}, recipient {RecipientUserId}, count {Count}",
+                data.PostId, data.RecipientUserId, data.AdditionalCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing post report aggregation key {Key}", key.ToString());
+        }
+    }
+
     private async Task CreateFavoriteAggregatedNotificationAsync(AggregationData data, CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
@@ -181,6 +225,29 @@ public class AggregationFlushService : BackgroundService
             ObjectId = data.ObjectId,
             ActorId = data.Count == 1 ? data.FirstActorId : null,
             ActorType = data.Count == 1 ? "USER" : "SYSTEM",
+            CreatedAt = GetVietnamTime(),
+            IsRead = false
+        };
+
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+    }
+
+    private async Task CreatePostReportAggregatedNotificationAsync(PostReportAggregationData data, CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+        var entity = new NotificationEntity
+        {
+            UserId = data.RecipientUserId,
+            Title = "Bài đăng bị báo cáo",
+            Content = data.AdditionalCount == 1
+                ? $"Bài đăng #{data.PostId} có thêm 1 báo cáo mới cần được kiểm duyệt."
+                : $"Bài đăng #{data.PostId} có thêm {data.AdditionalCount} báo cáo mới cần được kiểm duyệt.",
+            Type = "COMMUNITY_REPORT_REVIEW",
+            ObjectId = data.PostId.ToString(),
+            ActorId = null,
+            ActorType = "SYSTEM",
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };

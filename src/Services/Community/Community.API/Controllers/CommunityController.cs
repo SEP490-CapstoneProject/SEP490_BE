@@ -11,6 +11,8 @@ namespace Community.API.Controllers;
 [Route("api/community")]
 public class CommunityController : ControllerBase
 {
+    private const int ActivePostStatus = 1;
+
     private readonly ICommunityService _service;
     private readonly ILogger<CommunityController> _logger;
 
@@ -35,7 +37,8 @@ public class CommunityController : ControllerBase
     private bool IsAdminOrModerator()
     {
         var role = GetCurrentRole();
-        return role == "ADMIN" || role == "MODERATOR";
+        return string.Equals(role, "ADMIN", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "MODERATOR", StringComparison.OrdinalIgnoreCase);
     }
 
     // ─── Feed endpoints (Public) ──────────────────────────────────────────────
@@ -54,6 +57,10 @@ public class CommunityController : ControllerBase
     public async Task<IActionResult> GetPostById(int id)
     {
         var userId = GetCurrentUserId();
+        var postEntity = await _service.GetPostByIdAsync(id);
+        if (postEntity == null || postEntity.Status != ActivePostStatus)
+            return NotFound(new { error = $"Post {id} not found" });
+
         var post = await _service.GetPostDtoAsync(id, userId);
         if (post == null) return NotFound(new { error = $"Post {id} not found" });
         return Ok(post);
@@ -134,6 +141,7 @@ public class CommunityController : ControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized(new { error = "Invalid token" });
+        var role = GetCurrentRole();
 
         var post = await _service.GetPostByIdAsync(id);
         if (post == null) return NotFound(new { error = $"Post {id} not found" });
@@ -141,7 +149,7 @@ public class CommunityController : ControllerBase
         if (post.UserId != userId.Value && !IsAdminOrModerator())
             return StatusCode(403, new { error = "You don't have permission to delete this post" });
 
-        await _service.DeletePostAsync(id);
+        await _service.DeletePostAsync(id, userId.Value, role);
         return NoContent();
     }
 
@@ -276,4 +284,33 @@ public class CommunityController : ControllerBase
         await _service.DeleteReplyAsync(replyId);
         return NoContent();
     }
+
+    // ─── Post report & moderation ─────────────────────────────────────────────
+
+    [Authorize]
+    [HttpPost("posts/{postId:int}/report")]
+    public async Task<IActionResult> ReportPost(int postId, [FromBody] CreatePostReportRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized(new { error = "Invalid token" });
+
+        try
+        {
+            var created = await _service.ReportPostAsync(postId, userId.Value, request);
+            return StatusCode(201, created);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
 }

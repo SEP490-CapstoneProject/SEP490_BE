@@ -19,6 +19,7 @@ public class PortfolioDbContext : DbContext
     public DbSet<PortfolioBlock> PortfolioBlocks { get; set; }
     public DbSet<Compliment> Compliments { get; set; }
     public DbSet<PortfolioFollow> PortfolioFollows { get; set; }
+    public DbSet<PortfolioFollowCategory> PortfolioFollowCategories { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -140,12 +141,14 @@ public class PortfolioDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.CompanyId).IsRequired();
             e.Property(x => x.PortfolioId).IsRequired();
+            e.Property(x => x.CategoryId).IsRequired(false);
             e.Property(x => x.InterestLevel).HasMaxLength(10).IsRequired();
             e.Property(x => x.FollowedAt).HasDefaultValueSql("DATEADD(HOUR, 7, GETUTCDATE())");
             e.Property(x => x.UpdatedAt).IsRequired(false);
 
             e.HasIndex(x => x.CompanyId).HasDatabaseName("IX_PortfolioFollow_CompanyId");
             e.HasIndex(x => x.PortfolioId).HasDatabaseName("IX_PortfolioFollow_PortfolioId");
+            e.HasIndex(x => x.CategoryId).HasDatabaseName("IX_PortfolioFollow_CategoryId");
             e.HasIndex(x => new { x.CompanyId, x.PortfolioId })
              .HasDatabaseName("UX_PortfolioFollow_Company_Portfolio")
              .IsUnique();
@@ -154,6 +157,27 @@ public class PortfolioDbContext : DbContext
              .WithMany(x => x.Follows)
              .HasForeignKey(x => x.PortfolioId)
              .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.Category)
+             .WithMany(x => x.Follows)
+             .HasForeignKey(x => x.CategoryId)
+             .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<PortfolioFollowCategory>(e =>
+        {
+            e.ToTable("PortfolioFollowCategory");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.CompanyId).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Code).HasMaxLength(100).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("DATEADD(HOUR, 7, GETUTCDATE())");
+            e.Property(x => x.UpdatedAt).IsRequired(false);
+
+            e.HasIndex(x => x.CompanyId).HasDatabaseName("IX_PortfolioFollowCategory_CompanyId");
+            e.HasIndex(x => new { x.CompanyId, x.Code })
+             .HasDatabaseName("UX_PortfolioFollowCategory_Company_Code")
+             .IsUnique();
         });
     }
 }
