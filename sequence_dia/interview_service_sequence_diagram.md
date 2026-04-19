@@ -1,6 +1,5 @@
 ```mermaid
 sequenceDiagram
-    autonumber
     actor Recruiter
     actor Candidate
     participant InterviewController
@@ -9,14 +8,24 @@ sequenceDiagram
     participant NotificationBus
     participant InterviewDB
 
-    Recruiter->>InterviewController: POST /api/interviews/schedules
-    InterviewController->>InterviewService: ScheduleAsync(request)
-    InterviewService->>InterviewRepository: CreateScheduleAsync
-    InterviewRepository->>InterviewDB: INSERT interview_schedule
-    InterviewDB-->>InterviewRepository: scheduleId
-    InterviewRepository-->>InterviewService: InterviewScheduleDto
-    InterviewService->>NotificationBus: Publish interview.scheduled
-    InterviewService-->>InterviewController: InterviewScheduleDto
-    InterviewController-->>Recruiter: 201 Created
-    NotificationBus-->>Candidate: Interview notification
+    Recruiter->>InterviewController: 1. POST /api/interviews/schedules
+    activate InterviewController
+    InterviewController->>InterviewService: 2. ScheduleAsync(request)
+    activate InterviewService
+    InterviewService->>InterviewRepository: 3. CreateScheduleAsync
+    activate InterviewRepository
+    InterviewRepository->>InterviewDB: 4. INSERT interview_schedule
+    activate InterviewDB
+    InterviewDB-->>InterviewRepository: 5. Return scheduleId
+    deactivate InterviewDB
+    InterviewRepository-->>InterviewService: 6. Return InterviewScheduleDto
+    deactivate InterviewRepository
+    InterviewService->>NotificationBus: 7. Publish interview.scheduled
+    activate NotificationBus
+    NotificationBus-->>Candidate: 8. Send interview notification
+    deactivate NotificationBus
+    InterviewService-->>InterviewController: 9. Return InterviewScheduleDto
+    deactivate InterviewService
+    InterviewController-->>Recruiter: 10. 201 Created
+    deactivate InterviewController
 ```

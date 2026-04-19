@@ -1,6 +1,5 @@
 ```mermaid
 sequenceDiagram
-    autonumber
     actor Client
     participant PortfolioController
     participant PortfolioService
@@ -8,16 +7,28 @@ sequenceDiagram
     participant FollowRepository
     participant PortfolioDB
 
-    Client->>PortfolioController: GET /api/portfolio?page=1&pageSize=10&q=react&blockType=SKILL
-    PortfolioController->>PortfolioService: GetAllAsync(filters)
-    PortfolioService->>PortfolioRepository: GetAllAsync(filters)
-    PortfolioRepository->>PortfolioDB: SELECT public portfolios + block search
-    PortfolioDB-->>PortfolioRepository: Paged portfolios
-    PortfolioRepository-->>PortfolioService: Items
-    PortfolioService->>FollowRepository: GetFollowedPortfolioIdsAsync(companyId, ids)
-    FollowRepository->>PortfolioDB: SELECT followed portfolioIds
-    PortfolioDB-->>FollowRepository: followed IDs
-    FollowRepository-->>PortfolioService: HashSet<int>
-    PortfolioService-->>PortfolioController: PagedResult<PortfolioDto> (isFollowed)
-    PortfolioController-->>Client: 200 OK
+    Client->>PortfolioController: 1. GET /api/portfolio?page=1&pageSize=10&q=react&blockType=SKILL
+    activate PortfolioController
+    PortfolioController->>PortfolioService: 2. GetAllAsync(filters)
+    activate PortfolioService
+    PortfolioService->>PortfolioRepository: 3. Query paged portfolios
+    activate PortfolioRepository
+    PortfolioRepository->>PortfolioDB: 4. SELECT public portfolios + block search
+    activate PortfolioDB
+    PortfolioDB-->>PortfolioRepository: 5. Return paged portfolios
+    deactivate PortfolioDB
+    PortfolioRepository-->>PortfolioService: 6. Return portfolio items
+    deactivate PortfolioRepository
+    PortfolioService->>FollowRepository: 7. GetFollowedPortfolioIdsAsync(companyId, ids)
+    activate FollowRepository
+    FollowRepository->>PortfolioDB: 8. SELECT followed portfolioIds
+    activate PortfolioDB
+    PortfolioDB-->>FollowRepository: 9. Return followed IDs
+    deactivate PortfolioDB
+    FollowRepository-->>PortfolioService: 10. Return HashSet<int>
+    deactivate FollowRepository
+    PortfolioService-->>PortfolioController: 11. Return PagedResult<PortfolioDto> (isFollowed)
+    deactivate PortfolioService
+    PortfolioController-->>Client: 12. 200 OK
+    deactivate PortfolioController
 ```

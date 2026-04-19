@@ -35,12 +35,12 @@ public class ApplicationService : IApplicationService
 
         // TEMPORARILY DISABLED: Subscription quota check for testing
         // TODO: Re-enable when subscription system is fully tested and ready
-        // var (canApply, currentUsage) = await _entitlementChecker.TryIncrementUsageAsync(userId, "MAX_APPLY");
-        // if (!canApply)
-        // {
-        //     _logger.LogWarning("User {UserId} exceeded MAX_APPLY quota", userId);
-        //     throw new InvalidOperationException("You have reached your application limit. Upgrade your subscription to apply to more jobs.");
-        // }
+        var (canApply, currentUsage) = await _entitlementChecker.TryIncrementUsageAsync(userId, "MAX_APPLY");
+        if (!canApply)
+        {
+            _logger.LogWarning("User {UserId} exceeded MAX_APPLY quota", userId);
+            throw new InvalidOperationException("You have reached your application limit. Upgrade your subscription to apply to more jobs.");
+        }
 
         try
         {
