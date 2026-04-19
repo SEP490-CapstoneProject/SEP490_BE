@@ -45,13 +45,13 @@ public class CommunityService : ICommunityService
 
     // ─── Feed ─────────────────────────────────────────────────────────────────
 
-    public async Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId)
+    public async Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId, string? searchQuery)
     {
         if (pageSize < 1) pageSize = 50;
         if (pageSize > 100) pageSize = 100;
 
         // Fetch one extra to determine hasMore
-        var posts = await _repository.GetFeedAsync(cursor, pageSize + 1);
+        var posts = await _repository.GetFeedAsync(cursor, pageSize + 1, searchQuery);
         var hasMore = posts.Count > pageSize;
         if (hasMore) posts = posts.Take(pageSize).ToList();
 

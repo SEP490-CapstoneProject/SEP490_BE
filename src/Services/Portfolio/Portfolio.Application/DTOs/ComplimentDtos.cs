@@ -42,6 +42,7 @@ public class PortfolioWithComplimentDto
     public bool IsPublic { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public bool IsFollowed { get; set; }
     public int ComplimentCount { get; set; }
     public int ApprovedComplimentCount { get; set; }
     public decimal? AverageScore { get; set; }
@@ -71,6 +72,8 @@ public class PortfolioQueryParams
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
     public string? Status { get; set; }
+    public string? SearchTerm { get; set; }
+    public string? BlockType { get; set; }
     public bool IncludeCompliments { get; set; } = false;
     public ComplimentState? ComplimentState { get; set; }
     public bool? HasCompliment { get; set; }

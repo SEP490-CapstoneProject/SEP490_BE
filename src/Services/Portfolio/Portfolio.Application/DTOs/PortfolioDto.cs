@@ -15,6 +15,7 @@ public class PortfolioDto
     public bool IsPublic { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public bool IsFollowed { get; set; }
     public RankingDto Ranking { get; set; } = new();
     public List<PortfolioReviewerDto> Reviewers { get; set; } = new();
     public List<BlockDto> Blocks { get; set; } = new();

@@ -6,7 +6,7 @@ namespace Community.Application.Interfaces;
 public interface ICommunityRepository
 {
     // Feed queries (N+1-free, cursor-based)
-    Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize);
+    Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize, string? searchQuery);
     Task<FeedCountsResult> GetFeedCountsAsync(List<int> postIds, int? currentUserId);
 
     // CommunityPost operations

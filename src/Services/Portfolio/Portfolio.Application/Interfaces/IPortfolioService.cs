@@ -9,7 +9,7 @@ public interface IPortfolioService
     Task<PortfolioDto?> GetByIdAsync(int id);
     Task<IEnumerable<PortfolioDto>> GetByEmployeeIdAsync(int employeeId);
     Task<PortfolioDto?> GetMainByEmployeeIdAsync(int employeeId);
-    Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status, PortfolioSortMode sort, PortfolioRankBy rankBy);
+    Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy);
     Task<PortfolioDto> CreateAsync(int employeeId, CreatePortfolioRequest request);
     Task<PortfolioDto> UpdateAsync(int id, int employeeId, UpdatePortfolioRequest request);
     Task<PortfolioDto> ToggleMainAsync(int id, int employeeId);

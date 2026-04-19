@@ -37,6 +37,23 @@ public class PortfolioFollowRepository : IPortfolioFollowRepository
             .ToListAsync();
     }
 
+    public async Task<HashSet<int>> GetFollowedPortfolioIdsAsync(int companyId, IEnumerable<int> portfolioIds)
+    {
+        var ids = portfolioIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new HashSet<int>();
+        }
+
+        var followedIds = await _context.PortfolioFollows
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && ids.Contains(x.PortfolioId))
+            .Select(x => x.PortfolioId)
+            .ToListAsync();
+
+        return followedIds.ToHashSet();
+    }
+
     public async Task<PortfolioFollow> CreateAsync(PortfolioFollow follow)
     {
         _context.PortfolioFollows.Add(follow);
