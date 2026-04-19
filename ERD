@@ -1,4 +1,3 @@
-```mermaid
 erDiagram
     %% =======================
     %% AUTH SERVICE
@@ -423,4 +422,3 @@ erDiagram
     USER ||..o{ COMMUNITY_POST : creates
     PORTFOLIO ||..o{ COMMUNITY_POST : referenced
     USER ||..o{ NOTIFICATION : receives
-```
