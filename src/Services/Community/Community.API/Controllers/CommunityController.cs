@@ -46,10 +46,11 @@ public class CommunityController : ControllerBase
     [HttpGet("posts")]
     public async Task<IActionResult> GetFeed(
         [FromQuery] int pageSize = 20,
-        [FromQuery] int? cursor = null)
+        [FromQuery] int? cursor = null,
+        [FromQuery] string? q = null)
     {
         var userId = GetCurrentUserId();
-        var result = await _service.GetFeedAsync(cursor, pageSize, userId);
+        var result = await _service.GetFeedAsync(cursor, pageSize, userId, q);
         return Ok(result);
     }
 

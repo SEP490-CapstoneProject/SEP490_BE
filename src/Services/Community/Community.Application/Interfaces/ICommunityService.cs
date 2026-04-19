@@ -7,7 +7,7 @@ namespace Community.Application.Interfaces;
 public interface ICommunityService
 {
     // Feed (with DTOs)
-    Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId);
+    Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId, string? searchQuery);
     Task<CommunityPostDto?> GetPostDtoAsync(int postId, int? currentUserId);
     Task<PostCommentsResponseDto> GetCommentsResponseAsync(int postId);
     Task<List<CommunityPostDto>> GetPostsByUserIdDtoAsync(int userId, int? currentUserId);

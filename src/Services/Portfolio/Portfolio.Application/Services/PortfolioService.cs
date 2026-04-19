@@ -17,6 +17,8 @@ namespace Portfolio.Application.Services;
 public class PortfolioService : IPortfolioService
 {
     private readonly IPortfolioRepository _repo;
+    private readonly IPortfolioFollowRepository _followRepository;
+    private readonly ICurrentUserService _currentUser;
     private readonly IEmployeeServiceClient _employeeClient;
     private readonly IAuthServiceClient _authServiceClient;
     private readonly IReviewerProfileClient _reviewerProfileClient;
@@ -32,6 +34,8 @@ public class PortfolioService : IPortfolioService
 
     public PortfolioService(
         IPortfolioRepository repo,
+        IPortfolioFollowRepository followRepository,
+        ICurrentUserService currentUser,
         IEmployeeServiceClient employeeClient,
         IAuthServiceClient authServiceClient,
         IReviewerProfileClient reviewerProfileClient,
@@ -46,6 +50,8 @@ public class PortfolioService : IPortfolioService
         ILogger<PortfolioService> logger)
     {
         _repo = repo;
+        _followRepository = followRepository;
+        _currentUser = currentUser;
         _employeeClient = employeeClient;
         _authServiceClient = authServiceClient;
         _reviewerProfileClient = reviewerProfileClient;
@@ -180,13 +186,14 @@ public class PortfolioService : IPortfolioService
         return await _repo.DeleteAsync(id);
     }
 
-    public async Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status, PortfolioSortMode sort, PortfolioRankBy rankBy)
+    public async Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 10;
         if (pageSize > 100) pageSize = 100;
 
-        var (items, total, rankingMap) = await _repo.GetAllAsync(page, pageSize, status, sort, rankBy);
+        var normalizedBlockType = await ValidateAndNormalizeBlockTypeAsync(blockType);
+        var (items, total, rankingMap) = await _repo.GetAllAsync(page, pageSize, status, searchTerm, normalizedBlockType, sort, rankBy);
         var mappedItems = items.Select(MapToDto).ToList();
         foreach (var item in mappedItems)
         {
@@ -200,6 +207,7 @@ public class PortfolioService : IPortfolioService
         }
 
         await PopulateReviewersAsync(mappedItems, mappedItems.Select(x => x.PortfolioId));
+        await PopulateFollowStateAsync(mappedItems, mappedItems.Select(x => x.PortfolioId));
 
         return new PagedResult<PortfolioDto>
         {
@@ -495,9 +503,11 @@ public class PortfolioService : IPortfolioService
         if (queryParams.Page < 1) queryParams.Page = 1;
         if (queryParams.PageSize < 1) queryParams.PageSize = 10;
         if (queryParams.PageSize > 100) queryParams.PageSize = 100;
+        queryParams.BlockType = await ValidateAndNormalizeBlockTypeAsync(queryParams.BlockType);
 
         var (items, total) = await _repo.GetAllWithComplimentFilterAsync(queryParams);
         await PopulateReviewersAsync(items, items.Select(x => x.Id));
+        await PopulateFollowStateAsync(items, items.Select(x => x.Id));
         return new PagedResult<PortfolioWithComplimentDto>
         {
             Items = items,
@@ -505,6 +515,71 @@ public class PortfolioService : IPortfolioService
             Page = queryParams.Page,
             PageSize = queryParams.PageSize
         };
+    }
+
+    private async Task<string?> ValidateAndNormalizeBlockTypeAsync(string? blockType)
+    {
+        if (string.IsNullOrWhiteSpace(blockType))
+        {
+            return null;
+        }
+
+        var normalized = blockType.Trim().ToUpperInvariant();
+        var blockTypes = await _repo.GetBlockTypesAsync();
+        if (!blockTypes.ContainsKey(normalized))
+        {
+            throw new ArgumentException($"BlockType '{blockType}' is invalid.");
+        }
+
+        return normalized;
+    }
+
+    private async Task PopulateFollowStateAsync(List<PortfolioDto> items, IEnumerable<int> portfolioIds)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        if (!_currentUser.HasCompany || _currentUser.CompanyId <= 0)
+        {
+            foreach (var item in items)
+            {
+                item.IsFollowed = false;
+            }
+
+            return;
+        }
+
+        var followedIds = await _followRepository.GetFollowedPortfolioIdsAsync(_currentUser.CompanyId, portfolioIds);
+        foreach (var item in items)
+        {
+            item.IsFollowed = followedIds.Contains(item.PortfolioId);
+        }
+    }
+
+    private async Task PopulateFollowStateAsync(List<PortfolioWithComplimentDto> items, IEnumerable<int> portfolioIds)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        if (!_currentUser.HasCompany || _currentUser.CompanyId <= 0)
+        {
+            foreach (var item in items)
+            {
+                item.IsFollowed = false;
+            }
+
+            return;
+        }
+
+        var followedIds = await _followRepository.GetFollowedPortfolioIdsAsync(_currentUser.CompanyId, portfolioIds);
+        foreach (var item in items)
+        {
+            item.IsFollowed = followedIds.Contains(item.Id);
+        }
     }
 
     public async Task<JobMatchPagedResult> MatchJobsForPortfolioAsync(int portfolioId, int page, int pageSize, CancellationToken cancellationToken = default)

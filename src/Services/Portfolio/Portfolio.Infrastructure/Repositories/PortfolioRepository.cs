@@ -35,7 +35,7 @@ public class PortfolioRepository : IPortfolioRepository
             .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)
             .FirstOrDefaultAsync();
 
-    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, PortfolioSortMode sort, PortfolioRankBy rankBy)
+    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         var query = _context.Portfolios
             .Where(p => p.IsPublic)
@@ -43,6 +43,8 @@ public class PortfolioRepository : IPortfolioRepository
 
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(p => p.Status == status);
+
+        query = ApplySearchFilter(query, searchTerm, blockType);
 
         var total = await query.CountAsync();
         var items = await query.ToListAsync();
@@ -152,6 +154,8 @@ WHERE [EmployeeId] = {employeeId}
                        && (_currentUser.IsAdmin || c.UserId == _currentUser.UserId)));
         }
 
+        query = ApplySearchFilter(query, queryParams.SearchTerm, queryParams.BlockType);
+
         var total = await query.CountAsync();
 
         var items = await query
@@ -207,6 +211,35 @@ WHERE [EmployeeId] = {employeeId}
             .ToList();
 
         return (items, total);
+    }
+
+    private IQueryable<Portfolio.Domain.Entities.Portfolio> ApplySearchFilter(
+        IQueryable<Portfolio.Domain.Entities.Portfolio> query,
+        string? searchTerm,
+        string? blockType)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return query;
+        }
+
+        var normalizedSearch = searchTerm.Trim();
+        var escapedSearch = EscapeLikePattern(normalizedSearch);
+        var likePattern = $"%{escapedSearch}%";
+        var normalizedBlockType = string.IsNullOrWhiteSpace(blockType) ? null : blockType.Trim().ToUpperInvariant();
+
+        return query.Where(p => _context.PortfolioBlocks.Any(b =>
+            b.PortfolioId == p.Id &&
+            (normalizedBlockType == null || b.BlockType.Code == normalizedBlockType) &&
+            EF.Functions.Like(b.DataJson, likePattern)));
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("[", "[[]")
+            .Replace("%", "[%]")
+            .Replace("_", "[_]");
     }
 
     private async Task<Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)>> GetPublicRankingMapAsync(PortfolioRankBy rankBy)

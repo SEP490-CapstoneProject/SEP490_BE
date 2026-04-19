@@ -17,11 +17,19 @@ public class CommunityRepository : ICommunityRepository
 
     // ─── Feed (N+1-free, cursor-based) ───────────────────────────────────────
 
-    public async Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize)
+    public async Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize, string? searchQuery)
     {
         IQueryable<CommunityPost> query = _context.CommunityPosts
             .Where(p => p.Status == 1)
             .Include(p => p.Media);
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var normalizedQuery = searchQuery.Trim();
+            var escapedQuery = EscapeLikePattern(normalizedQuery);
+            var likePattern = $"%{escapedQuery}%";
+            query = query.Where(p => EF.Functions.Like(p.Description ?? string.Empty, likePattern));
+        }
 
         if (cursor.HasValue)
             query = query.Where(p => p.Id < cursor.Value);
@@ -30,6 +38,14 @@ public class CommunityRepository : ICommunityRepository
             .OrderByDescending(p => p.Id)
             .Take(pageSize)
             .ToListAsync();
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("[", "[[]")
+            .Replace("%", "[%]")
+            .Replace("_", "[_]");
     }
 
     public async Task<FeedCountsResult> GetFeedCountsAsync(List<int> postIds, int? currentUserId)

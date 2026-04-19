@@ -36,46 +36,57 @@ public class PortfolioController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? status = null,
+        [FromQuery] string? q = null,
+        [FromQuery] string? blockType = null,
         [FromQuery] bool includeCompliments = false,
         [FromQuery] ComplimentState? complimentState = null,
         [FromQuery] bool? hasCompliment = null,
         [FromQuery] PortfolioRankBy rankBy = PortfolioRankBy.average,
         [FromQuery] PortfolioSortMode sort = PortfolioSortMode.newest)
     {
-        // Use compliment filter path when any compliment param is specified
-        if (includeCompliments || complimentState.HasValue || hasCompliment.HasValue)
+        try
         {
-            var queryParams = new PortfolioQueryParams
+            // Use compliment filter path when any compliment param is specified
+            if (includeCompliments || complimentState.HasValue || hasCompliment.HasValue)
             {
-                Page = page,
-                PageSize = pageSize,
-                Status = status,
-                IncludeCompliments = includeCompliments,
-                ComplimentState = complimentState,
-                HasCompliment = hasCompliment,
-                RankBy = rankBy,
-                Sort = sort
-            };
-            var filteredResult = await _portfolioService.GetAllWithComplimentFilterAsync(queryParams);
+                var queryParams = new PortfolioQueryParams
+                {
+                    Page = page,
+                    PageSize = pageSize,
+                    Status = status,
+                    SearchTerm = q,
+                    BlockType = blockType,
+                    IncludeCompliments = includeCompliments,
+                    ComplimentState = complimentState,
+                    HasCompliment = hasCompliment,
+                    RankBy = rankBy,
+                    Sort = sort
+                };
+                var filteredResult = await _portfolioService.GetAllWithComplimentFilterAsync(queryParams);
 
-            foreach (var p in filteredResult.Items)
+                foreach (var p in filteredResult.Items)
+                {
+                    var blocks = await _blockRepo.GetByPortfolioIdAsync(p.Id);
+                    p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+                }
+
+                return Ok(filteredResult);
+            }
+
+            var result = await _portfolioService.GetAllAsync(page, pageSize, status, q, blockType, sort, rankBy);
+
+            foreach (var p in result.Items)
             {
-                var blocks = await _blockRepo.GetByPortfolioIdAsync(p.Id);
+                var blocks = await _blockRepo.GetByPortfolioIdAsync(p.PortfolioId);
                 p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
             }
 
-            return Ok(filteredResult);
+            return Ok(result);
         }
-
-        var result = await _portfolioService.GetAllAsync(page, pageSize, status, sort, rankBy);
-
-        foreach (var p in result.Items)
+        catch (ArgumentException ex)
         {
-            var blocks = await _blockRepo.GetByPortfolioIdAsync(p.PortfolioId);
-            p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+            return BadRequest(new { error = ex.Message });
         }
-
-        return Ok(result);
     }
 
     [HttpPost]
