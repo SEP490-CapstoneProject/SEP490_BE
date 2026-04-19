@@ -1,6 +1,5 @@
 ```mermaid
 sequenceDiagram
-    autonumber
     participant EventBus
     participant NotificationConsumer
     participant AggregationService
@@ -9,17 +8,35 @@ sequenceDiagram
     participant NotificationDB
     participant RealtimeService
 
-    EventBus->>NotificationConsumer: post.report.created
-    NotificationConsumer->>AggregationService: ProcessReportEventAsync
+    EventBus->>NotificationConsumer: 1. Consume post.report.created
+    activate NotificationConsumer
+    NotificationConsumer->>AggregationService: 2. ProcessReportEventAsync
+    activate AggregationService
     alt First report in window
-        AggregationService->>NotificationRepository: Create notification now
-        NotificationRepository->>NotificationDB: INSERT notification
-        NotificationDB-->>NotificationRepository: notificationId
-        AggregationService->>PublishService: Publish notification.created
+        AggregationService->>NotificationRepository: 3. Create notification now
+        activate NotificationRepository
+        NotificationRepository->>NotificationDB: 4. INSERT notification
+        activate NotificationDB
+        NotificationDB-->>NotificationRepository: 5. Return notificationId
+        deactivate NotificationDB
+        NotificationRepository-->>AggregationService: 6. Notification persisted
+        deactivate NotificationRepository
+        AggregationService->>PublishService: 7. Publish notification.created
+        activate PublishService
+        PublishService->>EventBus: 8. Emit notification.created
+        activate EventBus
+        EventBus->>RealtimeService: 9. Forward notification.created
+        activate RealtimeService
+        RealtimeService-->>RealtimeService: 10. Push to group user_{recipientId}
+        deactivate RealtimeService
+        deactivate EventBus
+        PublishService-->>AggregationService: 11. Publish completed
+        deactivate PublishService
     else Additional reports in 10m window
-        AggregationService->>AggregationService: Increase counter in Redis
+        AggregationService->>AggregationService: 3. Increase counter in Redis
     end
-    PublishService->>EventBus: notification.created
-    EventBus->>RealtimeService: notification.created
-    RealtimeService-->>RealtimeService: Push to user_{recipientId}
+    AggregationService-->>NotificationConsumer: 12. Processing completed
+    deactivate AggregationService
+    NotificationConsumer-->>EventBus: 13. Message acknowledged
+    deactivate NotificationConsumer
 ```
