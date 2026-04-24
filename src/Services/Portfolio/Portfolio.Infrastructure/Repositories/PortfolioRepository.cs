@@ -39,7 +39,7 @@ public class PortfolioRepository : IPortfolioRepository
     public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         var query = _context.Portfolios
-            .Where(p => p.IsPublic)
+            .Where(p => p.IsPublic && p.Status == "active")
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -130,7 +130,7 @@ WHERE [EmployeeId] = {employeeId}
     public async Task<(List<PortfolioWithComplimentDto> Items, int Total)> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams)
     {
         var query = _context.Portfolios
-            .Where(p => p.IsPublic)
+            .Where(p => p.IsPublic && p.Status == "active")
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(queryParams.Status))
@@ -258,7 +258,7 @@ WHERE [EmployeeId] = {employeeId}
             .ToDictionaryAsync(x => x.PortfolioId, x => (x.TotalScore, x.AverageScore));
 
         var publicPortfolioIds = await _context.Portfolios
-            .Where(p => p.IsPublic)
+            .Where(p => p.IsPublic && p.Status == "active")
             .Select(p => p.Id)
             .ToListAsync();
 
@@ -346,6 +346,7 @@ WHERE [EmployeeId] = {employeeId}
             .AsNoTracking()
             .Include(p => p.Blocks)
             .Where(p => p.IsPublic
+                && p.Status == "active"
                 && p.Embedding != null
                 && p.EmbeddingStatus == "Ready")
             .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.UpdatedAt ?? p.CreatedAt)

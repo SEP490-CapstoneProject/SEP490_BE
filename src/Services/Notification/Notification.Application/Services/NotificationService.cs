@@ -1,5 +1,6 @@
 using Notification.Application.DTOs;
 using Notification.Application.Interfaces;
+using Notification.Domain.Constants;
 using Notification.Domain.Entities;
 
 namespace Notification.Application.Services;
@@ -18,7 +19,33 @@ public class NotificationService : INotificationService
     public async Task<CursorPagedResult<UserNotificationDto>> GetNotificationsAsync(string userId, int? cursor, int limit)
     {
         var (items, nextCursor) = await _repo.GetNotificationsAsync(userId, cursor, limit);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
 
+    public async Task<CursorPagedResult<UserNotificationDto>> GetCommunityNotificationsAsync(string userId, int? cursor, int limit)
+    {
+        var (items, nextCursor) = await _repo.GetNotificationsByTypeFilterAsync(
+            userId,
+            cursor,
+            limit,
+            NotificationTypeGroups.CommunityTypes,
+            includeTypes: true);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
+
+    public async Task<CursorPagedResult<UserNotificationDto>> GetSystemNotificationsAsync(string userId, int? cursor, int limit)
+    {
+        var (items, nextCursor) = await _repo.GetNotificationsByTypeFilterAsync(
+            userId,
+            cursor,
+            limit,
+            NotificationTypeGroups.CommunityTypes,
+            includeTypes: false);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
+
+    private async Task<CursorPagedResult<UserNotificationDto>> BuildPagedResultAsync(List<NotificationEntity> items, int? nextCursor)
+    {
         var actorMap = new Dictionary<string, ActorDto>();
         var uniqueActors = items
             .Where(n => n.ActorId != null && n.ActorType != "SYSTEM")
