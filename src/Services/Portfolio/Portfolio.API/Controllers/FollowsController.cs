@@ -39,14 +39,15 @@ public class FollowsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetMyFollows()
+    public async Task<IActionResult> GetMyFollows([FromQuery] int? categoryId = null)
     {
         try
         {
-            var result = await _followService.GetMyFollowsAsync();
+            var result = await _followService.GetMyFollowsAsync(categoryId);
             return Ok(result);
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting followed portfolios");

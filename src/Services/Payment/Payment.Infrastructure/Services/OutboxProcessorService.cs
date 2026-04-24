@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Payment.Application.Interfaces;
 using Payment.Domain.Enums;
 using Payment.Domain.Interfaces;
+using System.Text.Json;
 
 namespace Payment.Infrastructure.Services;
 
@@ -58,17 +59,25 @@ public class OutboxProcessorService : BackgroundService
 
             try
             {
-                // Parse payload and publish
-                var payload = System.Text.Json.JsonDocument.Parse(outboxEvent.Payload);
-                var root = payload.RootElement;
+                var payload = JsonSerializer.Deserialize<PaymentSucceededOutboxPayload>(
+                    outboxEvent.Payload,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                if (payload == null)
+                {
+                    throw new InvalidOperationException($"Outbox payload is invalid for event {outboxEvent.EventId}");
+                }
 
                 await eventPublisher.PublishPaymentSucceededAsync(
-                    root.GetProperty("paymentId").GetGuid(),
-                    root.GetProperty("userId").GetInt32(),
-                    root.GetProperty("planId").GetInt32(),
-                    root.GetProperty("subscriptionId").GetInt32(),  // Added!
-                    root.GetProperty("amount").GetDecimal(),
-                    root.GetProperty("provider").GetString() ?? ""
+                    payload.PaymentId,
+                    payload.UserId,
+                    payload.PlanId,
+                    payload.SubscriptionId,
+                    payload.Amount,
+                    payload.Provider ?? string.Empty
                 );
 
                 // Mark as published
@@ -97,5 +106,15 @@ public class OutboxProcessorService : BackgroundService
                 }
             }
         }
+    }
+
+    private sealed class PaymentSucceededOutboxPayload
+    {
+        public Guid PaymentId { get; set; }
+        public int UserId { get; set; }
+        public int PlanId { get; set; }
+        public int SubscriptionId { get; set; }
+        public decimal Amount { get; set; }
+        public string? Provider { get; set; }
     }
 }

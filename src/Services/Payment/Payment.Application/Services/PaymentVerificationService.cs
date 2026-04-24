@@ -61,14 +61,17 @@ public class PaymentVerificationService : IPaymentVerificationService
         }
 
         // Step 3: Verify amount (CRITICAL - fraud detection)
-        if (Math.Abs(paymentInfo.Amount - payment.Amount) > 0.01m)
+        // PayOS returns integer VND while DB stores decimal plan price (e.g. 9.99 -> 9990).
+        var expectedProviderAmount = NormalizeAmountToProviderUnit(payment.Amount);
+        var providerAmount = NormalizeAmountToProviderUnit(paymentInfo.Amount);
+        if (Math.Abs(providerAmount - expectedProviderAmount) > 0.01m)
         {
             _logger.LogCritical("FRAUD ALERT: Amount mismatch for OrderCode {OrderCode}. " +
-                "Webhook: {WebhookAmount}, API: {ApiAmount}, DB: {DbAmount}",
-                webhookData.OrderCode, webhookData.Amount, paymentInfo.Amount, payment.Amount);
+                "Webhook: {WebhookAmount}, API: {ApiAmount}, DB: {DbAmount}, DBNormalized: {DbNormalized}",
+                webhookData.OrderCode, webhookData.Amount, paymentInfo.Amount, payment.Amount, expectedProviderAmount);
 
             return VerificationResult.Failure(
-                $"Amount mismatch - Expected: {payment.Amount}, API: {paymentInfo.Amount}");
+                $"Amount mismatch - Expected: {expectedProviderAmount}, API: {providerAmount}");
         }
 
         // Step 4: Verify status
@@ -113,5 +116,16 @@ public class PaymentVerificationService : IPaymentVerificationService
             _logger.LogError(ex, "Error verifying payment by OrderCode {OrderCode}", orderCode);
             return VerificationResult.Failure($"API error: {ex.Message}");
         }
+    }
+
+    private static decimal NormalizeAmountToProviderUnit(decimal amount)
+    {
+        var rounded = decimal.Round(amount, 0, MidpointRounding.AwayFromZero);
+        if (rounded > 0 && rounded < 1000)
+        {
+            rounded = decimal.Round(amount * 1000, 0, MidpointRounding.AwayFromZero);
+        }
+
+        return rounded;
     }
 }

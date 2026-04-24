@@ -58,6 +58,40 @@ public class PaymentVerificationServiceTests
     }
 
     [Fact]
+    public async Task VerifyWebhookDataAsync_DbDecimalAndProviderVndInteger_ReturnsValid()
+    {
+        // Arrange
+        var payment = new PaymentEntity
+        {
+            Id = Guid.NewGuid(),
+            Amount = 9.99m,
+            OrderCode = "ORD123"
+        };
+        var webhookData = new Payment.Application.Services.WebhookData
+        {
+            OrderCode = "ORD123",
+            Amount = 9990,
+            Status = "PAID"
+        };
+        var paymentInfo = new PaymentInfo
+        {
+            OrderCode = "ORD123",
+            Amount = 9990,
+            Status = "PAID"
+        };
+
+        _providerMock.Setup(p => p.VerifyPaymentAsync(It.IsAny<string>()))
+            .ReturnsAsync(paymentInfo);
+
+        // Act
+        var result = await _service.VerifyWebhookDataAsync(payment, webhookData);
+
+        // Assert
+        Assert.True(result.IsValid);
+        Assert.Null(result.FailureReason);
+    }
+
+    [Fact]
     public async Task VerifyWebhookDataAsync_AmountMismatch_ReturnsInvalid()
     {
         // Arrange

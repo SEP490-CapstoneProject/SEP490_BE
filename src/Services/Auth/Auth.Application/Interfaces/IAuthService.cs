@@ -15,4 +15,5 @@ public interface IAuthService
     Task<IEnumerable<UserDto>> GetAllUsersAsync();
     Task<InternalUserInfoDto?> GetInternalUserInfoByIdAsync(int userId);
     Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByIdsAsync(IEnumerable<int> userIds);
+    Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByRolesAsync(IEnumerable<string> roles);
 }

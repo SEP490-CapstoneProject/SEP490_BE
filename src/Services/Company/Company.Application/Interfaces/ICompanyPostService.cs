@@ -16,5 +16,7 @@ public interface ICompanyPostService
     Task<bool> SoftDeletePostAsync(int postId, int requesterId);
     Task SavePostAsync(int postId, int userId);
     Task UnsavePostAsync(int postId, int userId);
+    Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default);
 }
 

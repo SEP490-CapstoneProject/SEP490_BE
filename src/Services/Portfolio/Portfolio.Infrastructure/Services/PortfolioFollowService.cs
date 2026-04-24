@@ -13,6 +13,7 @@ public class PortfolioFollowService : IPortfolioFollowService
     };
 
     private readonly IPortfolioFollowRepository _followRepository;
+    private readonly IPortfolioFollowCategoryRepository _categoryRepository;
     private readonly IPortfolioRepository _portfolioRepository;
     private readonly IBlockRepository _blockRepository;
     private readonly IBlockService _blockService;
@@ -20,12 +21,14 @@ public class PortfolioFollowService : IPortfolioFollowService
 
     public PortfolioFollowService(
         IPortfolioFollowRepository followRepository,
+        IPortfolioFollowCategoryRepository categoryRepository,
         IPortfolioRepository portfolioRepository,
         IBlockRepository blockRepository,
         IBlockService blockService,
         ICurrentUserService currentUser)
     {
         _followRepository = followRepository;
+        _categoryRepository = categoryRepository;
         _portfolioRepository = portfolioRepository;
         _blockRepository = blockRepository;
         _blockService = blockService;
@@ -48,6 +51,7 @@ public class PortfolioFollowService : IPortfolioFollowService
         {
             CompanyId = _currentUser.CompanyId,
             PortfolioId = request.PortfolioId,
+            CategoryId = await ResolveCategoryIdAsync(request.CategoryId),
             InterestLevel = interestLevel,
             FollowedAt = VietnamTime.Now()
         };
@@ -57,11 +61,12 @@ public class PortfolioFollowService : IPortfolioFollowService
         return await MapToDtoAsync(created);
     }
 
-    public async Task<List<PortfolioFollowDto>> GetMyFollowsAsync()
+    public async Task<List<PortfolioFollowDto>> GetMyFollowsAsync(int? categoryId = null)
     {
         EnsureCompanyAccess();
 
-        var follows = await _followRepository.GetByCompanyAsync(_currentUser.CompanyId);
+        var validatedCategoryId = await ValidateCategoryFilterAsync(categoryId);
+        var follows = await _followRepository.GetByCompanyAsync(_currentUser.CompanyId, validatedCategoryId);
         var result = new List<PortfolioFollowDto>(follows.Count);
         foreach (var follow in follows)
         {
@@ -79,6 +84,10 @@ public class PortfolioFollowService : IPortfolioFollowService
             ?? throw new KeyNotFoundException($"Follow not found for portfolio {portfolioId}");
 
         follow.InterestLevel = NormalizeInterestLevel(request.InterestLevel);
+        if (request.CategoryId.HasValue)
+        {
+            follow.CategoryId = await ResolveCategoryIdAsync(request.CategoryId);
+        }
         follow.UpdatedAt = VietnamTime.Now();
         var updated = await _followRepository.UpdateAsync(follow);
         return await MapToDtoAsync(updated);
@@ -113,6 +122,50 @@ public class PortfolioFollowService : IPortfolioFollowService
         return normalized;
     }
 
+    private async Task<int?> ResolveCategoryIdAsync(int? categoryId)
+    {
+        if (!categoryId.HasValue)
+        {
+            return null;
+        }
+
+        if (categoryId.Value <= 0)
+        {
+            throw new ArgumentException("CategoryId must be greater than 0.");
+        }
+
+        var category = await _categoryRepository.GetByIdAsync(categoryId.Value)
+            ?? throw new KeyNotFoundException($"Category {categoryId.Value} not found");
+
+        if (category.CompanyId != _currentUser.CompanyId)
+        {
+            throw new UnauthorizedAccessException("Category does not belong to this company.");
+        }
+
+        return category.Id;
+    }
+
+    private async Task<int?> ValidateCategoryFilterAsync(int? categoryId)
+    {
+        if (!categoryId.HasValue)
+        {
+            return null;
+        }
+
+        if (categoryId.Value <= 0)
+        {
+            throw new ArgumentException("CategoryId must be greater than 0.");
+        }
+
+        var category = await _categoryRepository.GetByIdAsync(categoryId.Value);
+        if (category == null || category.CompanyId != _currentUser.CompanyId)
+        {
+            throw new ArgumentException("Category is invalid for this company.");
+        }
+
+        return category.Id;
+    }
+
     private async Task<PortfolioFollowDto> MapToDtoAsync(PortfolioFollow follow)
     {
         var portfolio = follow.Portfolio ?? await _portfolioRepository.GetByIdAsync(follow.PortfolioId)
@@ -128,6 +181,7 @@ public class PortfolioFollowService : IPortfolioFollowService
             var blockDto = _blockService.MapBlockToDto(firstBlock);
             preview = new PortfolioPreviewDto
             {
+                Id = firstBlock.Id,
                 Type = blockDto.Type,
                 Variant = blockDto.Variant,
                 Data = blockDto.Data
@@ -141,6 +195,9 @@ public class PortfolioFollowService : IPortfolioFollowService
             PortfolioName = portfolio.Name,
             Status = portfolio.Status,
             InterestLevel = follow.InterestLevel,
+            CategoryId = follow.CategoryId,
+            CategoryName = follow.Category?.Name,
+            CategoryCode = follow.Category?.Code,
             FollowedAt = follow.FollowedAt,
             LastPortfolioUpdateAt = lastPortfolioUpdate,
             IsUpdatedSinceFollow = lastPortfolioUpdate > follow.FollowedAt,

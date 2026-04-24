@@ -4,7 +4,11 @@ using Company.Application.Helpers;
 using Company.Application.Interfaces;
 using Company.Domain.Entities;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using RecruitmentPlatform.AI.Abstractions;
+using RecruitmentPlatform.AI.Models;
+using System.Text.Json;
 
 namespace Company.Application.Services;
 
@@ -14,6 +18,12 @@ public class CompanyPostService : ICompanyPostService
     private readonly ICompanyCacheRepository _companyCacheRepository;
     private readonly ICompanyProfileClient _companyProfileClient;
     private readonly IMediaUploadClient _mediaUploadClient;
+    private readonly IPortfolioMatchingClient _portfolioMatchingClient;
+    private readonly ICompanyEmbeddingEventPublisher _embeddingEventPublisher;
+    private readonly IMatchingEngine _matchingEngine;
+    private readonly ITextNormalizer _textNormalizer;
+    private readonly IEmbeddingService _embeddingService;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<CompanyPostService> _logger;
 
     public CompanyPostService(
@@ -21,12 +31,24 @@ public class CompanyPostService : ICompanyPostService
         ICompanyCacheRepository companyCacheRepository,
         ICompanyProfileClient companyProfileClient,
         IMediaUploadClient mediaUploadClient,
+        IPortfolioMatchingClient portfolioMatchingClient,
+        ICompanyEmbeddingEventPublisher embeddingEventPublisher,
+        IMatchingEngine matchingEngine,
+        ITextNormalizer textNormalizer,
+        IEmbeddingService embeddingService,
+        IMemoryCache cache,
         ILogger<CompanyPostService> logger)
     {
         _repository = repository;
         _companyCacheRepository = companyCacheRepository;
         _companyProfileClient = companyProfileClient;
         _mediaUploadClient = mediaUploadClient;
+        _portfolioMatchingClient = portfolioMatchingClient;
+        _embeddingEventPublisher = embeddingEventPublisher;
+        _matchingEngine = matchingEngine;
+        _textNormalizer = textNormalizer;
+        _embeddingService = embeddingService;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -96,11 +118,13 @@ public class CompanyPostService : ICompanyPostService
             Status = request.Status,
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
+        await UpdateEmbeddingStateAsync(post);
 
         var created = await _repository.CreatePostAsync(post);
 
         await UploadPostMediaAsync(created, request.CoverImageKey, fileMap, replaceAllMedia: false);
         await _repository.UpdatePostAsync(created);
+        await TryPublishEmbeddingEventAsync(created.PostId);
 
         var detail = await _repository.GetPostDetailAsync(created.PostId, companyId);
         if (detail != null)
@@ -115,6 +139,7 @@ public class CompanyPostService : ICompanyPostService
     {
         var detail = await _repository.GetPostDetailAsync(postId, null);
         if (detail == null || detail.CompanyId != requesterId) return null;
+        var existingPost = await _repository.GetPostEntityByIdAsync(postId);
 
         var post = new CompanyPost
         {
@@ -132,10 +157,15 @@ public class CompanyPostService : ICompanyPostService
             Benefits = request.Benefits ?? detail.Benefits,
             Status = request.Status ?? detail.Status,
             CoverImageVideo = detail.CoverImageUrl,
-            CreatedAt = detail.CreatedAt
+            CreatedAt = detail.CreatedAt,
+            Embedding = null,
+            EmbeddingVersion = existingPost?.EmbeddingVersion ?? 0,
+            EmbeddingStatus = EmbeddingReadinessPolicy.Pending
         };
+        await UpdateEmbeddingStateAsync(post);
 
         await _repository.UpdatePostAsync(post);
+        await TryPublishEmbeddingEventAsync(postId);
         return await _repository.GetPostDetailAsync(postId, requesterId);
     }
 
@@ -143,6 +173,7 @@ public class CompanyPostService : ICompanyPostService
     {
         var detail = await _repository.GetPostDetailAsync(postId, null);
         if (detail == null || detail.CompanyId != requesterId) return null;
+        var existingPost = await _repository.GetPostEntityByIdAsync(postId);
 
         if (string.IsNullOrWhiteSpace(request.Position))
         {
@@ -165,11 +196,16 @@ public class CompanyPostService : ICompanyPostService
             Benefits = request.Benefits,
             Status = request.Status,
             CoverImageVideo = detail.CoverImageUrl,
-            CreatedAt = detail.CreatedAt
+            CreatedAt = detail.CreatedAt,
+            Embedding = null,
+            EmbeddingVersion = existingPost?.EmbeddingVersion ?? 0,
+            EmbeddingStatus = EmbeddingReadinessPolicy.Pending
         };
+        await UpdateEmbeddingStateAsync(post);
 
         await UploadPostMediaAsync(post, request.CoverImageKey, fileMap, replaceAllMedia: true);
         await _repository.UpdatePostAsync(post);
+        await TryPublishEmbeddingEventAsync(postId);
         return await _repository.GetPostDetailAsync(postId, requesterId);
     }
 
@@ -187,6 +223,89 @@ public class CompanyPostService : ICompanyPostService
 
     public Task UnsavePostAsync(int postId, int userId)
         => _repository.UnsavePostAsync(userId, postId);
+
+    public async Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
+        var post = await _repository.GetPostEntityByIdAsync(postId);
+        if (post == null)
+        {
+            return new PortfolioMatchPagedResult { Page = safePage, PageSize = safePageSize };
+        }
+
+        var sourceEmbedding = ParseEmbedding(post.Embedding);
+        if (!EmbeddingReadinessPolicy.IsReady(post.EmbeddingStatus, sourceEmbedding))
+        {
+            return new PortfolioMatchPagedResult { Page = safePage, PageSize = safePageSize };
+        }
+
+        var cacheKey = $"job:{post.PostId}:{post.EmbeddingVersion}:matched-portfolios:{safePage}:{safePageSize}";
+        if (_cache.TryGetValue(cacheKey, out PortfolioMatchPagedResult? cached) && cached != null)
+        {
+            return cached;
+        }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        var candidates = await _portfolioMatchingClient.GetPortfolioCandidatesAsync(cts.Token);
+
+        var request = new MatchingRequest
+        {
+            SourceId = post.PostId,
+            SourceTitle = post.Position,
+            SourceDescription = post.JobDescription ?? string.Empty,
+            SourceSkills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
+            SourceCategories = ExtractCategories(post.EmploymentType, post.Address),
+            SourceEmbedding = sourceEmbedding,
+            SourceEmbeddingVersion = post.EmbeddingVersion
+        };
+
+        var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
+        var result = new PortfolioMatchPagedResult
+        {
+            Total = matches.Total,
+            Page = matches.Page,
+            PageSize = matches.PageSize,
+            Items = matches.Items.Select(x => new PortfolioMatchResultDto
+            {
+                PortfolioId = x.Id,
+                Title = x.Title,
+                Cosine = x.Cosine,
+                SkillScore = x.SkillScore,
+                CategoryScore = x.CategoryScore,
+                FinalScore = x.FinalScore
+            }).ToList()
+        };
+
+        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(10));
+        return result;
+    }
+
+    public async Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        var posts = await _repository.GetActivePostsForMatchingAsync(limit);
+        var items = posts
+            .Select(post =>
+            {
+                var embedding = ParseEmbedding(post.Embedding);
+                return new MatchingCandidate
+                {
+                    Id = post.PostId,
+                    Title = post.Position,
+                    Description = post.JobDescription ?? string.Empty,
+                    Skills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
+                    Categories = ExtractCategories(post.EmploymentType, post.Address),
+                    Embedding = embedding,
+                    EmbeddingVersion = post.EmbeddingVersion,
+                    EmbeddingStatus = post.EmbeddingStatus,
+                    UpdatedAt = post.EmbeddingUpdatedAt ?? post.CreatedAt
+                };
+            })
+            .Where(candidate => candidate.Embedding.Length > 0)
+            .ToList();
+
+        return new MatchingCandidateFeed { Items = items };
+    }
 
     private async Task EnrichCompanyCacheAsync(List<CompanyPostFeedDto> items)
     {
@@ -282,6 +401,89 @@ public class CompanyPostService : ICompanyPostService
                 Name = result.PublicId ?? filename,
                 Address = result.Url
             });
+        }
+    }
+
+    private async Task UpdateEmbeddingStateAsync(CompanyPost post)
+    {
+        post.EmbeddingStatus = EmbeddingReadinessPolicy.Pending;
+        var text = _textNormalizer.BuildJobText(new EmbeddingTextInput
+        {
+            Title = post.Position,
+            Description = post.JobDescription,
+            Skills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
+            Categories = ExtractCategories(post.EmploymentType, post.Address),
+            CustomFields = new[] { post.Benefits ?? "N/A", post.Salary ?? "N/A" }
+        });
+
+        try
+        {
+            var embedding = await _embeddingService.CreateEmbeddingAsync(text);
+            post.Embedding = JsonSerializer.Serialize(embedding);
+            post.EmbeddingVersion = Math.Max(1, post.EmbeddingVersion + 1);
+            post.EmbeddingUpdatedAt = DateTimeHelper.GetVietnamTime();
+            post.EmbeddingStatus = EmbeddingReadinessPolicy.ResolveStatus(embedding);
+        }
+        catch (Exception ex)
+        {
+            post.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
+            _logger.LogWarning(ex, "Failed to generate embedding for company post {PostId}", post.PostId);
+        }
+    }
+
+    private static float[] ParseEmbedding(string? embeddingJson)
+    {
+        if (string.IsNullOrWhiteSpace(embeddingJson))
+        {
+            return Array.Empty<float>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<float[]>(embeddingJson) ?? Array.Empty<float>();
+        }
+        catch
+        {
+            return Array.Empty<float>();
+        }
+    }
+
+    private static (int Page, int PageSize) NormalizeMatchPaging(int page, int pageSize)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 50);
+        return (safePage, safePageSize);
+    }
+
+    private static List<string> ExtractSkills(params string?[] textParts)
+    {
+        return textParts
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .SelectMany(x => x!.Split([',', ';', '\n', '\r', '|', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(x => x.Length > 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<string> ExtractCategories(params string?[] textParts)
+    {
+        return textParts
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .SelectMany(x => x!.Split([',', ';', '\n', '\r', '|', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(x => x.Length > 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private async Task TryPublishEmbeddingEventAsync(int postId)
+    {
+        try
+        {
+            await _embeddingEventPublisher.PublishCompanyPostChangedAsync(postId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish embedding event for company post {PostId}", postId);
         }
     }
 }

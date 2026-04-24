@@ -17,11 +17,19 @@ public class CommunityRepository : ICommunityRepository
 
     // ─── Feed (N+1-free, cursor-based) ───────────────────────────────────────
 
-    public async Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize)
+    public async Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize, string? searchQuery)
     {
         IQueryable<CommunityPost> query = _context.CommunityPosts
             .Where(p => p.Status == 1)
             .Include(p => p.Media);
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var normalizedQuery = searchQuery.Trim();
+            var escapedQuery = EscapeLikePattern(normalizedQuery);
+            var likePattern = $"%{escapedQuery}%";
+            query = query.Where(p => EF.Functions.Like(p.Description ?? string.Empty, likePattern));
+        }
 
         if (cursor.HasValue)
             query = query.Where(p => p.Id < cursor.Value);
@@ -30,6 +38,14 @@ public class CommunityRepository : ICommunityRepository
             .OrderByDescending(p => p.Id)
             .Take(pageSize)
             .ToListAsync();
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("[", "[[]")
+            .Replace("%", "[%]")
+            .Replace("_", "[_]");
     }
 
     public async Task<FeedCountsResult> GetFeedCountsAsync(List<int> postIds, int? currentUserId)
@@ -85,11 +101,29 @@ public class CommunityRepository : ICommunityRepository
             .ToListAsync();
     }
 
+    public async Task<List<CommunityPost>> GetAdminPostsAsync(int? status, int pageNumber, int pageSize)
+    {
+        IQueryable<CommunityPost> query = _context.CommunityPosts
+            .Include(p => p.Media);
+
+        if (status.HasValue)
+        {
+            query = query.Where(p => p.Status == status.Value);
+        }
+
+        return await query
+            .OrderByDescending(p => p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId)
     {
         return await _context.CommunityPosts
             .Include(p => p.Media)
-            .Where(p => p.UserId == userId)
+            .Where(p => p.UserId == userId && p.Status == 1)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync();
     }
@@ -107,14 +141,63 @@ public class CommunityRepository : ICommunityRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeletePostAsync(int id)
+    public async Task DeletePostAsync(CommunityPost post)
     {
-        var post = await _context.CommunityPosts.FindAsync(id);
-        if (post != null)
+        _context.CommunityPosts.Update(post);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<CommunityPostReport?> GetPostReportByIdAsync(int reportId)
+    {
+        return await _context.CommunityPostReports
+            .Include(r => r.CommunityPost)
+            .FirstOrDefaultAsync(r => r.Id == reportId);
+    }
+
+    public async Task<CommunityPostReport?> GetPostReportByPostAndReporterAsync(int postId, int reporterUserId)
+    {
+        return await _context.CommunityPostReports
+            .FirstOrDefaultAsync(r => r.CommunityPostId == postId && r.ReporterUserId == reporterUserId);
+    }
+
+    public async Task<CommunityPostReport> CreatePostReportAsync(CommunityPostReport report)
+    {
+        _context.CommunityPostReports.Add(report);
+        await _context.SaveChangesAsync();
+        return report;
+    }
+
+    public async Task<List<CommunityPostReport>> GetPostReportsAsync(int? postId, int? reporterUserId, int? status, int pageNumber, int pageSize)
+    {
+        IQueryable<CommunityPostReport> query = _context.CommunityPostReports
+            .Include(r => r.CommunityPost);
+
+        if (postId.HasValue)
         {
-            _context.CommunityPosts.Remove(post);
-            await _context.SaveChangesAsync();
+            query = query.Where(r => r.CommunityPostId == postId.Value);
         }
+
+        if (reporterUserId.HasValue)
+        {
+            query = query.Where(r => r.ReporterUserId == reporterUserId.Value);
+        }
+
+        if (status.HasValue)
+        {
+            query = query.Where(r => (int)r.Status == status.Value);
+        }
+
+        return await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+    }
+
+    public async Task UpdatePostReportAsync(CommunityPostReport report)
+    {
+        _context.CommunityPostReports.Update(report);
+        await _context.SaveChangesAsync();
     }
 
     // ─── Save/Favorite operations ─────────────────────────────────────────────
@@ -200,6 +283,7 @@ public class CommunityRepository : ICommunityRepository
             .Where(s => s.UserId == userId)
             .Include(s => s.CommunityPost)
                 .ThenInclude(p => p.Media)
+            .Where(s => s.CommunityPost.Status == 1)
             .OrderByDescending(s => s.CommunityPost.CreatedAt)
             .Select(s => s.CommunityPost)
             .ToListAsync();
@@ -211,6 +295,7 @@ public class CommunityRepository : ICommunityRepository
             .Where(f => f.UserId == userId)
             .Include(f => f.CommunityPost)
                 .ThenInclude(p => p.Media)
+            .Where(f => f.CommunityPost.Status == 1)
             .OrderByDescending(f => f.CommunityPost.CreatedAt)
             .Select(f => f.CommunityPost)
             .ToListAsync();
