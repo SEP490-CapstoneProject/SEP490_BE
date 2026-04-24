@@ -27,7 +27,8 @@ public class OutboxRepository : IOutboxRepository
     public async Task<IEnumerable<OutboxEvent>> GetPendingAsync(int limit = 100)
     {
         return await _context.OutboxEvents
-            .Where(e => e.Status == OutboxStatus.Pending)
+            .Where(e => e.Status == OutboxStatus.Pending &&
+                        e.EventType.StartsWith("subscription."))
             .OrderBy(e => e.CreatedAt)
             .Take(limit)
             .ToListAsync();

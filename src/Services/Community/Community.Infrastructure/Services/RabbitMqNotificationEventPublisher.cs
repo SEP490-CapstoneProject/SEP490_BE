@@ -26,6 +26,16 @@ public class RabbitMqNotificationEventPublisher : INotificationEventPublisher
         await PublishAsync("post.favorite", evt, cancellationToken);
     }
 
+    public async Task PublishPostRemovedByModerationNotificationAsync(PostRemovedByModerationNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.report.removed", evt, cancellationToken);
+    }
+
+    public async Task PublishPostReportCreatedNotificationAsync(PostReportCreatedNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.report.created", evt, cancellationToken);
+    }
+
     private async Task PublishAsync<T>(string routingKey, T evt, CancellationToken cancellationToken)
     {
         try

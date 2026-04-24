@@ -101,6 +101,14 @@ builder.Services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
 builder.Services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
 builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
 
+// Add external clients
+builder.Services.AddHttpClient<ISubscriptionUserProfileClient, SubscriptionUserProfileClient>(client =>
+{
+    var userProfileServiceUrl = builder.Configuration["ServiceUrls:UserProfileService"]
+        ?? "https://userprofile-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
+    client.BaseAddress = new Uri(userProfileServiceUrl);
+});
+
 // Add Services
 builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
@@ -156,7 +164,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

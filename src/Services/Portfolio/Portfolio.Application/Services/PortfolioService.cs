@@ -4,7 +4,12 @@ using Portfolio.Application.BlockHandlers;
 using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
+using Microsoft.Extensions.Caching.Memory;
+using RecruitmentPlatform.AI.Abstractions;
+using RecruitmentPlatform.AI.Models;
+using RecruitmentPlatform.AI.Services;
 using RecruitmentPlatform.Contracts.Time;
+using System.Text.Json;
 using System.Transactions;
 
 namespace Portfolio.Application.Services;
@@ -12,24 +17,51 @@ namespace Portfolio.Application.Services;
 public class PortfolioService : IPortfolioService
 {
     private readonly IPortfolioRepository _repo;
+    private readonly IPortfolioFollowRepository _followRepository;
+    private readonly ICurrentUserService _currentUser;
     private readonly IEmployeeServiceClient _employeeClient;
     private readonly IAuthServiceClient _authServiceClient;
     private readonly IReviewerProfileClient _reviewerProfileClient;
+    private readonly ICompanyMatchingClient _companyMatchingClient;
+    private readonly IPortfolioEmbeddingEventPublisher _embeddingEventPublisher;
+    private readonly IMatchingEngine _matchingEngine;
+    private readonly ITextNormalizer _textNormalizer;
+    private readonly IEmbeddingService _embeddingService;
+    private readonly ModerationService _moderationService;
+    private readonly IMemoryCache _cache;
     private readonly IEnumerable<IBlockHandler> _handlers;
     private readonly ILogger<PortfolioService> _logger;
 
     public PortfolioService(
         IPortfolioRepository repo,
+        IPortfolioFollowRepository followRepository,
+        ICurrentUserService currentUser,
         IEmployeeServiceClient employeeClient,
         IAuthServiceClient authServiceClient,
         IReviewerProfileClient reviewerProfileClient,
+        ICompanyMatchingClient companyMatchingClient,
+        IPortfolioEmbeddingEventPublisher embeddingEventPublisher,
+        IMatchingEngine matchingEngine,
+        ITextNormalizer textNormalizer,
+        IEmbeddingService embeddingService,
+        ModerationService moderationService,
+        IMemoryCache cache,
         IEnumerable<IBlockHandler> handlers,
         ILogger<PortfolioService> logger)
     {
         _repo = repo;
+        _followRepository = followRepository;
+        _currentUser = currentUser;
         _employeeClient = employeeClient;
         _authServiceClient = authServiceClient;
         _reviewerProfileClient = reviewerProfileClient;
+        _companyMatchingClient = companyMatchingClient;
+        _embeddingEventPublisher = embeddingEventPublisher;
+        _matchingEngine = matchingEngine;
+        _textNormalizer = textNormalizer;
+        _embeddingService = embeddingService;
+        _moderationService = moderationService;
+        _cache = cache;
         _handlers = handlers;
         _logger = logger;
     }
@@ -67,8 +99,10 @@ public class PortfolioService : IPortfolioService
             IsPublic = request.IsPublic,
             CreatedAt = VietnamTime.Now()
         };
+        await ApplyModerationAndEmbeddingAsync(portfolio);
 
         var created = await _repo.CreateAsync(portfolio);
+        await TryPublishEmbeddingEventAsync(created.Id);
         if (request.IsMain)
         {
             await _repo.SetMainPortfolioAsync(employeeId, created.Id);
@@ -93,11 +127,13 @@ public class PortfolioService : IPortfolioService
         if (request.IsMain.HasValue)
             portfolio.IsMain = request.IsMain.Value;
         portfolio.UpdatedAt = VietnamTime.Now();
+        await ApplyModerationAndEmbeddingAsync(portfolio);
 
         if (request.IsMain == true)
             await _repo.SetMainPortfolioAsync(employeeId, portfolio.Id);
 
         var updated = await _repo.UpdateAsync(portfolio);
+        await TryPublishEmbeddingEventAsync(updated.Id);
         return MapToDto(updated);
     }
 
@@ -150,13 +186,14 @@ public class PortfolioService : IPortfolioService
         return await _repo.DeleteAsync(id);
     }
 
-    public async Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status, PortfolioSortMode sort, PortfolioRankBy rankBy)
+    public async Task<PagedResult<PortfolioDto>> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 10;
         if (pageSize > 100) pageSize = 100;
 
-        var (items, total, rankingMap) = await _repo.GetAllAsync(page, pageSize, status, sort, rankBy);
+        var normalizedBlockType = await ValidateAndNormalizeBlockTypeAsync(blockType);
+        var (items, total, rankingMap) = await _repo.GetAllAsync(page, pageSize, status, searchTerm, normalizedBlockType, sort, rankBy);
         var mappedItems = items.Select(MapToDto).ToList();
         foreach (var item in mappedItems)
         {
@@ -170,6 +207,7 @@ public class PortfolioService : IPortfolioService
         }
 
         await PopulateReviewersAsync(mappedItems, mappedItems.Select(x => x.PortfolioId));
+        await PopulateFollowStateAsync(mappedItems, mappedItems.Select(x => x.PortfolioId));
 
         return new PagedResult<PortfolioDto>
         {
@@ -241,7 +279,9 @@ public class PortfolioService : IPortfolioService
         }
 
         // Entity already tracked by EF Core, just commit changes
+        await ApplyModerationAndEmbeddingAsync(portfolio);
         await _repo.CommitAsync();
+        await TryPublishEmbeddingEventAsync(portfolio.Id);
 
         scope.Complete();
 
@@ -301,8 +341,11 @@ public class PortfolioService : IPortfolioService
             portfolio.Blocks.Add(block);
         }
 
+        await ApplyModerationAndEmbeddingAsync(portfolio);
+
         _repo.AddAsync(portfolio);
         await _repo.CommitAsync();
+        await TryPublishEmbeddingEventAsync(portfolio.Id);
         if (request.IsMain)
         {
             await _repo.SetMainPortfolioAsync(request.EmployeeId, portfolio.Id);
@@ -460,9 +503,11 @@ public class PortfolioService : IPortfolioService
         if (queryParams.Page < 1) queryParams.Page = 1;
         if (queryParams.PageSize < 1) queryParams.PageSize = 10;
         if (queryParams.PageSize > 100) queryParams.PageSize = 100;
+        queryParams.BlockType = await ValidateAndNormalizeBlockTypeAsync(queryParams.BlockType);
 
         var (items, total) = await _repo.GetAllWithComplimentFilterAsync(queryParams);
         await PopulateReviewersAsync(items, items.Select(x => x.Id));
+        await PopulateFollowStateAsync(items, items.Select(x => x.Id));
         return new PagedResult<PortfolioWithComplimentDto>
         {
             Items = items,
@@ -470,5 +515,251 @@ public class PortfolioService : IPortfolioService
             Page = queryParams.Page,
             PageSize = queryParams.PageSize
         };
+    }
+
+    private async Task<string?> ValidateAndNormalizeBlockTypeAsync(string? blockType)
+    {
+        if (string.IsNullOrWhiteSpace(blockType))
+        {
+            return null;
+        }
+
+        var normalized = blockType.Trim().ToUpperInvariant();
+        var blockTypes = await _repo.GetBlockTypesAsync();
+        if (!blockTypes.ContainsKey(normalized))
+        {
+            throw new ArgumentException($"BlockType '{blockType}' is invalid.");
+        }
+
+        return normalized;
+    }
+
+    private async Task PopulateFollowStateAsync(List<PortfolioDto> items, IEnumerable<int> portfolioIds)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        if (!_currentUser.HasCompany || _currentUser.CompanyId <= 0)
+        {
+            foreach (var item in items)
+            {
+                item.IsFollowed = false;
+            }
+
+            return;
+        }
+
+        var followedIds = await _followRepository.GetFollowedPortfolioIdsAsync(_currentUser.CompanyId, portfolioIds);
+        foreach (var item in items)
+        {
+            item.IsFollowed = followedIds.Contains(item.PortfolioId);
+        }
+    }
+
+    private async Task PopulateFollowStateAsync(List<PortfolioWithComplimentDto> items, IEnumerable<int> portfolioIds)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        if (!_currentUser.HasCompany || _currentUser.CompanyId <= 0)
+        {
+            foreach (var item in items)
+            {
+                item.IsFollowed = false;
+            }
+
+            return;
+        }
+
+        var followedIds = await _followRepository.GetFollowedPortfolioIdsAsync(_currentUser.CompanyId, portfolioIds);
+        foreach (var item in items)
+        {
+            item.IsFollowed = followedIds.Contains(item.Id);
+        }
+    }
+
+    public async Task<JobMatchPagedResult> MatchJobsForPortfolioAsync(int portfolioId, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
+        var portfolio = await _repo.GetByIdAsync(portfolioId);
+        if (portfolio == null)
+        {
+            return new JobMatchPagedResult { Page = safePage, PageSize = safePageSize };
+        }
+
+        var sourceEmbedding = ParseEmbedding(portfolio.Embedding);
+        if (!EmbeddingReadinessPolicy.IsReady(portfolio.EmbeddingStatus, sourceEmbedding))
+        {
+            return new JobMatchPagedResult { Page = safePage, PageSize = safePageSize };
+        }
+
+        var cacheKey = $"portfolio:{portfolio.Id}:{portfolio.EmbeddingVersion}:matched-jobs:{safePage}:{safePageSize}";
+        if (_cache.TryGetValue(cacheKey, out JobMatchPagedResult? cached) && cached != null)
+        {
+            return cached;
+        }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        var candidates = await _companyMatchingClient.GetJobCandidatesAsync(cts.Token);
+
+        var sourceSkills = ExtractPortfolioSkills(portfolio);
+        var request = new MatchingRequest
+        {
+            SourceId = portfolio.Id,
+            SourceTitle = portfolio.Name,
+            SourceDescription = BuildPortfolioDescription(portfolio),
+            SourceSkills = sourceSkills,
+            SourceCategories = Array.Empty<string>().ToList(),
+            SourceEmbedding = sourceEmbedding,
+            SourceEmbeddingVersion = portfolio.EmbeddingVersion
+        };
+
+        var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
+        var result = new JobMatchPagedResult
+        {
+            Total = matches.Total,
+            Page = matches.Page,
+            PageSize = matches.PageSize,
+            Items = matches.Items.Select(x => new JobMatchResultDto
+            {
+                JobId = x.Id,
+                Title = x.Title,
+                Cosine = x.Cosine,
+                SkillScore = x.SkillScore,
+                CategoryScore = x.CategoryScore,
+                FinalScore = x.FinalScore
+            }).ToList()
+        };
+
+        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(10));
+        return result;
+    }
+
+    public async Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        var portfolios = await _repo.GetPublicPortfoliosForMatchingAsync(limit);
+        var items = portfolios
+            .Select(portfolio =>
+            {
+                var embedding = ParseEmbedding(portfolio.Embedding);
+                return new MatchingCandidate
+                {
+                    Id = portfolio.Id,
+                    Title = portfolio.Name,
+                    Description = BuildPortfolioDescription(portfolio),
+                    Skills = ExtractPortfolioSkills(portfolio),
+                    Categories = new List<string>(),
+                    Embedding = embedding,
+                    EmbeddingVersion = portfolio.EmbeddingVersion,
+                    EmbeddingStatus = portfolio.EmbeddingStatus,
+                    UpdatedAt = portfolio.EmbeddingUpdatedAt ?? portfolio.UpdatedAt ?? portfolio.CreatedAt
+                };
+            })
+            .Where(candidate => candidate.Embedding.Length > 0)
+            .ToList();
+
+        return new MatchingCandidateFeed { Items = items };
+    }
+
+    private async Task ApplyModerationAndEmbeddingAsync(Domain.Entities.Portfolio portfolio)
+    {
+        var description = BuildPortfolioDescription(portfolio);
+        var hasProject = portfolio.Blocks.Any(x => x.BlockTypeId == 6);
+        var moderation = _moderationService.Check(description, hasProject);
+        portfolio.ModerationStatus = moderation.Status;
+        portfolio.ModerationReason = moderation.Reason;
+        portfolio.ModeratedAt = VietnamTime.Now();
+        if (!string.Equals(moderation.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            portfolio.IsPublic = false;
+            portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
+            return;
+        }
+
+        portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.Pending;
+        var input = new EmbeddingTextInput
+        {
+            Title = portfolio.Name,
+            Description = description,
+            Skills = ExtractPortfolioSkills(portfolio),
+            Categories = Array.Empty<string>(),
+            Projects = portfolio.Blocks.Where(x => x.BlockTypeId == 6).Select(x => x.DataJson).ToList(),
+            CustomFields = portfolio.Blocks.Select(x => x.DataJson).Take(5).ToList()
+        };
+        var text = _textNormalizer.BuildPortfolioText(input);
+
+        try
+        {
+            var embedding = await _embeddingService.CreateEmbeddingAsync(text);
+            portfolio.Embedding = JsonSerializer.Serialize(embedding);
+            portfolio.EmbeddingVersion = Math.Max(1, portfolio.EmbeddingVersion + 1);
+            portfolio.EmbeddingUpdatedAt = VietnamTime.Now();
+            portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.ResolveStatus(embedding);
+        }
+        catch (Exception ex)
+        {
+            portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
+            _logger.LogWarning(ex, "Failed to generate embedding for portfolio {PortfolioId}", portfolio.Id);
+        }
+    }
+
+    private static string BuildPortfolioDescription(Domain.Entities.Portfolio portfolio)
+    {
+        var pieces = portfolio.Blocks
+            .OrderBy(x => x.DisplayOrder)
+            .Select(x => x.DataJson)
+            .Where(x => !string.IsNullOrWhiteSpace(x));
+        return string.Join(" ", pieces);
+    }
+
+    private static List<string> ExtractPortfolioSkills(Domain.Entities.Portfolio portfolio)
+    {
+        return portfolio.Blocks
+            .Where(x => x.BlockTypeId == 2)
+            .SelectMany(x => x.DataJson.Split([',', ';', '\n', '\r', '|', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(x => x.Length > 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static float[] ParseEmbedding(string? embeddingJson)
+    {
+        if (string.IsNullOrWhiteSpace(embeddingJson))
+        {
+            return Array.Empty<float>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<float[]>(embeddingJson) ?? Array.Empty<float>();
+        }
+        catch
+        {
+            return Array.Empty<float>();
+        }
+    }
+
+    private static (int Page, int PageSize) NormalizeMatchPaging(int page, int pageSize)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 50);
+        return (safePage, safePageSize);
+    }
+
+    private async Task TryPublishEmbeddingEventAsync(int portfolioId)
+    {
+        try
+        {
+            await _embeddingEventPublisher.PublishPortfolioChangedAsync(portfolioId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish embedding event for portfolio {PortfolioId}", portfolioId);
+        }
     }
 }

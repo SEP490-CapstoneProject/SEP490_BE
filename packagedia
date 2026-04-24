@@ -1,0 +1,110 @@
+```mermaid
+flowchart TB
+    %% =============================
+    %% CLIENTS
+    %% =============================
+    Web[Web / Frontend]
+    Mobile[Mobile App]
+
+    %% =============================
+    %% EDGE
+    %% =============================
+    ApiGateway[ApiGateway<br/>YARP + Auth Forward]
+
+    Web --> ApiGateway
+    Mobile --> ApiGateway
+
+    %% =============================
+    %% SHARED PACKAGES
+    %% =============================
+    subgraph Shared["Shared Packages"]
+        Common[RecruitmentPlatform.Common]
+        Contracts[RecruitmentPlatform.Contracts]
+        AIShared[RecruitmentPlatform.AI]
+    end
+
+    %% =============================
+    %% CORE DOMAIN SERVICES
+    %% =============================
+    subgraph Services["Microservices"]
+        Auth[Auth Service]
+        UserProfile[UserProfile Service]
+        Portfolio[Portfolio Service]
+        Community[Community Service]
+        Company[Company Service]
+        Application[Application Service]
+        Connection[Connection Service]
+        Interview[Interview Service]
+        Subscription[Subscription Service]
+        Payment[Payment Service]
+        Notification[Notification Service]
+        Realtime[Realtime Service]
+        Media[Media Service]
+        Moderation[Moderation Service]
+    end
+
+    ApiGateway --> Auth
+    ApiGateway --> UserProfile
+    ApiGateway --> Portfolio
+    ApiGateway --> Community
+    ApiGateway --> Company
+    ApiGateway --> Application
+    ApiGateway --> Connection
+    ApiGateway --> Interview
+    ApiGateway --> Subscription
+    ApiGateway --> Payment
+    ApiGateway --> Notification
+    ApiGateway --> Realtime
+    ApiGateway --> Media
+    ApiGateway --> Moderation
+
+    %% Shared package usage
+    Auth -.uses.-> Common
+    UserProfile -.uses.-> Common
+    Portfolio -.uses.-> Common
+    Community -.uses.-> Common
+    Company -.uses.-> Common
+    Application -.uses.-> Common
+    Connection -.uses.-> Common
+    Interview -.uses.-> Common
+    Subscription -.uses.-> Common
+    Payment -.uses.-> Common
+    Notification -.uses.-> Common
+    Realtime -.uses.-> Common
+    Media -.uses.-> Common
+    Moderation -.uses.-> Common
+
+    Services -.contracts/events.-> Contracts
+    Moderation -.ai workflows.-> AIShared
+
+    %% =============================
+    %% DATA & INFRA PACKAGES
+    %% =============================
+    subgraph Data["Data Stores"]
+        Sql[(SQL Server Databases)]
+        Redis[(Redis Cache)]
+    end
+
+    subgraph Messaging["Messaging"]
+        Bus[(RabbitMQ / Message Bus)]
+    end
+
+    subgraph External["External Providers"]
+        PayOS[PayOS]
+        Cloudinary[Cloudinary]
+        OpenAI[Azure OpenAI / AI Provider]
+    end
+
+    Services --> Sql
+    Community --> Redis
+    Notification --> Redis
+
+    Subscription <--> Payment
+    Services <--> Bus
+    Realtime --> Bus
+    Notification --> Bus
+
+    Payment --> PayOS
+    Media --> Cloudinary
+    Moderation --> OpenAI
+```

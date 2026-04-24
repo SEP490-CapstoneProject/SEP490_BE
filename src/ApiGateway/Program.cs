@@ -63,6 +63,7 @@ builder.Services.AddCors(options =>
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
                   "https://skill-snap-frontend.vercel.app",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

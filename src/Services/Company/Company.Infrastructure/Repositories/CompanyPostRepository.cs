@@ -3,6 +3,7 @@ using Company.Application.Interfaces;
 using Company.Domain.Entities;
 using Company.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using RecruitmentPlatform.AI.Models;
 
 namespace Company.Infrastructure.Repositories;
 
@@ -232,6 +233,46 @@ public class CompanyPostRepository : ICompanyPostRepository
 
     public async Task<bool> CheckPostSavedAsync(int userId, int postId)
         => await _context.CompanyPostSaves.AnyAsync(s => s.UserId == userId && s.CompanyPostId == postId);
+
+    public async Task<CompanyPost?> GetPostEntityByIdAsync(int postId)
+        => await _context.CompanyPosts.FirstOrDefaultAsync(p => p.PostId == postId && p.Status == 1);
+
+    public async Task<List<CompanyPost>> GetActivePostsForMatchingAsync(int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 150);
+        return await _context.CompanyPosts
+            .AsNoTracking()
+            .Where(p => p.Status == 1
+                && p.Embedding != null
+                && p.EmbeddingStatus == "Ready")
+            .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.PostId)
+            .Take(safeLimit)
+            .ToListAsync();
+    }
+
+    public async Task<List<CompanyPost>> GetPostsForEmbeddingBackfillAsync(int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 200);
+        return await _context.CompanyPosts
+            .Where(p => p.Status == 1 && (p.Embedding == null || p.EmbeddingStatus != EmbeddingReadinessPolicy.Ready))
+            .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.PostId)
+            .Take(safeLimit)
+            .ToListAsync();
+    }
+
+    public async Task UpdateEmbeddingAsync(int postId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus)
+    {
+        var post = await _context.CompanyPosts.FirstOrDefaultAsync(p => p.PostId == postId);
+        if (post == null) return;
+
+        post.Embedding = embedding;
+        post.EmbeddingVersion = embeddingVersion;
+        post.EmbeddingUpdatedAt = embeddingUpdatedAt;
+        post.EmbeddingStatus = embeddingStatus;
+        await _context.SaveChangesAsync();
+    }
 
     public async Task SavePostAsync(int userId, int postId)
     {

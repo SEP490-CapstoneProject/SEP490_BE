@@ -2,6 +2,7 @@ using Auth.Domain.Entities;
 using Auth.Application.Interfaces;
 using Auth.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using RecruitmentPlatform.Contracts.Enums;
 
 namespace Auth.Infrastructure.Repositories;
 
@@ -34,6 +35,19 @@ public class AuthRepository : IAuthRepository
 
         return await _context.Users
             .Where(u => idList.Contains(u.Id))
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<User>> GetByRolesAsync(IEnumerable<UserRole> roles)
+    {
+        var roleList = roles.Distinct().ToList();
+        if (roleList.Count == 0)
+        {
+            return Enumerable.Empty<User>();
+        }
+
+        return await _context.Users
+            .Where(u => roleList.Contains(u.Role))
             .ToListAsync();
     }
 

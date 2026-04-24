@@ -1,0 +1,548 @@
+```mermaid
+classDiagram
+direction LR
+
+%% =============================
+%% SHARED / CROSS-CUTTING
+%% =============================
+class BaseEntity {
+  +int Id
+  +DateTime CreatedAt
+  +DateTime? UpdatedAt
+}
+
+class JwtSettings {
+  +string SecretKey
+  +string Issuer
+  +string Audience
+}
+
+%% =============================
+%% AUTH SERVICE
+%% =============================
+namespace Auth {
+  class User {
+    +int Id
+    +string Email
+    +string PasswordHash
+    +UserRole Role
+    +UserStatus Status
+    +DateTime CreatedAt
+  }
+
+  class RefreshToken {
+    +int Id
+    +int UserId
+    +string Token
+    +DateTime ExpiredAt
+    +bool Revoked
+  }
+
+  class AuthController {
+    +Register()
+    +Login()
+    +Refresh()
+    +Revoke()
+    +GetUsersByRolesInternal()
+  }
+
+  class IAuthService {
+    <<interface>>
+    +RegisterAsync()
+    +LoginAsync()
+    +RefreshAsync()
+    +GetInternalUserInfosByRolesAsync()
+  }
+
+  class AuthService {
+    +RegisterAsync()
+    +LoginAsync()
+    +RefreshAsync()
+    +GetInternalUserInfosByRolesAsync()
+  }
+
+  class IAuthRepository {
+    <<interface>>
+    +GetByEmailAsync()
+    +CreateAsync()
+    +GetByRolesAsync()
+  }
+
+  class AuthRepository {
+    +GetByEmailAsync()
+    +CreateAsync()
+    +GetByRolesAsync()
+  }
+}
+
+Auth.User "1" o-- "*" Auth.RefreshToken
+Auth.AuthController --> Auth.IAuthService
+Auth.AuthService ..|> Auth.IAuthService
+Auth.AuthService --> Auth.IAuthRepository
+Auth.AuthRepository ..|> Auth.IAuthRepository
+
+%% =============================
+%% USER PROFILE SERVICE
+%% =============================
+namespace UserProfile {
+  class Employee {
+    +int Id
+    +int UserId
+    +string Name
+    +string Avatar
+    +string CoverImage
+    +string Phone
+  }
+
+  class Company {
+    +int Id
+    +int UserId
+    +string CompanyName
+    +string ActivityField
+    +string Avatar
+    +string CoverImage
+    +string Address
+  }
+
+  class Expert {
+    +int Id
+    +int UserId
+    +string Name
+    +string Avatar
+    +string CoverImage
+    +string Phone
+  }
+}
+
+%% =============================
+%% PORTFOLIO SERVICE
+%% =============================
+namespace Portfolio {
+  class Portfolio {
+    +int Id
+    +int EmployeeId
+    +string Name
+    +string Status
+    +bool IsMain
+    +bool IsPublic
+    +int ComplimentCount
+    +int ApprovedComplimentCount
+    +decimal? AverageScore
+    +string? Embedding
+    +string EmbeddingStatus
+  }
+
+  class BlockType {
+    +int Id
+    +string Code
+    +bool IsMultiple
+    +bool IsActive
+  }
+
+  class PortfolioBlock {
+    +int Id
+    +int PortfolioId
+    +int BlockTypeId
+    +string Variant
+    +int DisplayOrder
+    +bool IsVisible
+    +string DataJson
+  }
+
+  class Compliment {
+    +int Id
+    +int PortfolioId
+    +int UserId
+    +string Content
+    +int? Score
+    +ComplimentState State
+  }
+
+  class PortfolioFollowCategory {
+    +int Id
+    +int CompanyId
+    +string Name
+    +string Code
+  }
+
+  class PortfolioFollow {
+    +int Id
+    +int CompanyId
+    +int PortfolioId
+    +int? CategoryId
+    +string InterestLevel
+    +DateTime FollowedAt
+  }
+
+  class PortfolioController {
+    +GetAll()
+    +GetById()
+    +GetByEmployee()
+    +Create()
+    +Update()
+    +Delete()
+  }
+
+  class FollowsController {
+    +Create()
+    +GetMyFollows()
+    +UpdateInterest()
+    +Delete()
+  }
+
+  class IPortfolioService {
+    <<interface>>
+    +GetAllAsync()
+    +GetByIdAsync()
+    +CreatePortfolioAsync()
+    +UpdateFullPortfolioAsync()
+  }
+
+  class PortfolioService {
+    +GetAllAsync()
+    +GetByIdAsync()
+    +CreatePortfolioAsync()
+    +UpdateFullPortfolioAsync()
+    +MatchJobsForPortfolioAsync()
+  }
+
+  class IPortfolioRepository {
+    <<interface>>
+    +GetAllAsync()
+    +GetByIdAsync()
+    +CreateAsync()
+    +UpdateAsync()
+    +DeleteAsync()
+  }
+
+  class PortfolioRepository {
+    +GetAllAsync()
+    +GetByIdAsync()
+    +CreateAsync()
+    +UpdateAsync()
+    +DeleteAsync()
+  }
+
+  class IPortfolioFollowRepository {
+    <<interface>>
+    +GetByCompanyAndPortfolioAsync()
+    +GetByCompanyAsync()
+    +GetFollowedPortfolioIdsAsync()
+  }
+
+  class PortfolioFollowRepository {
+    +GetByCompanyAndPortfolioAsync()
+    +GetByCompanyAsync()
+    +GetFollowedPortfolioIdsAsync()
+  }
+}
+
+Portfolio.Portfolio "1" o-- "*" Portfolio.PortfolioBlock
+Portfolio.BlockType "1" o-- "*" Portfolio.PortfolioBlock
+Portfolio.Portfolio "1" o-- "*" Portfolio.Compliment
+Portfolio.Portfolio "1" o-- "*" Portfolio.PortfolioFollow
+Portfolio.PortfolioFollowCategory "1" o-- "*" Portfolio.PortfolioFollow
+Portfolio.PortfolioController --> Portfolio.IPortfolioService
+Portfolio.PortfolioService ..|> Portfolio.IPortfolioService
+Portfolio.PortfolioService --> Portfolio.IPortfolioRepository
+Portfolio.PortfolioRepository ..|> Portfolio.IPortfolioRepository
+Portfolio.FollowsController --> Portfolio.IPortfolioFollowRepository
+Portfolio.PortfolioFollowRepository ..|> Portfolio.IPortfolioFollowRepository
+
+%% =============================
+%% COMMUNITY SERVICE
+%% =============================
+namespace Community {
+  class CommunityPost {
+    +int Id
+    +int UserId
+    +string Description
+    +string CoverImageVideo
+    +int? PortfolioId
+    +int FavoriteCount
+    +int Status
+  }
+
+  class CommunityPostMedia {
+    +int Id
+    +int CommunityPostId
+    +string Type
+    +string Name
+    +string Address
+  }
+
+  class CommunityPostSave {
+    +int Id
+    +int CommunityPostId
+    +int UserId
+  }
+
+  class CommunityPostFavorite {
+    +int Id
+    +int CommunityPostId
+    +int UserId
+  }
+
+  class Comment {
+    +int Id
+    +int CommunityPostId
+    +int UserId
+    +string Content
+  }
+
+  class ReplyComment {
+    +int Id
+    +int CommentId
+    +int UserId
+    +int? ReplyToUserId
+    +string Content
+  }
+
+  class CommunityPostReport {
+    +int Id
+    +int CommunityPostId
+    +int ReporterUserId
+    +string Reason
+    +string? Description
+    +PostReportStatus Status
+    +int? ReviewedByUserId
+  }
+
+  class CommunityController {
+    +GetFeed()
+    +GetPostById()
+    +CreatePost()
+    +DeletePost()
+    +ReportPost()
+  }
+
+  class AdminCommunityController {
+    +GetPosts()
+    +GetPostReports()
+    +ReviewPostReport()
+  }
+
+  class ICommunityService {
+    <<interface>>
+    +GetFeedAsync()
+    +CreatePostAsync()
+    +DeletePostAsync()
+    +ReportPostAsync()
+    +ReviewPostReportAsync()
+  }
+
+  class CommunityService {
+    +GetFeedAsync()
+    +CreatePostAsync()
+    +DeletePostAsync()
+    +ReportPostAsync()
+    +ReviewPostReportAsync()
+  }
+
+  class ICommunityRepository {
+    <<interface>>
+    +GetFeedAsync()
+    +GetPostByIdAsync()
+    +CreatePostAsync()
+    +CreatePostReportAsync()
+  }
+
+  class CommunityRepository {
+    +GetFeedAsync()
+    +GetPostByIdAsync()
+    +CreatePostAsync()
+    +CreatePostReportAsync()
+  }
+}
+
+Community.CommunityPost "1" o-- "*" Community.CommunityPostMedia
+Community.CommunityPost "1" o-- "*" Community.CommunityPostSave
+Community.CommunityPost "1" o-- "*" Community.CommunityPostFavorite
+Community.CommunityPost "1" o-- "*" Community.Comment
+Community.Comment "1" o-- "*" Community.ReplyComment
+Community.CommunityPost "1" o-- "*" Community.CommunityPostReport
+Community.CommunityController --> Community.ICommunityService
+Community.AdminCommunityController --> Community.ICommunityService
+Community.CommunityService ..|> Community.ICommunityService
+Community.CommunityService --> Community.ICommunityRepository
+Community.CommunityRepository ..|> Community.ICommunityRepository
+
+%% =============================
+%% COMPANY SERVICE
+%% =============================
+namespace CompanySvc {
+  class CompanyPost {
+    +int PostId
+    +int CompanyId
+    +string Position
+    +string Address
+    +string Salary
+    +int Status
+  }
+
+  class CompanyPostMedia {
+    +int Id
+    +int CompanyPostId
+    +string Type
+    +string Address
+  }
+
+  class CompanyPostSave {
+    +int Id
+    +int CompanyPostId
+    +int UserId
+  }
+
+  class CompanyPostService {
+    +GetFeedAsync()
+    +CreateAsync()
+    +UpdateAsync()
+    +DeleteAsync()
+  }
+}
+
+CompanySvc.CompanyPost "1" o-- "*" CompanySvc.CompanyPostMedia
+CompanySvc.CompanyPost "1" o-- "*" CompanySvc.CompanyPostSave
+
+%% =============================
+%% APPLICATION / CONNECTION / INTERVIEW
+%% =============================
+namespace ApplicationSvc {
+  class Application {
+    +int ApplicationId
+    +int EmployeeId
+    +int CompanyId
+    +int CompanyPostId
+    +int PortfolioId
+    +int? RoomId
+    +ApplicationStatus Status
+  }
+}
+
+namespace ConnectionSvc {
+  class Connection {
+    +int Id
+    +int UserIdFrom
+    +int UserIdTo
+    +string Status
+  }
+  class Room {
+    +int Id
+    +int ConnectionId
+    +DateTime LastMessAt
+  }
+  class Message {
+    +int Id
+    +int MessageRoomId
+    +int UserId
+    +string Content
+    +int Status
+  }
+}
+
+ConnectionSvc.Connection "1" o-- "*" ConnectionSvc.Room
+ConnectionSvc.Room "1" o-- "*" ConnectionSvc.Message
+
+namespace InterviewSvc {
+  class Interview {
+    +int Id
+    +int ApplicationId
+    +int UserId
+    +int PostId
+    +Date Date
+    +Time Time
+    +string Status
+  }
+}
+
+%% =============================
+%% SUBSCRIPTION / PAYMENT / NOTIFICATION
+%% =============================
+namespace Subscription {
+  class Plan {
+    +int Id
+    +string Name
+    +decimal Price
+    +BillingCycle BillingCycle
+  }
+  class PlanFeature {
+    +int Id
+    +int PlanId
+    +string FeatureKey
+    +string Value
+  }
+  class UserSubscription {
+    +int Id
+    +int UserId
+    +int PlanId
+    +SubscriptionStatus Status
+  }
+  class OutboxEvent {
+    +int Id
+    +string EventId
+    +string EventType
+    +OutboxStatus Status
+  }
+}
+
+Subscription.Plan "1" o-- "*" Subscription.PlanFeature
+Subscription.Plan "1" o-- "*" Subscription.UserSubscription
+
+namespace Payment {
+  class PaymentEntity {
+    +int Id
+    +int UserId
+    +int PlanId
+    +decimal Amount
+    +PaymentStatus Status
+    +string OrderCode
+  }
+  class PaymentHistory {
+    +int Id
+    +int PaymentId
+    +string OldStatus
+    +string NewStatus
+  }
+  class ProcessedEvent {
+    +string EventId
+    +string EventHash
+  }
+  class OutboxEvent {
+    +int Id
+    +string EventId
+    +OutboxEventStatus Status
+  }
+}
+
+Payment.PaymentEntity "1" o-- "*" Payment.PaymentHistory
+
+namespace Notification {
+  class NotificationEntity {
+    +int Id
+    +string UserId
+    +string Title
+    +string Content
+    +string Type
+    +bool IsRead
+  }
+}
+
+%% =============================
+%% LOGICAL CROSS-SERVICE DEPENDENCIES
+%% =============================
+Auth.User ..> UserProfile.Employee : userId
+Auth.User ..> UserProfile.Company : userId
+Auth.User ..> UserProfile.Expert : userId
+
+UserProfile.Employee ..> Portfolio.Portfolio : owns
+UserProfile.Company ..> CompanySvc.CompanyPost : publishes
+
+Portfolio.Portfolio ..> ApplicationSvc.Application : attachedPortfolio
+CompanySvc.CompanyPost ..> ApplicationSvc.Application : targetPost
+ApplicationSvc.Application ..> InterviewSvc.Interview : interviewFlow
+
+Auth.User ..> Subscription.UserSubscription : subscriptionOwner
+Subscription.Plan ..> Payment.PaymentEntity : billedByPlan
+Auth.User ..> Notification.NotificationEntity : receives
+Community.CommunityPost ..> Portfolio.Portfolio : optionalReference
+```

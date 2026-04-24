@@ -203,6 +203,24 @@ namespace Portfolio.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETDATE()");
 
+                    b.Property<string>("Embedding")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EmbeddingStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<DateTime?>("EmbeddingUpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("EmbeddingVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
 
@@ -215,6 +233,20 @@ namespace Portfolio.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("ModeratedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModerationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ModerationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("PendingReview");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -295,6 +327,9 @@ namespace Portfolio.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("int");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -316,6 +351,9 @@ namespace Portfolio.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("IX_PortfolioFollow_CategoryId");
+
                     b.HasIndex("CompanyId")
                         .HasDatabaseName("IX_PortfolioFollow_CompanyId");
 
@@ -327,6 +365,47 @@ namespace Portfolio.Infrastructure.Migrations
                         .HasDatabaseName("UX_PortfolioFollow_Company_Portfolio");
 
                     b.ToTable("PortfolioFollow", (string)null);
+                });
+
+            modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioFollowCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("DATEADD(HOUR, 7, GETUTCDATE())");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .HasDatabaseName("IX_PortfolioFollowCategory_CompanyId");
+
+                    b.HasIndex("CompanyId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PortfolioFollowCategory_Company_Code");
+
+                    b.ToTable("PortfolioFollowCategory", (string)null);
                 });
 
             modelBuilder.Entity("Portfolio.Domain.Entities.Compliment", b =>
@@ -361,11 +440,18 @@ namespace Portfolio.Infrastructure.Migrations
 
             modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioFollow", b =>
                 {
+                    b.HasOne("Portfolio.Domain.Entities.PortfolioFollowCategory", "Category")
+                        .WithMany("Follows")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Portfolio.Domain.Entities.Portfolio", "Portfolio")
                         .WithMany("Follows")
                         .HasForeignKey("PortfolioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Category");
 
                     b.Navigation("Portfolio");
                 });
@@ -381,6 +467,11 @@ namespace Portfolio.Infrastructure.Migrations
 
                     b.Navigation("Compliments");
 
+                    b.Navigation("Follows");
+                });
+
+            modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioFollowCategory", b =>
+                {
                     b.Navigation("Follows");
                 });
 #pragma warning restore 612, 618

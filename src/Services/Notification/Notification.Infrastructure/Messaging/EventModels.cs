@@ -6,10 +6,11 @@ public class NotificationEvent
     public string? EventId { get; set; }
     public string EventType { get; set; } = default!;
     public int Version { get; set; } = 1;
-    public string UserId { get; set; } = default!;
+    public string UserId { get; set; } = string.Empty;
     public string? ActorId { get; set; }
     public string ActorType { get; set; } = "USER";
     public string? ObjectId { get; set; }
+    public string[]? TargetRoles { get; set; }
     public string Title { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Type { get; set; } = default!;
