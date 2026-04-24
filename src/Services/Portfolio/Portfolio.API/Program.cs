@@ -96,6 +96,7 @@ builder.Services.AddScoped<IPortfolioFollowRepository, PortfolioFollowRepository
 builder.Services.AddScoped<IBlockRepository, BlockRepository>();
 builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
 builder.Services.AddScoped<IComplimentRepository, ComplimentRepository>();
+builder.Services.AddScoped<ICriterionRepository, CriterionRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
@@ -104,6 +105,7 @@ builder.Services.AddScoped<BlockService>(); // concrete registration for Portfol
 builder.Services.AddScoped<IBlockTypeService, BlockTypeService>();
 builder.Services.AddScoped<IComplimentService, ComplimentService>();
 builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
+builder.Services.AddScoped<ICriterionService, CriterionService>();
 
 // Block Handlers
 builder.Services.AddScoped<IBlockHandler, IntroBlockHandler>();

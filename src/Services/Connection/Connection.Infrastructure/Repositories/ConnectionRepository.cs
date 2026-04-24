@@ -108,6 +108,25 @@ public class ConnectionRepository : IConnectionRepository
         return list;
     }
 
+    public async Task<Connection.Application.DTOs.RoomSummaryRaw?> GetRoomSummaryByConnectionIdAsync(int connectionId, int userId)
+    {
+        return await (from r in _context.Rooms
+                      join c in _context.Connections on r.ConnectionId equals c.Id
+                      where c.Id == connectionId
+                      select new Connection.Application.DTOs.RoomSummaryRaw
+                      {
+                          RoomId = r.Id,
+                          ProfileId = c.ProfileId,
+                          ConnectionId = c.Id,
+                          UserIdFrom = c.UserIdFrom,
+                          UserIdTo = c.UserIdTo,
+                          LastContent = r.Messages.OrderByDescending(m => m.CreatedAt).Select(m => m.Content).FirstOrDefault(),
+                          LastAt = r.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.CreatedAt).FirstOrDefault(),
+                          UnreadCount = r.Messages.Count(m => m.Status == 0 && m.UserId != userId)
+                      })
+                     .FirstOrDefaultAsync();
+    }
+
     public async Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId)
     {
         var msgs = await _context.Messages.Where(m => m.MessageRoomId == roomId && m.UserId != userId && m.Status != 1).ToListAsync();

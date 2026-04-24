@@ -97,6 +97,11 @@ public class ConnectionService : IConnectionService
         return await _repo.GetRoomSummariesByUserIdAsync(userId);
     }
 
+    public async Task<Connection.Application.DTOs.RoomSummaryRaw?> GetRoomSummaryByConnectionIdAsync(int connectionId, int userId)
+    {
+        return await _repo.GetRoomSummaryByConnectionIdAsync(connectionId, userId);
+    }
+
     public async Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId)
     {
         return await _repo.MarkRoomMessagesAsReadAsync(roomId, userId);
