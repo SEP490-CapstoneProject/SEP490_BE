@@ -13,6 +13,7 @@ namespace Portfolio.API.Controllers;
 [Authorize]
 public class PortfolioController : ControllerBase
 {
+    private const string ActiveStatus = "active";
     private readonly IPortfolioService _portfolioService;
     private readonly IBlockRepository _blockRepo;
     private readonly BlockService _blockService;
@@ -132,6 +133,8 @@ public class PortfolioController : ControllerBase
     {
         var portfolio = await _portfolioService.GetByIdAsync(id);
         if (portfolio == null) return NotFound(new { error = $"Portfolio {id} not found" });
+        if (!string.Equals(portfolio.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase))
+            return NotFound(new { error = $"Portfolio {id} not found" });
 
         var blocks = await _blockRepo.GetByPortfolioIdAsync(id);
         var firstBlock = blocks.OrderBy(b => b.DisplayOrder).FirstOrDefault();
@@ -147,6 +150,8 @@ public class PortfolioController : ControllerBase
     {
         var portfolio = await _portfolioService.GetByIdAsync(id);
         if (portfolio == null) return NotFound(new { error = $"Portfolio {id} not found" });
+        if (!string.Equals(portfolio.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase))
+            return NotFound(new { error = $"Portfolio {id} not found" });
 
         var blocks = await _blockRepo.GetByPortfolioIdAsync(id);
         portfolio.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
@@ -180,7 +185,9 @@ public class PortfolioController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetByEmployee(int employeeId)
     {
-        var portfolios = (await _portfolioService.GetByEmployeeIdAsync(employeeId)).ToList();
+        var portfolios = (await _portfolioService.GetByEmployeeIdAsync(employeeId))
+            .Where(p => string.Equals(p.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
         foreach (var p in portfolios)
         {
@@ -197,6 +204,8 @@ public class PortfolioController : ControllerBase
     {
         var portfolio = await _portfolioService.GetMainByEmployeeIdAsync(employeeId);
         if (portfolio == null) return NotFound(new { error = $"Main portfolio for employee {employeeId} not found" });
+        if (!string.Equals(portfolio.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase))
+            return NotFound(new { error = $"Main portfolio for employee {employeeId} not found" });
 
         var blocks = await _blockRepo.GetByPortfolioIdAsync(portfolio.PortfolioId);
         portfolio.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
