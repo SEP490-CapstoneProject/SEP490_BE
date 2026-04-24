@@ -155,7 +155,7 @@ public class PortfolioController : ControllerBase
     }
 
     [HttpGet("{id:int}/match-jobs")]
-    [AllowAnonymous]
+    [Authorize]
     public async Task<IActionResult> MatchJobs(
         int id,
         [FromQuery] int page = 1,

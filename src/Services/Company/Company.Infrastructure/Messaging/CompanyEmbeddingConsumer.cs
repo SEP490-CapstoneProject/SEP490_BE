@@ -20,6 +20,7 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<CompanyEmbeddingConsumer> _logger;
+    private readonly EmbeddingBackfillOptions _options;
     private IConnection? _connection;
     private IChannel? _channel;
 
@@ -28,19 +29,20 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
         _scopeFactory = scopeFactory;
         _configuration = configuration;
         _logger = logger;
+        _options = configuration.GetSection("EmbeddingBackfill").Get<EmbeddingBackfillOptions>() ?? new EmbeddingBackfillOptions();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
-        var userName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
+        var host = GetRabbitSetting("HostName", "Host", "localhost");
+        var userName = GetRabbitSetting("UserName", "Username", "guest");
         var factory = new ConnectionFactory
         {
             HostName = host,
             UserName = userName,
-            Password = _configuration["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
+            Password = GetRabbitSetting("Password", defaultValue: "guest"),
+            VirtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/"),
+            Port = int.TryParse(GetRabbitSetting("Port", defaultValue: "5672"), out var port) ? port : 5672
         };
 
         while (!stoppingToken.IsCancellationRequested)
@@ -79,15 +81,18 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
     {
         if (_channel == null) return;
 
+        int postId = 0;
         try
         {
             var body = Encoding.UTF8.GetString(args.Body.ToArray());
             var payload = JsonSerializer.Deserialize<CompanyPostChangedEvent>(body, JsonOptions);
             if (payload is null || payload.PostId <= 0)
             {
+                _logger.LogWarning("Ignoring invalid company.post.changed payload: {Payload}", body);
                 await _channel.BasicAckAsync(args.DeliveryTag, false);
                 return;
             }
+            postId = payload.PostId;
 
             using var scope = _scopeFactory.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<ICompanyPostRepository>();
@@ -110,16 +115,38 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
                 CustomFields = new[] { post.Benefits ?? "N/A", post.Salary ?? "N/A" }
             });
 
-            var embedding = await embeddingService.CreateEmbeddingAsync(text);
+            var embedding = await CreateEmbeddingWithRetryAsync(embeddingService, text, CancellationToken.None);
             var serialized = JsonSerializer.Serialize(embedding);
             var version = Math.Max(1, post.EmbeddingVersion + 1);
-            await repo.UpdateEmbeddingAsync(payload.PostId, serialized, version, DateTime.UtcNow, embedding.Length > 0 ? "Ready" : "Failed");
+            await repo.UpdateEmbeddingAsync(payload.PostId, serialized, version, DateTime.UtcNow, EmbeddingReadinessPolicy.ResolveStatus(embedding));
 
             await _channel.BasicAckAsync(args.DeliveryTag, false);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to process company.post.changed event");
+            if (postId > 0)
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var repo = scope.ServiceProvider.GetRequiredService<ICompanyPostRepository>();
+                    var current = await repo.GetPostEntityByIdAsync(postId);
+                    if (current != null)
+                    {
+                        await repo.UpdateEmbeddingAsync(
+                            postId,
+                            current.Embedding,
+                            current.EmbeddingVersion,
+                            DateTime.UtcNow,
+                            IsQuotaError(ex) ? EmbeddingReadinessPolicy.Pending : EmbeddingReadinessPolicy.Failed);
+                    }
+                }
+                catch (Exception updateEx)
+                {
+                    _logger.LogWarning(updateEx, "Failed to mark company post {PostId} embedding as failed after consumer error", postId);
+                }
+            }
             await _channel.BasicNackAsync(args.DeliveryTag, false, false);
         }
     }
@@ -178,6 +205,53 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
             .Where(x => x.Length > 1)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private async Task<float[]> CreateEmbeddingWithRetryAsync(IEmbeddingService embeddingService, string text, CancellationToken cancellationToken)
+    {
+        var attempts = Math.Max(1, _options.MaxRetryAttempts);
+        var baseDelayMs = Math.Max(100, _options.RetryBaseDelayMs);
+
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                return await embeddingService.CreateEmbeddingAsync(text, cancellationToken);
+            }
+            catch (Exception ex) when (attempt < attempts && !IsQuotaError(ex))
+            {
+                var delayMs = baseDelayMs * (int)Math.Pow(2, attempt - 1);
+                await Task.Delay(TimeSpan.FromMilliseconds(delayMs), cancellationToken);
+            }
+        }
+
+        throw new InvalidOperationException("Embedding generation failed after max retry attempts.");
+    }
+
+    private string GetRabbitSetting(string primaryKey, string? fallbackKey = null, string defaultValue = "")
+    {
+        var primary = _configuration[$"RabbitMQ:{primaryKey}"];
+        if (!string.IsNullOrWhiteSpace(primary))
+        {
+            return primary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackKey))
+        {
+            var fallback = _configuration[$"RabbitMQ:{fallbackKey}"];
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                return fallback;
+            }
+        }
+
+        return defaultValue;
+    }
+
+    private static bool IsQuotaError(Exception ex)
+    {
+        return ex.Message.Contains("TooManyRequests", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("quota", StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class CompanyPostChangedEvent

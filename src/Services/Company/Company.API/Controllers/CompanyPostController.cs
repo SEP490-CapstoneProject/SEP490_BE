@@ -122,7 +122,7 @@ public class CompanyPostController : ControllerBase
     }
 
     [HttpGet("{id:int}/match-portfolios")]
-    [AllowAnonymous]
+    [Authorize]
     public async Task<IActionResult> MatchPortfolios(
         int id,
         [FromQuery] int page = 1,

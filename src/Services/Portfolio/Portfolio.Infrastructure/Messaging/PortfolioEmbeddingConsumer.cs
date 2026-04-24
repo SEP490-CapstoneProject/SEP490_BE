@@ -15,9 +15,11 @@ namespace Portfolio.Infrastructure.Messaging;
 
 public sealed class PortfolioEmbeddingConsumer : BackgroundService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PortfolioEmbeddingConsumer> _logger;
+    private readonly EmbeddingBackfillOptions _options;
     private IConnection? _connection;
     private IChannel? _channel;
 
@@ -26,19 +28,20 @@ public sealed class PortfolioEmbeddingConsumer : BackgroundService
         _scopeFactory = scopeFactory;
         _configuration = configuration;
         _logger = logger;
+        _options = configuration.GetSection("EmbeddingBackfill").Get<EmbeddingBackfillOptions>() ?? new EmbeddingBackfillOptions();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
-        var userName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
+        var host = GetRabbitSetting("HostName", "Host", "localhost");
+        var userName = GetRabbitSetting("UserName", "Username", "guest");
         var factory = new ConnectionFactory
         {
             HostName = host,
             UserName = userName,
-            Password = _configuration["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
+            Password = GetRabbitSetting("Password", defaultValue: "guest"),
+            VirtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/"),
+            Port = int.TryParse(GetRabbitSetting("Port", defaultValue: "5672"), out var port) ? port : 5672
         };
 
         while (!stoppingToken.IsCancellationRequested)
@@ -101,15 +104,18 @@ public sealed class PortfolioEmbeddingConsumer : BackgroundService
     {
         if (_channel == null) return;
 
+        int portfolioId = 0;
         try
         {
             var body = Encoding.UTF8.GetString(args.Body.ToArray());
-            using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("PortfolioId", out var idElement) || !idElement.TryGetInt32(out var portfolioId))
+            var payload = JsonSerializer.Deserialize<PortfolioChangedEvent>(body, JsonOptions);
+            if (payload is null || payload.PortfolioId <= 0)
             {
+                _logger.LogWarning("Ignoring invalid portfolio.changed payload: {Payload}", body);
                 await _channel.BasicAckAsync(args.DeliveryTag, false);
                 return;
             }
+            portfolioId = payload.PortfolioId;
 
             using var scope = _scopeFactory.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IPortfolioRepository>();
@@ -135,16 +141,38 @@ public sealed class PortfolioEmbeddingConsumer : BackgroundService
                 CustomFields = portfolio.Blocks.Select(x => x.DataJson).Take(5).ToList()
             });
 
-            var embedding = await embeddingService.CreateEmbeddingAsync(text);
+            var embedding = await CreateEmbeddingWithRetryAsync(embeddingService, text, CancellationToken.None);
             var serialized = JsonSerializer.Serialize(embedding);
             var newVersion = Math.Max(1, portfolio.EmbeddingVersion + 1);
-            await repo.UpdateEmbeddingAsync(portfolioId, serialized, newVersion, VietnamTime.Now(), embedding.Length > 0 ? "Ready" : "Failed");
+            await repo.UpdateEmbeddingAsync(portfolioId, serialized, newVersion, VietnamTime.Now(), EmbeddingReadinessPolicy.ResolveStatus(embedding));
 
             await _channel.BasicAckAsync(args.DeliveryTag, false);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to process portfolio.changed event");
+            if (portfolioId > 0)
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var repo = scope.ServiceProvider.GetRequiredService<IPortfolioRepository>();
+                    var current = await repo.GetByIdAsync(portfolioId);
+                    if (current != null)
+                    {
+                        await repo.UpdateEmbeddingAsync(
+                            portfolioId,
+                            current.Embedding,
+                            current.EmbeddingVersion,
+                            VietnamTime.Now(),
+                            IsQuotaError(ex) ? EmbeddingReadinessPolicy.Pending : EmbeddingReadinessPolicy.Failed);
+                    }
+                }
+                catch (Exception updateEx)
+                {
+                    _logger.LogWarning(updateEx, "Failed to mark portfolio {PortfolioId} embedding as failed after consumer error", portfolioId);
+                }
+            }
             await _channel.BasicNackAsync(args.DeliveryTag, false, false);
         }
     }
@@ -169,5 +197,57 @@ public sealed class PortfolioEmbeddingConsumer : BackgroundService
             .Where(x => x.Length > 1)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private async Task<float[]> CreateEmbeddingWithRetryAsync(IEmbeddingService embeddingService, string text, CancellationToken cancellationToken)
+    {
+        var attempts = Math.Max(1, _options.MaxRetryAttempts);
+        var baseDelayMs = Math.Max(100, _options.RetryBaseDelayMs);
+
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                return await embeddingService.CreateEmbeddingAsync(text, cancellationToken);
+            }
+            catch (Exception ex) when (attempt < attempts && !IsQuotaError(ex))
+            {
+                var delayMs = baseDelayMs * (int)Math.Pow(2, attempt - 1);
+                await Task.Delay(TimeSpan.FromMilliseconds(delayMs), cancellationToken);
+            }
+        }
+
+        throw new InvalidOperationException("Embedding generation failed after max retry attempts.");
+    }
+
+    private string GetRabbitSetting(string primaryKey, string? fallbackKey = null, string defaultValue = "")
+    {
+        var primary = _configuration[$"RabbitMQ:{primaryKey}"];
+        if (!string.IsNullOrWhiteSpace(primary))
+        {
+            return primary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackKey))
+        {
+            var fallback = _configuration[$"RabbitMQ:{fallbackKey}"];
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                return fallback;
+            }
+        }
+
+        return defaultValue;
+    }
+
+    private static bool IsQuotaError(Exception ex)
+    {
+        return ex.Message.Contains("TooManyRequests", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("quota", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class PortfolioChangedEvent
+    {
+        public int PortfolioId { get; init; }
     }
 }

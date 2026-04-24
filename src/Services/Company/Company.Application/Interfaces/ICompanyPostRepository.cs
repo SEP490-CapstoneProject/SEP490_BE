@@ -13,6 +13,7 @@ public interface ICompanyPostRepository
     Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId);
     Task<CompanyPost?> GetPostEntityByIdAsync(int postId);
     Task<List<CompanyPost>> GetActivePostsForMatchingAsync(int limit);
+    Task<List<CompanyPost>> GetPostsForEmbeddingBackfillAsync(int limit);
     Task UpdateEmbeddingAsync(int postId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus);
     Task<bool> CheckPostSavedAsync(int userId, int postId);
     Task SavePostAsync(int userId, int postId);

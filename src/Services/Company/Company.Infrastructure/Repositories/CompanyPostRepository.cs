@@ -3,6 +3,7 @@ using Company.Application.Interfaces;
 using Company.Domain.Entities;
 using Company.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using RecruitmentPlatform.AI.Models;
 
 namespace Company.Infrastructure.Repositories;
 
@@ -241,7 +242,20 @@ public class CompanyPostRepository : ICompanyPostRepository
         var safeLimit = Math.Clamp(limit, 1, 150);
         return await _context.CompanyPosts
             .AsNoTracking()
-            .Where(p => p.Status == 1)
+            .Where(p => p.Status == 1
+                && p.Embedding != null
+                && p.EmbeddingStatus == "Ready")
+            .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.PostId)
+            .Take(safeLimit)
+            .ToListAsync();
+    }
+
+    public async Task<List<CompanyPost>> GetPostsForEmbeddingBackfillAsync(int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 200);
+        return await _context.CompanyPosts
+            .Where(p => p.Status == 1 && (p.Embedding == null || p.EmbeddingStatus != EmbeddingReadinessPolicy.Ready))
             .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.CreatedAt)
             .ThenByDescending(p => p.PostId)
             .Take(safeLimit)

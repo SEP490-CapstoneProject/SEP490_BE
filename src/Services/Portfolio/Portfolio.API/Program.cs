@@ -111,6 +111,7 @@ builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCateg
 builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
 builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
 builder.Services.AddHostedService<PortfolioEmbeddingConsumer>();
+builder.Services.AddHostedService<PortfolioEmbeddingBackfillWorker>();
 
 // Block Handlers
 builder.Services.AddScoped<IBlockHandler, IntroBlockHandler>();
