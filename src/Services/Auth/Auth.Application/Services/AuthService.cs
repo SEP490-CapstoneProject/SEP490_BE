@@ -148,6 +148,27 @@ public class AuthService : IAuthService
         return users.Select(MapToInternalUserInfoDto);
     }
 
+    public async Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByRolesAsync(IEnumerable<string> roles)
+    {
+        var parsedRoles = roles
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => Enum.TryParse<UserRole>(r.Trim(), true, out var role) ? role : (UserRole?)null)
+            .Where(r => r.HasValue)
+            .Select(r => r!.Value)
+            .Distinct()
+            .ToList();
+
+        if (parsedRoles.Count == 0)
+        {
+            return Enumerable.Empty<InternalUserInfoDto>();
+        }
+
+        var users = await _repository.GetByRolesAsync(parsedRoles);
+        return users
+            .Where(u => u.Status == UserStatus.Active)
+            .Select(MapToInternalUserInfoDto);
+    }
+
     private async Task<LoginResponse> GenerateTokenResponse(User user)
     {
         int? employeeId = null;

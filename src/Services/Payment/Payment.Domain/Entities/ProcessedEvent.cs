@@ -7,12 +7,7 @@ namespace Payment.Domain.Entities;
 public class ProcessedEvent
 {
     /// <summary>
-    /// Primary key (auto-generated)
-    /// </summary>
-    public Guid Id { get; set; }
-    
-    /// <summary>
-    /// Correlation ID for tracking (e.g., paymentId)
+    /// Primary key / event identifier used for idempotency tracking
     /// </summary>
     public string EventId { get; set; } = null!;
     

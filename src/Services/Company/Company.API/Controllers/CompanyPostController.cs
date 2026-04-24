@@ -121,6 +121,28 @@ public class CompanyPostController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("{id:int}/match-portfolios")]
+    [Authorize]
+    public async Task<IActionResult> MatchPortfolios(
+        int id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _service.MatchPortfoliosForJobAsync(id, page, pageSize, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("internal/matching-candidates")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetMatchingCandidates(
+        [FromQuery] int limit = 150,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetMatchingCandidatesAsync(limit, cancellationToken);
+        return Ok(result);
+    }
+
     /// <summary>Create a job post with optional media files</summary>
     [HttpPost]
     [Authorize]

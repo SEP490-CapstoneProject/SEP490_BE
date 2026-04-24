@@ -189,6 +189,76 @@ namespace Community.Infrastructure.Migrations
                     b.ToTable("communityPostMedia", (string)null);
                 });
 
+            modelBuilder.Entity("Community.Domain.Entities.CommunityPostReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CommunityPostId")
+                        .HasColumnType("int")
+                        .HasColumnName("communityPostId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("createAt");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("reason");
+
+                    b.Property<int>("ReporterUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("reporterUserId");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("reviewNote");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("reviewedAt");
+
+                    b.Property<int?>("ReviewedByUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("reviewedByUserId");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updateAt");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommunityPostId")
+                        .HasDatabaseName("IX_PostReport_PostId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_PostReport_Status");
+
+                    b.HasIndex("CommunityPostId", "ReporterUserId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PostReport_Post_Reporter");
+
+                    b.ToTable("communityPostReport", (string)null);
+                });
+
             modelBuilder.Entity("Community.Domain.Entities.CommunityPostSave", b =>
                 {
                     b.Property<int>("Id")
@@ -294,6 +364,18 @@ namespace Community.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("FK_PostMedia_Post");
+
+                    b.Navigation("CommunityPost");
+                });
+
+            modelBuilder.Entity("Community.Domain.Entities.CommunityPostReport", b =>
+                {
+                    b.HasOne("Community.Domain.Entities.CommunityPost", "CommunityPost")
+                        .WithMany()
+                        .HasForeignKey("CommunityPostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_PostReport_Post");
 
                     b.Navigation("CommunityPost");
                 });

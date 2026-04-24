@@ -12,11 +12,16 @@ public class AdminSubscriptionService : IAdminSubscriptionService
 {
     private readonly SubscriptionDbContext _context;
     private readonly IAuditLogService _auditLogService;
+    private readonly ISubscriptionUserProfileClient _userProfileClient;
 
-    public AdminSubscriptionService(SubscriptionDbContext context, IAuditLogService auditLogService)
+    public AdminSubscriptionService(
+        SubscriptionDbContext context,
+        IAuditLogService auditLogService,
+        ISubscriptionUserProfileClient userProfileClient)
     {
         _context = context;
         _auditLogService = auditLogService;
+        _userProfileClient = userProfileClient;
     }
 
     public async Task<PlanDto> CreatePlanAsync(CreatePlanRequest request)
@@ -258,7 +263,9 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             .Take(filter.PageSize)
             .ToListAsync();
 
-        return subscriptions.Select(MapToAdminSubscriptionDto);
+        var items = subscriptions.Select(MapToAdminSubscriptionDto).ToList();
+        await EnrichUserProfilesAsync(items);
+        return items;
     }
 
     public async Task<AdminSubscriptionDto?> GetSubscriptionByIdAsync(int subscriptionId)
@@ -276,6 +283,8 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         {
             Id = s.Id,
             UserId = s.UserId,
+            UserName = "Unknown",
+            UserAvatar = string.Empty,
             PlanId = s.PlanId,
             PlanName = s.Plan?.Name ?? "Unknown",
             StartDate = s.StartDate,
@@ -299,6 +308,8 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         {
             Id = s.Id,
             UserId = s.UserId,
+            UserName = "Unknown",
+            UserAvatar = string.Empty,
             PlanId = s.PlanId,
             PlanName = s.Plan?.Name ?? "Unknown",
             StartDate = s.StartDate,
@@ -309,6 +320,23 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt
         });
+    }
+
+    private async Task EnrichUserProfilesAsync(List<AdminSubscriptionDto> items)
+    {
+        var userIds = items.Select(x => x.UserId);
+        var profileMap = await _userProfileClient.GetUsersBatchAsync(userIds);
+
+        foreach (var item in items)
+        {
+            if (!profileMap.TryGetValue(item.UserId, out var profile))
+            {
+                continue;
+            }
+
+            item.UserName = profile.Name;
+            item.UserAvatar = profile.Avatar;
+        }
     }
     public async Task CancelSubscriptionAsync(int subscriptionId, AdminCancelRequest request)
     {

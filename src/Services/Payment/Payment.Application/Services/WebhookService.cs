@@ -139,12 +139,16 @@ public class WebhookService : IWebhookService
         string eventHash,
         string correlationId)
     {
-        var transaction = await _paymentRepository.BeginTransactionAsync();
+        using var transaction = await _paymentRepository.BeginTransactionAsync();
 
         try
         {
             payment.Status = webhookData.Status == "PAID" ? PaymentStatus.Succeeded : PaymentStatus.Failed;
             payment.TransactionId = webhookData.TransactionId;
+            if (payment.Status == PaymentStatus.Succeeded)
+            {
+                payment.PaidAt ??= DateTime.UtcNow;
+            }
             payment.UpdatedAt = DateTime.UtcNow;
             await _paymentRepository.UpdateAsync(payment);
 
@@ -161,12 +165,11 @@ public class WebhookService : IWebhookService
 
             await _processedEventRepository.CreateAsync(new ProcessedEvent
             {
-                Id = Guid.NewGuid(),
+                EventId = Guid.NewGuid().ToString(),
                 EventHash = eventHash,
                 OrderCode = webhookData.OrderCode,
                 ProcessedAt = DateTime.UtcNow,
                 CorrelationId = correlationId,
-                EventId = payment.Id.ToString(),
                 EventType = "webhook"
             });
 
@@ -178,26 +181,26 @@ public class WebhookService : IWebhookService
                     EventType = "PaymentSucceeded",
                     Payload = JsonSerializer.Serialize(new
                     {
-                        PaymentId = payment.Id,
-                        SubscriptionId = payment.SubscriptionId,
-                        UserId = payment.UserId,
-                        PlanId = payment.PlanId,
-                        Amount = payment.Amount,
-                        Provider = payment.Provider.ToString(),
-                        TransactionId = payment.TransactionId
+                        paymentId = payment.Id,
+                        subscriptionId = payment.SubscriptionId,
+                        userId = payment.UserId,
+                        planId = payment.PlanId,
+                        amount = payment.Amount,
+                        provider = payment.Provider.ToString(),
+                        transactionId = payment.TransactionId
                     }),
                     Status = OutboxStatus.Pending,
                     CreatedAt = DateTime.UtcNow
                 });
             }
 
-            await ((dynamic)transaction).CommitAsync();
+            transaction.Commit();
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Transaction failed");
-            await ((dynamic)transaction).RollbackAsync();
+            transaction.Rollback();
             return false;
         }
     }
