@@ -6,16 +6,22 @@ namespace Community.Application.Interfaces;
 public interface ICommunityRepository
 {
     // Feed queries (N+1-free, cursor-based)
-    Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize);
+    Task<List<CommunityPost>> GetFeedAsync(int? cursor, int pageSize, string? searchQuery);
     Task<FeedCountsResult> GetFeedCountsAsync(List<int> postIds, int? currentUserId);
 
     // CommunityPost operations
     Task<CommunityPost?> GetPostByIdAsync(int id);
     Task<IEnumerable<CommunityPost>> GetAllPostsAsync();
+    Task<List<CommunityPost>> GetAdminPostsAsync(int? status, int pageNumber, int pageSize);
     Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId);
     Task<CommunityPost> CreatePostAsync(CommunityPost post);
     Task UpdatePostAsync(CommunityPost post);
-    Task DeletePostAsync(int id);
+    Task DeletePostAsync(CommunityPost post);
+    Task<CommunityPostReport?> GetPostReportByIdAsync(int reportId);
+    Task<CommunityPostReport?> GetPostReportByPostAndReporterAsync(int postId, int reporterUserId);
+    Task<CommunityPostReport> CreatePostReportAsync(CommunityPostReport report);
+    Task<List<CommunityPostReport>> GetPostReportsAsync(int? postId, int? reporterUserId, int? status, int pageNumber, int pageSize);
+    Task UpdatePostReportAsync(CommunityPostReport report);
     
     // Save/Favorite operations
     Task<bool> SavePostAsync(int postId, int userId);

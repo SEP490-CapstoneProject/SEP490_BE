@@ -17,14 +17,42 @@ public class PortfolioFollowRepository : IPortfolioFollowRepository
     public async Task<PortfolioFollow?> GetByCompanyAndPortfolioAsync(int companyId, int portfolioId)
         => await _context.PortfolioFollows
             .Include(x => x.Portfolio)
+            .Include(x => x.Category)
             .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.PortfolioId == portfolioId);
 
-    public async Task<List<PortfolioFollow>> GetByCompanyAsync(int companyId)
-        => await _context.PortfolioFollows
-            .Where(x => x.CompanyId == companyId)
+    public async Task<List<PortfolioFollow>> GetByCompanyAsync(int companyId, int? categoryId = null)
+    {
+        var query = _context.PortfolioFollows
+            .Where(x => x.CompanyId == companyId);
+
+        if (categoryId.HasValue)
+        {
+            query = query.Where(x => x.CategoryId == categoryId.Value);
+        }
+
+        return await query
             .Include(x => x.Portfolio)
+            .Include(x => x.Category)
             .OrderByDescending(x => x.FollowedAt)
             .ToListAsync();
+    }
+
+    public async Task<HashSet<int>> GetFollowedPortfolioIdsAsync(int companyId, IEnumerable<int> portfolioIds)
+    {
+        var ids = portfolioIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new HashSet<int>();
+        }
+
+        var followedIds = await _context.PortfolioFollows
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && ids.Contains(x.PortfolioId))
+            .Select(x => x.PortfolioId)
+            .ToListAsync();
+
+        return followedIds.ToHashSet();
+    }
 
     public async Task<PortfolioFollow> CreateAsync(PortfolioFollow follow)
     {

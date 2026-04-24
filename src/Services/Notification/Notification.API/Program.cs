@@ -98,7 +98,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
@@ -114,11 +114,19 @@ builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 
+builder.Services.AddHttpClient<IRecipientResolverClient, RecipientResolverClient>(client =>
+{
+    var url = builder.Configuration["ServiceUrls:AuthService"] ?? "http://auth-service:8080";
+    client.BaseAddress = new Uri(url);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
 builder.Services.AddScoped<FavoriteAggregationService>();
 builder.Services.AddScoped<CommentReplyAggregationService>();
+builder.Services.AddScoped<PostReportAggregationService>();
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
 builder.Services.AddHostedService<AggregationFlushService>();

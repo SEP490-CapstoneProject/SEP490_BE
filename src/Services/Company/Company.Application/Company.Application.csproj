@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Company.Domain\Company.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.AI\RecruitmentPlatform.AI.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,424 @@
+erDiagram
+    %% =======================
+    %% AUTH SERVICE
+    %% =======================
+    USER {
+        int Id PK
+        string Email UK
+        string PasswordHash
+        int Role
+        int Status
+        datetime CreatedAt
+    }
+    REFRESH_TOKEN {
+        int Id PK
+        int UserId FK
+        string Token
+        datetime ExpiredAt
+        bool Revoked
+    }
+    USER ||--o{ REFRESH_TOKEN : has
+
+    %% =======================
+    %% USER PROFILE SERVICE
+    %% =======================
+    EMPLOYEE {
+        int id PK
+        int userId UK
+        string name
+        string phone
+        string avatar
+        string coverImage
+    }
+    COMPANY_PROFILE {
+        int companyId PK
+        int userId UK
+        string companyName
+        string activityField
+        int taxIdentification
+        string address
+        string avatar
+        string coverImage
+    }
+    EXPERT {
+        int expertId PK
+        int userId UK
+        string name
+        string phone
+        string avatar
+        string coverImage
+    }
+
+    %% =======================
+    %% PORTFOLIO SERVICE
+    %% =======================
+    PORTFOLIO {
+        int Id PK
+        int EmployeeId
+        string Name
+        string Status
+        bool IsMain
+        bool IsPublic
+        int ComplimentCount
+        int ApprovedComplimentCount
+        decimal AverageScore
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+    BLOCK_TYPE {
+        int Id PK
+        string Code UK
+        bool IsMultiple
+        bool IsActive
+    }
+    PORTFOLIO_BLOCK {
+        int Id PK
+        int PortfolioId FK
+        int BlockTypeId FK
+        string Variant
+        int DisplayOrder
+        bool IsVisible
+        string DataJson
+    }
+    COMPLIMENT {
+        int Id PK
+        int PortfolioId FK
+        int UserId
+        string Content
+        int Score
+        int State
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+    PORTFOLIO_FOLLOW_CATEGORY {
+        int Id PK
+        int CompanyId
+        string Name
+        string Code
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+    PORTFOLIO_FOLLOW {
+        int Id PK
+        int CompanyId
+        int PortfolioId FK
+        int CategoryId FK
+        string InterestLevel
+        datetime FollowedAt
+        datetime UpdatedAt
+    }
+
+    PORTFOLIO ||--o{ PORTFOLIO_BLOCK : contains
+    BLOCK_TYPE ||--o{ PORTFOLIO_BLOCK : classifies
+    PORTFOLIO ||--o{ COMPLIMENT : receives
+    PORTFOLIO ||--o{ PORTFOLIO_FOLLOW : followed_by
+    PORTFOLIO_FOLLOW_CATEGORY ||--o{ PORTFOLIO_FOLLOW : groups
+
+    %% =======================
+    %% COMPANY SERVICE
+    %% =======================
+    COMPANY {
+        int id PK
+        string name
+        string avatarUrl
+    }
+    COMPANY_POST {
+        int postId PK
+        int companyId
+        string position
+        string address
+        string salary
+        string employmentType
+        int experienceYear
+        int quantity
+        string jobDescription
+        string requirementsMandatory
+        string requirementsPreferred
+        string benefits
+        string coverImageVideo
+        int status
+        datetime createAt
+    }
+    COMPANY_POST_MEDIA {
+        int id PK
+        int companyPostId FK
+        string type
+        string name
+        string address
+    }
+    COMPANY_POST_SAVE {
+        int id PK
+        int companyPostId FK
+        int userId
+    }
+    COMPANY_POST ||--o{ COMPANY_POST_MEDIA : has
+    COMPANY_POST ||--o{ COMPANY_POST_SAVE : saved_by
+
+    %% =======================
+    %% COMMUNITY SERVICE
+    %% =======================
+    COMMUNITY_POST {
+        int id PK
+        int userId
+        string description
+        string coverImageVideo
+        int portfolioId
+        int favoriteCount
+        int status
+        datetime createAt
+    }
+    COMMUNITY_POST_MEDIA {
+        int id PK
+        int communityPostId FK
+        string type
+        string name
+        string address
+    }
+    COMMUNITY_POST_SAVE {
+        int id PK
+        int communityPostId FK
+        int userId
+    }
+    COMMUNITY_POST_FAVORITE {
+        int id PK
+        int communityPostId FK
+        int userId
+    }
+    COMMENT {
+        int id PK
+        int communityPostId FK
+        int userId
+        string content
+        datetime createAt
+    }
+    REPLY_COMMENT {
+        int id PK
+        int commentId FK
+        int userId
+        int replyToUserId
+        string content
+        datetime createAt
+    }
+    COMMUNITY_POST_REPORT {
+        int id PK
+        int communityPostId FK
+        int reporterUserId
+        string reason
+        string description
+        int status
+        int reviewedByUserId
+        datetime reviewedAt
+        string reviewNote
+        datetime createAt
+        datetime updateAt
+    }
+
+    COMMUNITY_POST ||--o{ COMMUNITY_POST_MEDIA : has
+    COMMUNITY_POST ||--o{ COMMUNITY_POST_SAVE : saved_by
+    COMMUNITY_POST ||--o{ COMMUNITY_POST_FAVORITE : favorited_by
+    COMMUNITY_POST ||--o{ COMMENT : has
+    COMMENT ||--o{ REPLY_COMMENT : has
+    COMMUNITY_POST ||--o{ COMMUNITY_POST_REPORT : reported_by
+
+    %% =======================
+    %% APPLICATION SERVICE
+    %% =======================
+    APPLICATION {
+        int ApplicationId PK
+        int EmployeeId
+        int CompanyId
+        int CompanyPostId
+        int PortfolioId
+        int RoomId
+        int Status
+        datetime AppliedAt
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    %% =======================
+    %% CONNECTION SERVICE
+    %% =======================
+    CONNECTION {
+        int Id PK
+        int UserIdFrom
+        int UserIdTo
+        int ProfileId
+        string Status
+        datetime CreateAt
+        datetime ConnectionAt
+    }
+    ROOM {
+        int Id PK
+        int ConnectionId FK
+        datetime CreatedAt
+        datetime LastMessAt
+    }
+    MESSAGE {
+        int Id PK
+        int MessageRoomId FK
+        int UserId
+        string Content
+        int Status
+        datetime CreatedAt
+    }
+    CONNECTION ||--o{ ROOM : opens
+    ROOM ||--o{ MESSAGE : contains
+
+    %% =======================
+    %% INTERVIEW SERVICE
+    %% =======================
+    INTERVIEW {
+        int Id PK
+        int ApplicationId
+        int UserId
+        int PostId
+        string PostPosition
+        date Date
+        time Time
+        string Type
+        string Platform
+        string Link
+        string Building
+        string Room
+        string Status
+        string InterviewerName
+    }
+
+    %% =======================
+    %% SUBSCRIPTION SERVICE
+    %% =======================
+    PLAN {
+        int Id PK
+        string Name
+        string Description
+        decimal Price
+        int BillingCycle
+        bool IsActive
+        datetime CreatedAt
+    }
+    PLAN_FEATURE {
+        int Id PK
+        int PlanId FK
+        string FeatureKey
+        string FeatureName
+        string Value
+        int Type
+        bool IsActive
+    }
+    USER_SUBSCRIPTION {
+        int Id PK
+        int UserId
+        int PlanId FK
+        int Status
+        datetime StartAt
+        datetime EndAt
+        datetime CreatedAt
+    }
+    SUB_PROCESSED_EVENT {
+        string EventId PK
+        string EventType
+        datetime ProcessedAt
+    }
+    SUB_OUTBOX_EVENT {
+        int Id PK
+        string EventId
+        string EventType
+        string Payload
+        int Status
+        int RetryCount
+        datetime CreatedAt
+    }
+    ADMIN_AUDIT_LOG {
+        int Id PK
+        int AdminUserId
+        string Action
+        string EntityType
+        string EntityId
+        datetime CreatedAt
+    }
+
+    PLAN ||--o{ PLAN_FEATURE : has
+    PLAN ||--o{ USER_SUBSCRIPTION : assigned_to
+
+    %% =======================
+    %% PAYMENT SERVICE
+    %% =======================
+    PAYMENT {
+        int Id PK
+        int UserId
+        int PlanId
+        decimal Amount
+        string Currency
+        int Provider
+        int Status
+        string OrderCode UK
+        string TransactionId
+        datetime ExpiresAt
+        datetime PaidAt
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+    PAYMENT_HISTORY {
+        int Id PK
+        int PaymentId FK
+        string OldStatus
+        string NewStatus
+        string Action
+        string RawData
+        datetime CreatedAt
+    }
+    PAY_PROCESSED_EVENT {
+        string EventId PK
+        string EventType
+        string EventHash UK
+        string OrderCode UK
+        datetime ProcessedAt
+    }
+    PAY_OUTBOX_EVENT {
+        int Id PK
+        string EventId
+        string EventType
+        string Payload
+        int Status
+        int RetryCount
+        datetime CreatedAt
+    }
+
+    PAYMENT ||--o{ PAYMENT_HISTORY : changes
+
+    %% =======================
+    %% NOTIFICATION SERVICE
+    %% =======================
+    NOTIFICATION {
+        int Id PK
+        string UserId
+        string Title
+        string Content
+        string Type
+        string ObjectId
+        string ActorId
+        string ActorType
+        bool IsRead
+        datetime CreatedAt
+    }
+
+    %% =======================
+    %% LOGICAL CROSS-SERVICE LINKS (no physical FK)
+    %% =======================
+    USER ||..|| EMPLOYEE : profile_of
+    USER ||..|| COMPANY_PROFILE : profile_of
+    USER ||..|| EXPERT : profile_of
+    EMPLOYEE ||..o{ PORTFOLIO : owns
+    COMPANY_PROFILE ||..o{ COMPANY_POST : posts
+    EMPLOYEE ||..o{ APPLICATION : applies
+    COMPANY_PROFILE ||..o{ APPLICATION : receives
+    COMPANY_POST ||..o{ APPLICATION : target
+    PORTFOLIO ||..o{ APPLICATION : attached
+    APPLICATION ||..o{ INTERVIEW : schedules
+    USER ||..o{ USER_SUBSCRIPTION : subscribes
+    PLAN ||..o{ PAYMENT : purchased_plan
+    USER ||..o{ PAYMENT : pays
+    USER ||..o{ COMMUNITY_POST : creates
+    PORTFOLIO ||..o{ COMMUNITY_POST : referenced
+    USER ||..o{ NOTIFICATION : receives

@@ -2,8 +2,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Payment.Application.Interfaces;
+using Payment.Domain.Entities;
 using Payment.Domain.Enums;
 using Payment.Domain.Interfaces;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace Payment.Infrastructure.Services;
 
@@ -50,6 +54,9 @@ public class ReconciliationService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var paymentRepository = scope.ServiceProvider.GetRequiredService<IPaymentRepository>();
         var verificationService = scope.ServiceProvider.GetRequiredService<IPaymentVerificationService>();
+        var processedEventRepository = scope.ServiceProvider.GetRequiredService<IProcessedEventRepository>();
+        var outboxRepository = scope.ServiceProvider.GetRequiredService<IOutboxEventRepository>();
+        var historyRepository = scope.ServiceProvider.GetRequiredService<IPaymentHistoryRepository>();
 
         // Find payments stuck in Processing or Pending for too long
         var stuckStatuses = new[] { PaymentStatus.Processing, PaymentStatus.Pending };
@@ -77,7 +84,58 @@ public class ReconciliationService : BackgroundService
                     _logger.LogWarning("Reconciliation: Payment {Id} was stuck but PayOS says PAID. Fixing.",
                         payment.Id);
 
-                    await paymentRepository.UpdateStatusAsync(payment.Id, PaymentStatus.Succeeded);
+                    if (!await processedEventRepository.IsProcessedByOrderCodeAsync(payment.OrderCode))
+                    {
+                        var oldStatus = payment.Status;
+
+                        payment.Status = PaymentStatus.Succeeded;
+                        payment.PaidAt ??= DateTime.UtcNow;
+                        payment.UpdatedAt = DateTime.UtcNow;
+                        await paymentRepository.UpdateAsync(payment);
+
+                        await historyRepository.CreateAsync(new PaymentHistory
+                        {
+                            Id = Guid.NewGuid(),
+                            PaymentId = payment.Id,
+                            OldStatus = oldStatus.ToString(),
+                            NewStatus = PaymentStatus.Succeeded.ToString(),
+                            Action = "Reconciliation: status synced from provider",
+                            CorrelationId = $"reconcile-{payment.Id}",
+                            CreatedAt = DateTime.UtcNow
+                        });
+
+                        await processedEventRepository.CreateAsync(new ProcessedEvent
+                        {
+                            EventId = $"reconcile_{payment.Id}_{Guid.NewGuid():N}",
+                            EventType = "manual_reconciliation",
+                            EventHash = ComputeSha256($"reconcile:{payment.OrderCode}:{payment.UpdatedAt:O}"),
+                            OrderCode = payment.OrderCode,
+                            ProcessedAt = DateTime.UtcNow,
+                            CorrelationId = $"reconcile-{payment.Id}"
+                        });
+
+                        await outboxRepository.CreateAsync(new OutboxEvent
+                        {
+                            EventId = Guid.NewGuid().ToString(),
+                            EventType = "PaymentSucceeded",
+                            Payload = JsonSerializer.Serialize(new
+                            {
+                                paymentId = payment.Id,
+                                subscriptionId = payment.SubscriptionId,
+                                userId = payment.UserId,
+                                planId = payment.PlanId,
+                                amount = payment.Amount,
+                                provider = payment.Provider.ToString(),
+                                transactionId = payment.TransactionId
+                            }),
+                            Status = OutboxStatus.Pending,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                    else
+                    {
+                        await paymentRepository.UpdateStatusAsync(payment.Id, PaymentStatus.Succeeded);
+                    }
                 }
                 else if (verificationResult.IsValid && verificationResult.ActualStatus == "CANCELLED")
                 {
@@ -105,5 +163,11 @@ public class ReconciliationService : BackgroundService
         }
 
         _logger.LogInformation("Reconciliation cycle completed");
+    }
+
+    private static string ComputeSha256(string input)
+    {
+        using var sha256 = SHA256.Create();
+        return Convert.ToHexString(sha256.ComputeHash(Encoding.UTF8.GetBytes(input)));
     }
 }

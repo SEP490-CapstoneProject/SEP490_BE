@@ -174,4 +174,28 @@ public class AuthController : ControllerBase
         var users = await _authService.GetInternalUserInfosByIdsAsync(userIds);
         return Ok(users);
     }
+
+    [HttpGet("internal/users/by-roles")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<InternalUserInfoDto>>> GetInternalUsersByRoles([FromQuery] string roles)
+    {
+        if (string.IsNullOrWhiteSpace(roles))
+        {
+            return Ok(new List<InternalUserInfoDto>());
+        }
+
+        var roleList = roles.Split(',')
+            .Select(r => r.Trim())
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (roleList.Count == 0)
+        {
+            return Ok(new List<InternalUserInfoDto>());
+        }
+
+        var users = await _authService.GetInternalUserInfosByRolesAsync(roleList);
+        return Ok(users);
+    }
 }

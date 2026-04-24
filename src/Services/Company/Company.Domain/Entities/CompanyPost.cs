@@ -17,6 +17,10 @@ public class CompanyPost
     public string? CoverImageVideo { get; set; }
     public DateTime CreatedAt { get; set; }
     public int Status { get; set; } = 1;
+    public string? Embedding { get; set; }
+    public int EmbeddingVersion { get; set; }
+    public DateTime? EmbeddingUpdatedAt { get; set; }
+    public string EmbeddingStatus { get; set; } = "Pending";
 
     public CompanyEntity? Company { get; set; }
     public ICollection<CompanyPostMedia> Media { get; set; } = new List<CompanyPostMedia>();

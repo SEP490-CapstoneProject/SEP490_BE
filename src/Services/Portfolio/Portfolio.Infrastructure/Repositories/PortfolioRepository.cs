@@ -3,6 +3,7 @@ using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
 using Portfolio.Infrastructure.Data;
+using RecruitmentPlatform.AI.Models;
 
 namespace Portfolio.Infrastructure.Repositories;
 
@@ -35,7 +36,7 @@ public class PortfolioRepository : IPortfolioRepository
             .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)
             .FirstOrDefaultAsync();
 
-    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, PortfolioSortMode sort, PortfolioRankBy rankBy)
+    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         var query = _context.Portfolios
             .Where(p => p.IsPublic)
@@ -43,6 +44,8 @@ public class PortfolioRepository : IPortfolioRepository
 
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(p => p.Status == status);
+
+        query = ApplySearchFilter(query, searchTerm, blockType);
 
         var total = await query.CountAsync();
         var items = await query.ToListAsync();
@@ -152,6 +155,8 @@ WHERE [EmployeeId] = {employeeId}
                        && (_currentUser.IsAdmin || c.UserId == _currentUser.UserId)));
         }
 
+        query = ApplySearchFilter(query, queryParams.SearchTerm, queryParams.BlockType);
+
         var total = await query.CountAsync();
 
         var items = await query
@@ -207,6 +212,35 @@ WHERE [EmployeeId] = {employeeId}
             .ToList();
 
         return (items, total);
+    }
+
+    private IQueryable<Portfolio.Domain.Entities.Portfolio> ApplySearchFilter(
+        IQueryable<Portfolio.Domain.Entities.Portfolio> query,
+        string? searchTerm,
+        string? blockType)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return query;
+        }
+
+        var normalizedSearch = searchTerm.Trim();
+        var escapedSearch = EscapeLikePattern(normalizedSearch);
+        var likePattern = $"%{escapedSearch}%";
+        var normalizedBlockType = string.IsNullOrWhiteSpace(blockType) ? null : blockType.Trim().ToUpperInvariant();
+
+        return query.Where(p => _context.PortfolioBlocks.Any(b =>
+            b.PortfolioId == p.Id &&
+            (normalizedBlockType == null || b.BlockType.Code == normalizedBlockType) &&
+            EF.Functions.Like(b.DataJson, likePattern)));
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("[", "[[]")
+            .Replace("%", "[%]")
+            .Replace("_", "[_]");
     }
 
     private async Task<Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)>> GetPublicRankingMapAsync(PortfolioRankBy rankBy)
@@ -303,5 +337,44 @@ WHERE [EmployeeId] = {employeeId}
             PortfolioSortMode.oldest => source.OrderBy(x => x.UpdatedAt ?? x.CreatedAt),
             _ => source.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
         };
+    }
+
+    public async Task<List<Portfolio.Domain.Entities.Portfolio>> GetPublicPortfoliosForMatchingAsync(int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 150);
+        return await _context.Portfolios
+            .AsNoTracking()
+            .Include(p => p.Blocks)
+            .Where(p => p.IsPublic
+                && p.Embedding != null
+                && p.EmbeddingStatus == "Ready")
+            .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.UpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Take(safeLimit)
+            .ToListAsync();
+    }
+
+    public async Task<List<Portfolio.Domain.Entities.Portfolio>> GetPortfoliosForEmbeddingBackfillAsync(int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 200);
+        return await _context.Portfolios
+            .Include(p => p.Blocks)
+            .Where(p => p.Embedding == null || p.EmbeddingStatus != EmbeddingReadinessPolicy.Ready)
+            .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Take(safeLimit)
+            .ToListAsync();
+    }
+
+    public async Task UpdateEmbeddingAsync(int portfolioId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus)
+    {
+        var portfolio = await _context.Portfolios.FirstOrDefaultAsync(p => p.Id == portfolioId);
+        if (portfolio == null) return;
+
+        portfolio.Embedding = embedding;
+        portfolio.EmbeddingVersion = embeddingVersion;
+        portfolio.EmbeddingUpdatedAt = embeddingUpdatedAt;
+        portfolio.EmbeddingStatus = embeddingStatus;
+        await _context.SaveChangesAsync();
     }
 }
