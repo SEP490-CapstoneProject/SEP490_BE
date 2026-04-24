@@ -206,6 +206,73 @@ public class ConnectionController : ControllerBase
         return Ok(summaries);
     }
 
+    /// <summary>
+    /// Lấy room summary của 1 connection cụ thể theo connectionId.
+    /// userId dùng để tính unreadCount đúng (tin nhắn chưa đọc của user đó).
+    /// </summary>
+    [HttpGet("rooms/summary/by-connection/{connectionId}")]
+    public async Task<IActionResult> GetRoomSummaryByConnection(int connectionId, [FromQuery] int userId)
+    {
+        if (userId <= 0)
+            return BadRequest(new { error = "userId is required" });
+
+        var room = await _service.GetRoomSummaryByConnectionIdAsync(connectionId, userId);
+        if (room == null)
+            return NotFound(new { error = "Room not found for the given connectionId" });
+
+        int otherUserId = room.UserIdFrom == userId ? room.UserIdTo : room.UserIdFrom;
+        string name = otherUserId.ToString();
+        string? avatar = null;
+        string? cover = null;
+        string role = "USER";
+
+        var client = _httpClientFactory.CreateClient("UserProfile");
+        try
+        {
+            var res = await client.GetAsync($"/api/company/by-user/{otherUserId}");
+            if (res.IsSuccessStatusCode)
+            {
+                var json = await res.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("companyName", out var comp)) name = comp.GetString() ?? name;
+                if (doc.RootElement.TryGetProperty("avatar", out var av)) avatar = av.GetString();
+                if (doc.RootElement.TryGetProperty("coverImage", out var cv)) cover = cv.GetString();
+                role = "COMPANY";
+            }
+            else
+            {
+                var res2 = await client.GetAsync($"/api/employee/by-user/{otherUserId}");
+                if (res2.IsSuccessStatusCode)
+                {
+                    var json2 = await res2.Content.ReadAsStringAsync();
+                    using var doc2 = System.Text.Json.JsonDocument.Parse(json2);
+                    if (doc2.RootElement.TryGetProperty("name", out var nm)) name = nm.GetString() ?? name;
+                    if (doc2.RootElement.TryGetProperty("avatar", out var av2)) avatar = av2.GetString();
+                    if (doc2.RootElement.TryGetProperty("coverImage", out var cv2)) cover = cv2.GetString();
+                    role = "USER";
+                }
+            }
+        }
+        catch
+        {
+            // ignore profile fetch errors
+        }
+
+        var summary = new Connection.Application.DTOs.RoomSummaryDto
+        {
+            RoomId = room.RoomId,
+            Name = name,
+            Avatar = avatar,
+            CoverImage = cover,
+            Role = role,
+            LastContent = room.LastContent,
+            LastAt = room.LastAt,
+            UnreadCount = room.UnreadCount
+        };
+
+        return Ok(summary);
+    }
+
     [HttpPost("rooms/{roomId}/messages")]
     [Authorize]
     public async Task<IActionResult> CreateMessage(int roomId, [FromBody] Connection.Application.DTOs.CreateMessageRequest req)

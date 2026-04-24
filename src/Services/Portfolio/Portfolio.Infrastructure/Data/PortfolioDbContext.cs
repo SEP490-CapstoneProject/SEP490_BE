@@ -19,6 +19,7 @@ public class PortfolioDbContext : DbContext
     public DbSet<PortfolioBlock> PortfolioBlocks { get; set; }
     public DbSet<Compliment> Compliments { get; set; }
     public DbSet<PortfolioFollow> PortfolioFollows { get; set; }
+    public DbSet<Criterion> Criteria { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -147,6 +148,18 @@ public class PortfolioDbContext : DbContext
              .WithMany(x => x.Follows)
              .HasForeignKey(x => x.PortfolioId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Criterion
+        modelBuilder.Entity<Criterion>(e =>
+        {
+            e.ToTable("Criterion");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(255).IsRequired();
+            e.Property(x => x.Kind).HasMaxLength(100).IsRequired();
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+
+            e.HasIndex(x => x.Kind).HasDatabaseName("IX_Criterion_Kind");
         });
     }
 }
