@@ -35,6 +35,26 @@ public class NotificationController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Get notifications related to community interactions only.</summary>
+    [HttpGet("community")]
+    public async Task<IActionResult> GetCommunityNotifications([FromQuery] int? cursor, [FromQuery] int limit = 20)
+    {
+        limit = Math.Clamp(limit, 1, 50);
+        var userId = GetUserId();
+        var result = await _service.GetCommunityNotificationsAsync(userId, cursor, limit);
+        return Ok(result);
+    }
+
+    /// <summary>Get system notifications excluding community-specific types.</summary>
+    [HttpGet("system")]
+    public async Task<IActionResult> GetSystemNotifications([FromQuery] int? cursor, [FromQuery] int limit = 20)
+    {
+        limit = Math.Clamp(limit, 1, 50);
+        var userId = GetUserId();
+        var result = await _service.GetSystemNotificationsAsync(userId, cursor, limit);
+        return Ok(result);
+    }
+
     [HttpGet("unread-count")]
     public async Task<IActionResult> GetUnreadCount()
     {

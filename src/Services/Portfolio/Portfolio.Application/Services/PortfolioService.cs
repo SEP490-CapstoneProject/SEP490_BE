@@ -674,7 +674,10 @@ public class PortfolioService : IPortfolioService
         portfolio.ModerationStatus = moderation.Status;
         portfolio.ModerationReason = moderation.Reason;
         portfolio.ModeratedAt = VietnamTime.Now();
-        if (!string.Equals(moderation.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+        var isApproved = string.Equals(moderation.Status, "Approved", StringComparison.OrdinalIgnoreCase);
+        portfolio.Status = isApproved ? "active" : "inactive";
+
+        if (!isApproved)
         {
             portfolio.IsPublic = false;
             portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
