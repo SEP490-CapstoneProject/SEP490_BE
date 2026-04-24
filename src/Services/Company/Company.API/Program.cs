@@ -63,6 +63,7 @@ builder.Services.AddScoped<ICompanyCacheRepository, CompanyCacheRepository>();
 builder.Services.AddScoped<ICompanyEmbeddingEventPublisher, CompanyEmbeddingEventPublisher>();
 builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
 builder.Services.AddHostedService<CompanyEmbeddingConsumer>();
+builder.Services.AddHostedService<CompanyEmbeddingBackfillWorker>();
 
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
 builder.Services.AddHttpClient<IMediaUploadClient, MediaUploadClient>(client =>

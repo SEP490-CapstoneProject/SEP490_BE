@@ -3,6 +3,7 @@ using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
 using Portfolio.Infrastructure.Data;
+using RecruitmentPlatform.AI.Models;
 
 namespace Portfolio.Infrastructure.Repositories;
 
@@ -344,8 +345,22 @@ WHERE [EmployeeId] = {employeeId}
         return await _context.Portfolios
             .AsNoTracking()
             .Include(p => p.Blocks)
-            .Where(p => p.IsPublic)
+            .Where(p => p.IsPublic
+                && p.Embedding != null
+                && p.EmbeddingStatus == "Ready")
             .OrderByDescending(p => p.EmbeddingUpdatedAt ?? p.UpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Take(safeLimit)
+            .ToListAsync();
+    }
+
+    public async Task<List<Portfolio.Domain.Entities.Portfolio>> GetPortfoliosForEmbeddingBackfillAsync(int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 200);
+        return await _context.Portfolios
+            .Include(p => p.Blocks)
+            .Where(p => p.Embedding == null || p.EmbeddingStatus != EmbeddingReadinessPolicy.Ready)
+            .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)
             .ThenByDescending(p => p.Id)
             .Take(safeLimit)
             .ToListAsync();

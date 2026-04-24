@@ -584,19 +584,20 @@ public class PortfolioService : IPortfolioService
 
     public async Task<JobMatchPagedResult> MatchJobsForPortfolioAsync(int portfolioId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
+        var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
         var portfolio = await _repo.GetByIdAsync(portfolioId);
         if (portfolio == null)
         {
-            return new JobMatchPagedResult { Page = page, PageSize = pageSize };
+            return new JobMatchPagedResult { Page = safePage, PageSize = safePageSize };
         }
 
         var sourceEmbedding = ParseEmbedding(portfolio.Embedding);
-        if (sourceEmbedding.Length == 0 || !string.Equals(portfolio.EmbeddingStatus, "Ready", StringComparison.OrdinalIgnoreCase))
+        if (!EmbeddingReadinessPolicy.IsReady(portfolio.EmbeddingStatus, sourceEmbedding))
         {
-            return new JobMatchPagedResult { Page = page, PageSize = pageSize };
+            return new JobMatchPagedResult { Page = safePage, PageSize = safePageSize };
         }
 
-        var cacheKey = $"portfolio:{portfolio.Id}:{portfolio.EmbeddingVersion}:matched-jobs:{page}:{Math.Min(pageSize, 50)}";
+        var cacheKey = $"portfolio:{portfolio.Id}:{portfolio.EmbeddingVersion}:matched-jobs:{safePage}:{safePageSize}";
         if (_cache.TryGetValue(cacheKey, out JobMatchPagedResult? cached) && cached != null)
         {
             return cached;
@@ -618,7 +619,7 @@ public class PortfolioService : IPortfolioService
             SourceEmbeddingVersion = portfolio.EmbeddingVersion
         };
 
-        var matches = _matchingEngine.Match(request, candidates, page, pageSize);
+        var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
         var result = new JobMatchPagedResult
         {
             Total = matches.Total,
@@ -642,18 +643,25 @@ public class PortfolioService : IPortfolioService
     public async Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default)
     {
         var portfolios = await _repo.GetPublicPortfoliosForMatchingAsync(limit);
-        var items = portfolios.Select(portfolio => new MatchingCandidate
-        {
-            Id = portfolio.Id,
-            Title = portfolio.Name,
-            Description = BuildPortfolioDescription(portfolio),
-            Skills = ExtractPortfolioSkills(portfolio),
-            Categories = new List<string>(),
-            Embedding = ParseEmbedding(portfolio.Embedding),
-            EmbeddingVersion = portfolio.EmbeddingVersion,
-            EmbeddingStatus = portfolio.EmbeddingStatus,
-            UpdatedAt = portfolio.EmbeddingUpdatedAt ?? portfolio.UpdatedAt ?? portfolio.CreatedAt
-        }).ToList();
+        var items = portfolios
+            .Select(portfolio =>
+            {
+                var embedding = ParseEmbedding(portfolio.Embedding);
+                return new MatchingCandidate
+                {
+                    Id = portfolio.Id,
+                    Title = portfolio.Name,
+                    Description = BuildPortfolioDescription(portfolio),
+                    Skills = ExtractPortfolioSkills(portfolio),
+                    Categories = new List<string>(),
+                    Embedding = embedding,
+                    EmbeddingVersion = portfolio.EmbeddingVersion,
+                    EmbeddingStatus = portfolio.EmbeddingStatus,
+                    UpdatedAt = portfolio.EmbeddingUpdatedAt ?? portfolio.UpdatedAt ?? portfolio.CreatedAt
+                };
+            })
+            .Where(candidate => candidate.Embedding.Length > 0)
+            .ToList();
 
         return new MatchingCandidateFeed { Items = items };
     }
@@ -669,11 +677,11 @@ public class PortfolioService : IPortfolioService
         if (!string.Equals(moderation.Status, "Approved", StringComparison.OrdinalIgnoreCase))
         {
             portfolio.IsPublic = false;
-            portfolio.EmbeddingStatus = "Failed";
+            portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
             return;
         }
 
-        portfolio.EmbeddingStatus = "Pending";
+        portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.Pending;
         var input = new EmbeddingTextInput
         {
             Title = portfolio.Name,
@@ -691,11 +699,11 @@ public class PortfolioService : IPortfolioService
             portfolio.Embedding = JsonSerializer.Serialize(embedding);
             portfolio.EmbeddingVersion = Math.Max(1, portfolio.EmbeddingVersion + 1);
             portfolio.EmbeddingUpdatedAt = VietnamTime.Now();
-            portfolio.EmbeddingStatus = embedding.Length > 0 ? "Ready" : "Failed";
+            portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.ResolveStatus(embedding);
         }
         catch (Exception ex)
         {
-            portfolio.EmbeddingStatus = "Failed";
+            portfolio.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
             _logger.LogWarning(ex, "Failed to generate embedding for portfolio {PortfolioId}", portfolio.Id);
         }
     }
@@ -734,6 +742,13 @@ public class PortfolioService : IPortfolioService
         {
             return Array.Empty<float>();
         }
+    }
+
+    private static (int Page, int PageSize) NormalizeMatchPaging(int page, int pageSize)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 50);
+        return (safePage, safePageSize);
     }
 
     private async Task TryPublishEmbeddingEventAsync(int portfolioId)

@@ -160,7 +160,7 @@ public class CompanyPostService : ICompanyPostService
             CreatedAt = detail.CreatedAt,
             Embedding = null,
             EmbeddingVersion = existingPost?.EmbeddingVersion ?? 0,
-            EmbeddingStatus = "Pending"
+            EmbeddingStatus = EmbeddingReadinessPolicy.Pending
         };
         await UpdateEmbeddingStateAsync(post);
 
@@ -199,7 +199,7 @@ public class CompanyPostService : ICompanyPostService
             CreatedAt = detail.CreatedAt,
             Embedding = null,
             EmbeddingVersion = existingPost?.EmbeddingVersion ?? 0,
-            EmbeddingStatus = "Pending"
+            EmbeddingStatus = EmbeddingReadinessPolicy.Pending
         };
         await UpdateEmbeddingStateAsync(post);
 
@@ -226,19 +226,20 @@ public class CompanyPostService : ICompanyPostService
 
     public async Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
+        var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
         var post = await _repository.GetPostEntityByIdAsync(postId);
         if (post == null)
         {
-            return new PortfolioMatchPagedResult { Page = page, PageSize = pageSize };
+            return new PortfolioMatchPagedResult { Page = safePage, PageSize = safePageSize };
         }
 
         var sourceEmbedding = ParseEmbedding(post.Embedding);
-        if (sourceEmbedding.Length == 0 || !string.Equals(post.EmbeddingStatus, "Ready", StringComparison.OrdinalIgnoreCase))
+        if (!EmbeddingReadinessPolicy.IsReady(post.EmbeddingStatus, sourceEmbedding))
         {
-            return new PortfolioMatchPagedResult { Page = page, PageSize = pageSize };
+            return new PortfolioMatchPagedResult { Page = safePage, PageSize = safePageSize };
         }
 
-        var cacheKey = $"job:{post.PostId}:{post.EmbeddingVersion}:matched-portfolios:{page}:{Math.Min(pageSize, 50)}";
+        var cacheKey = $"job:{post.PostId}:{post.EmbeddingVersion}:matched-portfolios:{safePage}:{safePageSize}";
         if (_cache.TryGetValue(cacheKey, out PortfolioMatchPagedResult? cached) && cached != null)
         {
             return cached;
@@ -259,7 +260,7 @@ public class CompanyPostService : ICompanyPostService
             SourceEmbeddingVersion = post.EmbeddingVersion
         };
 
-        var matches = _matchingEngine.Match(request, candidates, page, pageSize);
+        var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
         var result = new PortfolioMatchPagedResult
         {
             Total = matches.Total,
@@ -283,18 +284,25 @@ public class CompanyPostService : ICompanyPostService
     public async Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default)
     {
         var posts = await _repository.GetActivePostsForMatchingAsync(limit);
-        var items = posts.Select(post => new MatchingCandidate
-        {
-            Id = post.PostId,
-            Title = post.Position,
-            Description = post.JobDescription ?? string.Empty,
-            Skills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
-            Categories = ExtractCategories(post.EmploymentType, post.Address),
-            Embedding = ParseEmbedding(post.Embedding),
-            EmbeddingVersion = post.EmbeddingVersion,
-            EmbeddingStatus = post.EmbeddingStatus,
-            UpdatedAt = post.EmbeddingUpdatedAt ?? post.CreatedAt
-        }).ToList();
+        var items = posts
+            .Select(post =>
+            {
+                var embedding = ParseEmbedding(post.Embedding);
+                return new MatchingCandidate
+                {
+                    Id = post.PostId,
+                    Title = post.Position,
+                    Description = post.JobDescription ?? string.Empty,
+                    Skills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
+                    Categories = ExtractCategories(post.EmploymentType, post.Address),
+                    Embedding = embedding,
+                    EmbeddingVersion = post.EmbeddingVersion,
+                    EmbeddingStatus = post.EmbeddingStatus,
+                    UpdatedAt = post.EmbeddingUpdatedAt ?? post.CreatedAt
+                };
+            })
+            .Where(candidate => candidate.Embedding.Length > 0)
+            .ToList();
 
         return new MatchingCandidateFeed { Items = items };
     }
@@ -398,7 +406,7 @@ public class CompanyPostService : ICompanyPostService
 
     private async Task UpdateEmbeddingStateAsync(CompanyPost post)
     {
-        post.EmbeddingStatus = "Pending";
+        post.EmbeddingStatus = EmbeddingReadinessPolicy.Pending;
         var text = _textNormalizer.BuildJobText(new EmbeddingTextInput
         {
             Title = post.Position,
@@ -414,11 +422,11 @@ public class CompanyPostService : ICompanyPostService
             post.Embedding = JsonSerializer.Serialize(embedding);
             post.EmbeddingVersion = Math.Max(1, post.EmbeddingVersion + 1);
             post.EmbeddingUpdatedAt = DateTimeHelper.GetVietnamTime();
-            post.EmbeddingStatus = embedding.Length > 0 ? "Ready" : "Failed";
+            post.EmbeddingStatus = EmbeddingReadinessPolicy.ResolveStatus(embedding);
         }
         catch (Exception ex)
         {
-            post.EmbeddingStatus = "Failed";
+            post.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
             _logger.LogWarning(ex, "Failed to generate embedding for company post {PostId}", post.PostId);
         }
     }
@@ -438,6 +446,13 @@ public class CompanyPostService : ICompanyPostService
         {
             return Array.Empty<float>();
         }
+    }
+
+    private static (int Page, int PageSize) NormalizeMatchPaging(int page, int pageSize)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 50);
+        return (safePage, safePageSize);
     }
 
     private static List<string> ExtractSkills(params string?[] textParts)

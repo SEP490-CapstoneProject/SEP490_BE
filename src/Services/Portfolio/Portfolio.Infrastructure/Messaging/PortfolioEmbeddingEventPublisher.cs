@@ -20,15 +20,15 @@ public sealed class PortfolioEmbeddingEventPublisher : IPortfolioEmbeddingEventP
 
     public async Task PublishPortfolioChangedAsync(int portfolioId, CancellationToken cancellationToken = default)
     {
-        var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
-        var userName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
+        var host = GetRabbitSetting("HostName", "Host", "localhost");
+        var userName = GetRabbitSetting("UserName", "Username", "guest");
         var factory = new ConnectionFactory
         {
             HostName = host,
             UserName = userName,
-            Password = _configuration["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
+            Password = GetRabbitSetting("Password", defaultValue: "guest"),
+            VirtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/"),
+            Port = int.TryParse(GetRabbitSetting("Port", defaultValue: "5672"), out var port) ? port : 5672
         };
 
         await using var connection = await factory.CreateConnectionAsync(cancellationToken);
@@ -41,5 +41,25 @@ public sealed class PortfolioEmbeddingEventPublisher : IPortfolioEmbeddingEventP
         var body = Encoding.UTF8.GetBytes(payload);
         await channel.BasicPublishAsync(exchange, "portfolio.changed", body, cancellationToken);
         _logger.LogInformation("Published portfolio.changed for {PortfolioId}", portfolioId);
+    }
+
+    private string GetRabbitSetting(string primaryKey, string? fallbackKey = null, string defaultValue = "")
+    {
+        var primary = _configuration[$"RabbitMQ:{primaryKey}"];
+        if (!string.IsNullOrWhiteSpace(primary))
+        {
+            return primary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackKey))
+        {
+            var fallback = _configuration[$"RabbitMQ:{fallbackKey}"];
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                return fallback;
+            }
+        }
+
+        return defaultValue;
     }
 }
