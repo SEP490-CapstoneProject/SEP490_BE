@@ -72,6 +72,7 @@ public sealed class NotificationCreatedEvent : RealtimeEventBase
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
+    public string Category { get; set; } = "system";
     public string? ObjectId { get; set; }
     public NotificationActorDto? Actor { get; set; }
     public bool IsRead { get; set; }

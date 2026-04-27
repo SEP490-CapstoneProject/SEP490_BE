@@ -53,6 +53,7 @@ public class NotificationCreatedEventDto
     public string Title { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Type { get; set; } = default!;
+    public string Category { get; set; } = "system";
     public string? ObjectId { get; set; }
     public ActorDto? Actor { get; set; }
     public DateTime CreatedAt { get; set; }

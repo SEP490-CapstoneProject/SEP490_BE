@@ -11,17 +11,23 @@ public class ComplimentService : IComplimentService
 {
     private readonly IComplimentRepository _repo;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEmployeeServiceClient _employeeServiceClient;
+    private readonly IPortfolioNotificationEventPublisher _notificationEventPublisher;
     private readonly PortfolioDbContext _db;
     private readonly ILogger<ComplimentService> _logger;
 
     public ComplimentService(
         IComplimentRepository repo,
         ICurrentUserService currentUser,
+        IEmployeeServiceClient employeeServiceClient,
+        IPortfolioNotificationEventPublisher notificationEventPublisher,
         PortfolioDbContext db,
         ILogger<ComplimentService> logger)
     {
         _repo = repo;
         _currentUser = currentUser;
+        _employeeServiceClient = employeeServiceClient;
+        _notificationEventPublisher = notificationEventPublisher;
         _db = db;
         _logger = logger;
     }
@@ -50,6 +56,7 @@ public class ComplimentService : IComplimentService
             var created = await _repo.CreateAsync(compliment);
             await RecalculateAggregatesAsync(request.PortfolioId);
             await tx.CommitAsync();
+            await TryPublishComplimentNotificationAsync(created);
             _logger.LogInformation("Compliment {Id} created for portfolio {PortfolioId}", created.Id, request.PortfolioId);
             return MapToDto(created);
         }
@@ -154,6 +161,48 @@ public class ComplimentService : IComplimentService
         => ex.InnerException?.Message.Contains("UNIQUE") == true
         || ex.InnerException?.Message.Contains("unique") == true
         || ex.InnerException?.Message.Contains("duplicate") == true;
+
+    private async Task TryPublishComplimentNotificationAsync(Compliment compliment)
+    {
+        var portfolio = await _db.Portfolios
+            .AsNoTracking()
+            .Where(p => p.Id == compliment.PortfolioId)
+            .Select(p => new { p.Id, p.EmployeeId })
+            .FirstOrDefaultAsync();
+
+        if (portfolio is null)
+        {
+            return;
+        }
+
+        var employee = await _employeeServiceClient.GetEmployeeByIdAsync(portfolio.EmployeeId);
+        if (employee is null || employee.UserId <= 0 || employee.UserId == _currentUser.UserId)
+        {
+            return;
+        }
+
+        var payload = new PortfolioNotificationEventPayload
+        {
+            EventType = "portfolio.compliment.created",
+            UserId = employee.UserId.ToString(),
+            ActorId = _currentUser.UserId.ToString(),
+            ActorType = "RECRUITER",
+            ObjectId = compliment.PortfolioId.ToString(),
+            Title = "Portfolio đã được đánh giá",
+            Content = "Portfolio của bạn vừa nhận được một đánh giá mới từ nhà tuyển dụng.",
+            Type = "PORTFOLIO_REVIEWED",
+            CreatedAt = compliment.CreatedAt
+        };
+
+        try
+        {
+            await _notificationEventPublisher.PublishComplimentCreatedAsync(payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish compliment notification. ComplimentId={ComplimentId}", compliment.Id);
+        }
+    }
 
     private static ComplimentDto MapToDto(Compliment c) => new()
     {
