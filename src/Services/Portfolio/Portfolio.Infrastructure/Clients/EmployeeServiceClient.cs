@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Portfolio.Application.Interfaces;
+using System.Net.Http.Json;
 
 namespace Portfolio.Infrastructure.Clients;
 
@@ -25,6 +26,25 @@ public class EmployeeServiceClient : IEmployeeServiceClient
         {
             _logger.LogWarning(ex, "Could not validate employee {EmployeeId}", employeeId);
             return false;
+        }
+    }
+
+    public async Task<EmployeeProfileDto?> GetEmployeeByIdAsync(int employeeId)
+    {
+        try
+        {
+            var response = await _http.GetAsync($"/api/employee/{employeeId}");
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<EmployeeProfileDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch employee profile {EmployeeId}", employeeId);
+            return null;
         }
     }
 }

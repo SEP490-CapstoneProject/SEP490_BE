@@ -4,6 +4,7 @@ using Application.Infrastructure.Azure;
 using Application.Infrastructure.Clients;
 using Application.Infrastructure.Configuration;
 using Application.Infrastructure.Data;
+using Application.Infrastructure.Messaging;
 using Application.Infrastructure.Repositories;
 using Application.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -63,6 +64,7 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IEntitlementChecker, EntitlementChecker>();
+builder.Services.AddScoped<IApplicationNotificationEventPublisher, RabbitMqApplicationNotificationEventPublisher>();
 
 // HTTP Client with Polly
 var retryPolicy = HttpPolicyExtensions

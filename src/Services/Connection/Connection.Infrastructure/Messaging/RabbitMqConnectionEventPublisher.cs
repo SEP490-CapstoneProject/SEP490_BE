@@ -66,6 +66,29 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
         }
     }
 
+    private async Task PublishNotificationAsync(string routingKey, ConnectionNotificationEventPayload payload, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var connection = await CreateFactory().CreateConnectionAsync(cancellationToken);
+            await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+            await channel.ExchangeDeclareAsync(Exchange, ExchangeType.Topic, durable: true, cancellationToken: cancellationToken);
+
+            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+            await channel.BasicPublishAsync(Exchange, routingKey, body, cancellationToken);
+
+            _logger.LogInformation(
+                "Published notification event {EventType} to {RoutingKey}. UserId={UserId}",
+                payload.EventType, routingKey, payload.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to publish notification event {EventType}. RoutingKey={RoutingKey}",
+                payload.EventType, routingKey);
+        }
+    }
+
     public Task PublishConnectionRequestedAsync(
         int connectionId, int fromUserId, int toUserId, int profileId,
         DateTime requestedAt, CancellationToken cancellationToken = default)
@@ -116,4 +139,10 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
         };
         return PublishAsync("message.new", evt, cancellationToken);
     }
+
+    public Task PublishConnectionRequestNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default)
+        => PublishNotificationAsync("connection.request.created", payload, cancellationToken);
+
+    public Task PublishConnectionAcceptedNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default)
+        => PublishNotificationAsync("connection.request.accepted", payload, cancellationToken);
 }

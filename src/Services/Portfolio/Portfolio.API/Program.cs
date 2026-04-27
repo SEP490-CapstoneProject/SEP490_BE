@@ -110,6 +110,7 @@ builder.Services.AddScoped<IComplimentService, ComplimentService>();
 builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCategoryService>();
 builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
+builder.Services.AddScoped<IPortfolioNotificationEventPublisher, PortfolioNotificationEventPublisher>();
 builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
 builder.Services.AddHostedService<PortfolioEmbeddingConsumer>();
 builder.Services.AddHostedService<PortfolioEmbeddingBackfillWorker>();
