@@ -99,6 +99,7 @@ public class NotificationService : INotificationService
             Title = entity.Title,
             Content = entity.Content,
             Type = entity.Type,
+            Category = NotificationTypeGroups.ResolveCategory(entity.Type),
             ObjectId = entity.ObjectId,
             Actor = actor,
             CreatedAt = entity.CreatedAt,

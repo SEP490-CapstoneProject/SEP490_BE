@@ -55,6 +55,18 @@ public class ConnectionController : ControllerBase
         _ = _eventPublisher.PublishConnectionRequestedAsync(
             created.Id, created.UserIdFrom, created.UserIdTo,
             created.ProfileId, created.CreateAt);
+        _ = _eventPublisher.PublishConnectionRequestNotificationAsync(new ConnectionNotificationEventPayload
+        {
+            EventType = "connection.request.created",
+            UserId = created.UserIdTo.ToString(),
+            ActorId = created.UserIdFrom.ToString(),
+            ActorType = "USER",
+            ObjectId = created.Id.ToString(),
+            Title = "Đã nhận yêu cầu kết nối",
+            Content = "Bạn vừa nhận được một yêu cầu kết nối mới.",
+            Type = "CONNECTION_REQUEST_SENT",
+            CreatedAt = created.CreateAt
+        });
 
         return CreatedAtAction(nameof(GetConnectionById), new { id = created.Id }, created);
     }
@@ -112,6 +124,18 @@ public class ConnectionController : ControllerBase
             _ = _eventPublisher.PublishConnectionAcceptedAsync(
                 updated.Id, updated.UserIdFrom, updated.UserIdTo,
                 updated.ConnectionAt ?? DateTime.UtcNow);
+            _ = _eventPublisher.PublishConnectionAcceptedNotificationAsync(new ConnectionNotificationEventPayload
+            {
+                EventType = "connection.request.accepted",
+                UserId = updated.UserIdFrom.ToString(),
+                ActorId = updated.UserIdTo.ToString(),
+                ActorType = "USER",
+                ObjectId = updated.Id.ToString(),
+                Title = "Yêu cầu kết nối đã được chấp nhận",
+                Content = "Yêu cầu kết nối của bạn đã được chấp nhận.",
+                Type = "CONNECTION_REQUEST_ACCEPTED",
+                CreatedAt = updated.ConnectionAt ?? DateTime.UtcNow
+            });
         }
         else if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.BLOCK)
         {

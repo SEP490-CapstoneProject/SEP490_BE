@@ -52,6 +52,7 @@ public class RabbitMqNotificationEventPublisher : INotificationEventPublisher
             Title = evt.Title,
             Content = evt.Content,
             Type = evt.Type,
+            Category = evt.Category,
             ObjectId = evt.ObjectId,
             Actor = evt.Actor is null
                 ? null

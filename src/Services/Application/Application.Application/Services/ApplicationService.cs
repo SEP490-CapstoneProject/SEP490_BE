@@ -12,6 +12,7 @@ public class ApplicationService : IApplicationService
     private readonly IUserProfileClient _userProfileClient;
     private readonly ICurrentUserService _currentUser;
     private readonly IEntitlementChecker _entitlementChecker;
+    private readonly IApplicationNotificationEventPublisher _notificationEventPublisher;
     private readonly ILogger<ApplicationService> _logger;
 
     public ApplicationService(
@@ -19,12 +20,14 @@ public class ApplicationService : IApplicationService
         IUserProfileClient userProfileClient,
         ICurrentUserService currentUser,
         IEntitlementChecker entitlementChecker,
+        IApplicationNotificationEventPublisher notificationEventPublisher,
         ILogger<ApplicationService> logger)
     {
         _repo = repo;
         _userProfileClient = userProfileClient;
         _currentUser = currentUser;
         _entitlementChecker = entitlementChecker;
+        _notificationEventPublisher = notificationEventPublisher;
         _logger = logger;
     }
 
@@ -90,6 +93,8 @@ public class ApplicationService : IApplicationService
             var created = await _repo.CreateAsync(application);
             _logger.LogInformation("Application {Id} created by employee {EmployeeId} for post {PostId}",
                 created.ApplicationId, employeeId, request.CompanyPostId);
+
+            await TryPublishCreatedNotificationAsync(created, employee, post);
 
             // Map to DTO
             var company = await _userProfileClient.GetCompanyByIdAsync(post.CompanyId);
@@ -202,8 +207,11 @@ public class ApplicationService : IApplicationService
         var updated = await _repo.UpdateAsync(application);
 
         // Enrich
+        var candidate = await _userProfileClient.GetEmployeeByIdAsync(updated.EmployeeId);
         var post = await _userProfileClient.GetCompanyPostByIdAsync(updated.CompanyPostId);
         var company = await _userProfileClient.GetCompanyByIdAsync(updated.CompanyId);
+
+        await TryPublishStatusUpdatedNotificationAsync(updated, candidate, post);
 
         return new ApplicationDto
         {
@@ -267,4 +275,75 @@ public class ApplicationService : IApplicationService
         Name = employee.Name,
         Avatar = employee.Avatar
     };
+
+    private async Task TryPublishCreatedNotificationAsync(
+        Domain.Entities.Application created,
+        EmployeeDto employee,
+        CompanyPostDto post)
+    {
+        var eventPayload = new ApplicationNotificationEventPayload
+        {
+            EventType = "job.application.created",
+            UserId = employee.UserId.ToString(),
+            ActorId = _currentUser.GetUserId().ToString(),
+            ActorType = "USER",
+            ObjectId = created.ApplicationId.ToString(),
+            Title = "Ứng tuyển thành công",
+            Content = $"Bạn đã ứng tuyển thành công vị trí {post.Position}.",
+            Type = "APPLICATION_SUBMITTED",
+            CreatedAt = VietnamTime.Now()
+        };
+
+        try
+        {
+            await _notificationEventPublisher.PublishAsync(eventPayload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish application created notification. ApplicationId={ApplicationId}", created.ApplicationId);
+        }
+    }
+
+    private async Task TryPublishStatusUpdatedNotificationAsync(
+        Domain.Entities.Application updated,
+        EmployeeDto? candidate,
+        CompanyPostDto? post)
+    {
+        if (candidate is null || candidate.UserId <= 0)
+        {
+            return;
+        }
+
+        var statusType = updated.Status == ApplicationStatus.ACCEPTED
+            ? "APPLICATION_APPROVED"
+            : "APPLICATION_REJECTED";
+        var title = updated.Status == ApplicationStatus.ACCEPTED
+            ? "Đơn ứng tuyển đã được duyệt"
+            : "Đơn ứng tuyển đã bị từ chối";
+        var content = updated.Status == ApplicationStatus.ACCEPTED
+            ? $"Đơn ứng tuyển vị trí {post?.Position ?? "đã ứng tuyển"} của bạn đã được duyệt."
+            : $"Đơn ứng tuyển vị trí {post?.Position ?? "đã ứng tuyển"} của bạn đã bị từ chối.";
+
+        var eventPayload = new ApplicationNotificationEventPayload
+        {
+            EventType = "job.application.status.updated",
+            UserId = candidate.UserId.ToString(),
+            ActorId = _currentUser.GetUserId().ToString(),
+            ActorType = "RECRUITER",
+            ObjectId = updated.ApplicationId.ToString(),
+            Title = title,
+            Content = content,
+            Type = statusType,
+            CreatedAt = VietnamTime.Now()
+        };
+
+        try
+        {
+            await _notificationEventPublisher.PublishAsync(eventPayload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish application status notification. ApplicationId={ApplicationId}", updated.ApplicationId);
+        }
+    }
 }

@@ -8,6 +8,12 @@ namespace Realtime.API.Services;
 public class SignalRPushService : IRealtimePushService
 {
     private readonly IHubContext<RealtimeHub> _hubContext;
+    private static readonly HashSet<string> CommunityTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "COMMUNITY",
+        "POST_FAVORITE",
+        "COMMUNITY_REPORT_REVIEW"
+    };
 
     public SignalRPushService(IHubContext<RealtimeHub> hubContext)
     {
@@ -15,9 +21,35 @@ public class SignalRPushService : IRealtimePushService
     }
 
     public Task PushNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
+    {
+        var tasks = new List<Task>
+        {
+            _hubContext.Clients
+                .Group($"user_{evt.UserId}")
+                .SendAsync("ReceiveNotification", evt, cancellationToken)
+        };
+
+        if (IsCommunity(evt))
+        {
+            tasks.Add(PushCommunityNotificationAsync(evt, cancellationToken));
+        }
+        else
+        {
+            tasks.Add(PushSystemNotificationAsync(evt, cancellationToken));
+        }
+
+        return Task.WhenAll(tasks);
+    }
+
+    public Task PushCommunityNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
         => _hubContext.Clients
             .Group($"user_{evt.UserId}")
-            .SendAsync("ReceiveNotification", evt, cancellationToken);
+            .SendAsync("ReceiveCommunityNotification", evt, cancellationToken);
+
+    public Task PushSystemNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
+        => _hubContext.Clients
+            .Group($"user_{evt.UserId}")
+            .SendAsync("ReceiveSystemNotification", evt, cancellationToken);
 
     public Task PushCommentAsync(CommentCreatedEvent evt, CancellationToken cancellationToken = default)
         => _hubContext.Clients
@@ -64,4 +96,14 @@ public class SignalRPushService : IRealtimePushService
                 toUserId,
                 totalNewMessages
             }, cancellationToken);
+
+    private static bool IsCommunity(NotificationCreatedEvent evt)
+    {
+        if (string.Equals(evt.Category, "community", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return CommunityTypes.Contains(evt.Type);
+    }
 }
