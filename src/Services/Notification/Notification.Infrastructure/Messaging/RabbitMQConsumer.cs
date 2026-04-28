@@ -29,7 +29,7 @@ public class RabbitMQConsumer : BackgroundService
     private const string DlxExchange = "skillsnap.events.dlx";
     private const string DlqQueue = "notification.events.dlq";
 
-    private static readonly string[] BindingKeys = { "post.#", "connection.*", "portfolio.*", "job.*", "system.*" };
+    private static readonly string[] BindingKeys = { "post.#", "connection.#", "portfolio.#", "job.#", "system.#" };
     private static readonly HashSet<string> NotificationEventTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "post.favorite",

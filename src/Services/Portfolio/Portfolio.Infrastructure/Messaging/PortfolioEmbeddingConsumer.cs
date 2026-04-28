@@ -33,8 +33,8 @@ public sealed class PortfolioEmbeddingConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var host = GetRabbitSetting("HostName", "Host", "localhost");
-        var userName = GetRabbitSetting("UserName", "Username", "guest");
+        var host = GetRabbitSetting("Host", "HostName", "localhost");
+        var userName = GetRabbitSetting("Username", "UserName", "guest");
         var factory = new ConnectionFactory
         {
             HostName = host,
