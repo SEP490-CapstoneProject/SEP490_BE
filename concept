@@ -1,0 +1,118 @@
+flowchart TB
+
+%% ===== Actors =====
+subgraph Actors
+  CAND[Candidate]
+  COMP[Company]
+  ADMIN[Admin / Moderator]
+end
+
+%% ===== Entry =====
+subgraph Entry
+  GW[API Gateway (YARP)]
+end
+
+%% ===== Core Domains =====
+subgraph CoreServices["Core Microservices"]
+  AUTH[Auth Service]
+  PROFILE[UserProfile Service]
+  PORT[Portfolio Service]
+  COMPANY[Company Service]
+  APP[Application Service]
+  CONN[Connection Service]
+  COMM[Community Service]
+  INTERVIEW[Interview Service]
+end
+
+%% ===== Platform Services =====
+subgraph PlatformServices["Platform Services"]
+  SUB[Subscription Service]
+  PAY[Payment Service]
+  NOTI[Notification Service]
+  REAL[Realtime Service]
+  MEDIA[Media Service]
+end
+
+%% ===== Shared Infrastructure =====
+subgraph Infra["Shared Infrastructure"]
+  SQL[(SQL Server - per service DB)]
+  RABBIT[(RabbitMQ Event Bus)]
+  REDIS[(Redis Cache)]
+end
+
+%% ===== External Integrations =====
+subgraph External["External Systems"]
+  CLOUD[Cloudinary]
+  OAUTH[OAuth / Identity Provider]
+  PAYOS[PayOS Gateway]
+  OPENAI[OpenAI / Azure OpenAI]
+end
+
+%% User access
+CAND --> GW
+COMP --> GW
+ADMIN --> GW
+
+%% Gateway routing
+GW --> AUTH
+GW --> PROFILE
+GW --> PORT
+GW --> COMPANY
+GW --> APP
+GW --> CONN
+GW --> COMM
+GW --> INTERVIEW
+GW --> SUB
+GW --> PAY
+GW --> NOTI
+GW --> REAL
+GW --> MEDIA
+
+%% Domain relations
+AUTH --> PROFILE
+PORT --> PROFILE
+COMPANY --> PROFILE
+APP --> PORT
+APP --> COMPANY
+CONN --> PROFILE
+COMM --> PROFILE
+INTERVIEW --> APP
+SUB --> AUTH
+PAY --> SUB
+
+%% Event-driven / realtime
+COMM <--> RABBIT
+APP <--> RABBIT
+PAY <--> RABBIT
+SUB <--> RABBIT
+NOTI <--> RABBIT
+REAL <--> RABBIT
+NOTI --> REAL
+
+%% Data/cache
+AUTH --> SQL
+PROFILE --> SQL
+PORT --> SQL
+COMPANY --> SQL
+APP --> SQL
+CONN --> SQL
+COMM --> SQL
+INTERVIEW --> SQL
+SUB --> SQL
+PAY --> SQL
+NOTI --> SQL
+AUTH --> REDIS
+SUB --> REDIS
+NOTI --> REDIS
+REAL --> REDIS
+
+%% External
+AUTH --> OAUTH
+PAY --> PAYOS
+MEDIA --> CLOUD
+PORT --> MEDIA
+COMPANY --> MEDIA
+COMM --> MEDIA
+PORT --> OPENAI
+COMPANY --> OPENAI
+COMM --> OPENAI

@@ -62,34 +62,41 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 // Add RabbitMQ
 builder.Services.AddSingleton<IConnection>(sp =>
 {
-    var host = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost";
-    var port = builder.Configuration.GetValue<int?>("RabbitMQ:Port") ?? 5672;
-    var username = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest";
-    var password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest";
-    var virtualHost = builder.Configuration.GetValue<string>("RabbitMQ:VirtualHost") ?? "/";
-    var useSsl = builder.Configuration.GetValue<bool>("RabbitMQ:UseSsl");
+    var uri = builder.Configuration.GetValue<string>("RabbitMQ:Uri");
+    var factory = new ConnectionFactory();
 
-    if (!useSsl && port == 5671)
+    if (!string.IsNullOrEmpty(uri))
     {
-        useSsl = true;
+        factory.Uri = new Uri(uri);
     }
-
-    var factory = new ConnectionFactory
+    else
     {
-        HostName = host,
-        Port = port,
-        UserName = username,
-        Password = password,
-        VirtualHost = virtualHost
-    };
+        var host = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost";
+        var port = builder.Configuration.GetValue<int?>("RabbitMQ:Port") ?? 5672;
+        var username = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest";
+        var password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest";
+        var virtualHost = builder.Configuration.GetValue<string>("RabbitMQ:VirtualHost") ?? "/";
+        var useSsl = builder.Configuration.GetValue<bool>("RabbitMQ:UseSsl");
 
-    if (useSsl)
-    {
-        factory.Ssl = new SslOption
+        if (!useSsl && port == 5671)
         {
-            Enabled = true,
-            ServerName = host
-        };
+            useSsl = true;
+        }
+
+        factory.HostName = host;
+        factory.Port = port;
+        factory.UserName = username;
+        factory.Password = password;
+        factory.VirtualHost = virtualHost;
+
+        if (useSsl)
+        {
+            factory.Ssl = new SslOption
+            {
+                Enabled = true,
+                ServerName = host
+            };
+        }
     }
 
     return factory.CreateConnection();
