@@ -156,7 +156,7 @@ public class ConnectionController : ControllerBase
 
     /// <summary>
     /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED).
-    /// Trả về: { status: "PENDING" | "MATCHED" | "BLOCK" } hoặc { status: null } nếu không tìm thấy.
+    /// Trả về: { connectionId, status } — connectionId = 0 nếu không tìm thấy connection.
     /// </summary>
     [HttpGet("status/by-users")]
     public async Task<IActionResult> GetConnectionStatusByUsers([FromQuery] int userId1, [FromQuery] int userId2)
@@ -164,8 +164,8 @@ public class ConnectionController : ControllerBase
         if (userId1 <= 0 || userId2 <= 0)
             return BadRequest(new { error = "userId1 and userId2 are required" });
 
-        var status = await _service.GetConnectionStatusByUsersAsync(userId1, userId2);
-        return Ok(new { status });
+        var (connectionId, status) = await _service.GetConnectionStatusByUsersAsync(userId1, userId2);
+        return Ok(new { connectionId, status });
     }
 
     [HttpGet("rooms/summary/{userId}")]

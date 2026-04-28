@@ -175,7 +175,7 @@ public class ConnectionRepository : IConnectionRepository
             .CountAsync();
     }
 
-    public async Task<string?> GetConnectionStatusByUsersAsync(int userId1, int userId2)
+    public async Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2)
     {
         // Find active (non-STORED) connection between the two users
         var conn = await _context.Connections
@@ -186,6 +186,6 @@ public class ConnectionRepository : IConnectionRepository
             .OrderByDescending(c => c.CreateAt)
             .FirstOrDefaultAsync();
 
-        return conn?.Status;
+        return conn == null ? (0, null) : (conn.Id, conn.Status);
     }
 }
