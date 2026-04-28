@@ -20,8 +20,8 @@ public sealed class PortfolioEmbeddingEventPublisher : IPortfolioEmbeddingEventP
 
     public async Task PublishPortfolioChangedAsync(int portfolioId, CancellationToken cancellationToken = default)
     {
-        var host = GetRabbitSetting("HostName", "Host", "localhost");
-        var userName = GetRabbitSetting("UserName", "Username", "guest");
+        var host = GetRabbitSetting("Host", "HostName", "localhost");
+        var userName = GetRabbitSetting("Username", "UserName", "guest");
         var factory = new ConnectionFactory
         {
             HostName = host,

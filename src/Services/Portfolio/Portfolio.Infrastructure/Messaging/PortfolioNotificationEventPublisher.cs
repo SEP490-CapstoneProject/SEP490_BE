@@ -22,14 +22,23 @@ public class PortfolioNotificationEventPublisher : IPortfolioNotificationEventPu
 
     public async Task PublishComplimentCreatedAsync(PortfolioNotificationEventPayload payload, CancellationToken cancellationToken = default)
     {
+        var host = GetRabbitSetting("Host", "HostName", "localhost");
+        var userName = GetRabbitSetting("Username", "UserName", "guest");
+        var virtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/");
+        var portValue = GetRabbitSetting("Port", defaultValue: "5672");
+
         var factory = new ConnectionFactory
         {
-            HostName = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost",
-            UserName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest",
-            Password = _configuration["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
+            HostName = host,
+            UserName = userName,
+            Password = GetRabbitSetting("Password", defaultValue: "guest"),
+            VirtualHost = virtualHost,
+            Port = int.TryParse(portValue, out var port) ? port : 5672
         };
+
+        _logger.LogInformation(
+            "Publishing portfolio compliment notification with RabbitMQ host {Host}, port {Port}, vhost {VHost}",
+            host, factory.Port, virtualHost);
 
         await using var connection = await factory.CreateConnectionAsync(cancellationToken);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
@@ -45,5 +54,25 @@ public class PortfolioNotificationEventPublisher : IPortfolioNotificationEventPu
         _logger.LogInformation(
             "Published portfolio compliment notification. UserId={UserId}, ObjectId={ObjectId}",
             payload.UserId, payload.ObjectId);
+    }
+
+    private string GetRabbitSetting(string primaryKey, string? fallbackKey = null, string defaultValue = "")
+    {
+        var primary = _configuration[$"RabbitMQ:{primaryKey}"];
+        if (!string.IsNullOrWhiteSpace(primary))
+        {
+            return primary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackKey))
+        {
+            var fallback = _configuration[$"RabbitMQ:{fallbackKey}"];
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                return fallback;
+            }
+        }
+
+        return defaultValue;
     }
 }
