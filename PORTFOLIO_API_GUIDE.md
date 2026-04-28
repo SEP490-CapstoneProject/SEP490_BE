@@ -33,6 +33,20 @@
 | `PATCH` | `/api/compliments/{id}/state` | Đổi trạng thái compliment | ✅ Company |
 | `DELETE` | `/api/compliments/{id}` | Xóa mềm compliment | ✅ Company |
 
+### AI Matching (Portfolio ↔ Company Posts)
+
+| Method | URL | Mô tả | Auth |
+|--------|-----|-------|------|
+| `GET` | `/api/portfolio/{id}/match-jobs?page=1&pageSize=20` | Lấy danh sách company posts phù hợp với portfolio | ✅ Required |
+| `GET` | `/api/company-posts/{id}/match-portfolios?page=1&pageSize=20` | Lấy danh sách portfolio phù hợp với company post | ✅ Required |
+| `GET` | `/api/portfolio/internal/matching-candidates?limit=150` | Feed candidates nội bộ cho company-service | ❌ Internal |
+| `GET` | `/api/company-posts/internal/matching-candidates?limit=150` | Feed candidates nội bộ cho portfolio-service | ❌ Internal |
+
+> Quy ước paging cho 2 API matching chính:
+> - `page` tối thiểu là `1`.
+> - `pageSize` được clamp trong khoảng `1..50`.
+> - Response luôn trả đủ metadata: `total`, `page`, `pageSize`, `items`.
+
 ---
 
 ## 1. POST /api/portfolio — Tạo portfolio đầy đủ

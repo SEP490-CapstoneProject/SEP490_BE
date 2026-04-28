@@ -1,379 +1,128 @@
-# 🚀 REFACTOR PROMPT — REALTIME SERVICE (SINGLE CONNECTION) & NOTIFICATION CLEANUP
+Implement the system strictly based on the provided final design. Do NOT reinterpret or simplify any part of the pipeline.
 
-## 🎯 Objective
+## Enforcement Rules (CRITICAL)
 
-Refactor system to:
+1. **Pipeline order must be EXACT**
+   You MUST implement matching in this exact sequence:
 
-1. Extract a dedicated **Realtime Service (SignalR)**.
-2. Refactor **Notification Service** to remove realtime responsibilities.
-3. Implement **comment & reply realtime** via event-driven architecture.
-4. Use **SINGLE SignalR connection (ONE HUB ONLY)** for all realtime events.
-5. Ensure production-grade: idempotency, scalability, clean separation.
+2. Data quality filter
 
----
+3. Pre-filter (skill overlap ranking, take top 100–150)
 
-# 🏗️ TARGET ARCHITECTURE
+4. Cosine similarity (safe)
 
-Community Service
-↓
-RabbitMQ (skillsnap.events)
-↓
-┌─────────────────────┬──────────────────────┐
-↓                     ↓
-Realtime Service       Notification Service
-(SignalR ONLY)         (Business Logic ONLY)
+5. Compute scoring components
 
----
+6. Weighted scoring
 
-# ⚠️ CRITICAL DESIGN DECISIONS (MUST FOLLOW)
+7. Threshold filter (>= 0.3)
 
-## 1. SINGLE CONNECTION STRATEGY (MANDATORY)
+8. Deterministic sorting
 
-* ONLY ONE HUB:
+9. Pagination (max size = 50)
 
-  ```
-  /hubs/realtime
-  ```
+10. Cache result (versioned key)
 
-* DO NOT create multiple hubs like:
-
-  * ❌ /hubs/notifications
-  * ❌ /hubs/community
+Any deviation is NOT allowed.
 
 ---
 
-## 2. SINGLE HUB EVENT DESIGN
+2. **Deterministic behavior is mandatory**
 
-RealtimeHub handles ALL events:
+* Same input MUST always produce identical output
+* Always:
 
-* ReceiveNotification
-* ReceiveComment
-* ReceiveReply
+  * round finalScore to 4 decimal places
+  * apply stable sorting:
 
----
-
-## 3. GROUP STRATEGY
-
-* User group:
-
-  ```
-  user_{userId}
-  ```
-
-* Post group:
-
-  ```
-  post_{postId}
-  ```
+    * finalScore DESC
+    * UpdatedAt DESC
+    * Id ASC
 
 ---
 
-# ✅ TASK 1 — CREATE REALTIME SERVICE
-
-## Structure
-
-RealtimeService/
-├── Hubs/
-│    └── RealtimeHub.cs
-│
-├── Consumers/
-│    ├── CommentEventConsumer.cs
-│    ├── ReplyEventConsumer.cs
-│    ├── NotificationEventConsumer.cs
-│
-├── Services/
-│    ├── IRealtimePushService.cs
-│    ├── SignalRPushService.cs
-│
-├── Infrastructure/
-│    ├── Idempotency (Redis)
-│
-└── Program.cs
-
----
-
-# ✅ TASK 2 — IMPLEMENT REALTIME HUB
-
-## RealtimeHub.cs
-
-### MUST IMPLEMENT:
-
-### 1. Auto join user group on connect
-
-```csharp
-public override async Task OnConnectedAsync()
-{
-    var userId = Context.UserIdentifier;
-
-    await Groups.AddToGroupAsync(
-        Context.ConnectionId,
-        $"user_{userId}"
-    );
-
-    await base.OnConnectedAsync();
-}
-```
-
----
-
-### 2. Join/Leave post group
-
-```csharp
-public async Task JoinPost(string postId)
-{
-    await Groups.AddToGroupAsync(
-        Context.ConnectionId,
-        $"post_{postId}"
-    );
-}
-
-public async Task LeavePost(string postId)
-{
-    await Groups.RemoveFromGroupAsync(
-        Context.ConnectionId,
-        $"post_{postId}"
-    );
-}
-```
-
----
-
-# ✅ TASK 3 — REALTIME PUSH SERVICE
+3. **Cosine similarity must be hardened**
 
 Implement:
 
-```csharp
-PushNotification(userId)
-PushComment(postId)
-PushReply(postId)
-```
-
-SignalR mapping:
-
-* Notification → user_{userId}
-* Comment → post_{postId}
-* Reply → post_{postId}
+* null vectors → return 0
+* length mismatch → return 0
+* zero norm → return 0
+* never throw exceptions
 
 ---
 
-# ✅ TASK 4 — RABBITMQ CONSUMERS
+4. **Scoring must follow exact formula**
 
-Consume directly from RabbitMQ:
+finalScore = cosine * 0.7 + skillScore * 0.2 + categoryScore * 0.1
 
-* post.comment.created
-* post.reply.created
-* notification.created
-
----
-
-## Behavior
-
-### CommentCreatedEvent
-
-→ Push "ReceiveComment" → group post_{postId}
-
-### ReplyCreatedEvent
-
-→ Push "ReceiveReply" → group post_{postId}
-
-### NotificationCreatedEvent
-
-→ Push "ReceiveNotification" → group user_{userId}
+* Clamp all values to [0..1]
+* Do not modify weights
 
 ---
 
-# ✅ TASK 5 — IDEMPOTENCY (MANDATORY)
+5. **Pre-filter must reduce dataset BEFORE cosine**
 
-## Use Redis
-
-Key:
-
-```
-event:{eventId}
-```
-
-TTL:
-
-```
-5–10 minutes
-```
-
-Logic:
-
-* If key exists → skip push
-* If not → process + set key
+* Compute skill overlap count
+* Sort DESC
+* Take top 100–150
+* Only THEN compute cosine
 
 ---
 
-# ✅ TASK 6 — EVENT CONTRACT (MUST INCLUDE VERSION)
+6. **Strict filtering rules**
 
-### CommentCreatedEvent
+Skip any record that:
 
-```json
-{
-  "eventId": "uuid",
-  "eventType": "post.comment.created",
-  "version": 1,
-  "postId": "...",
-  "commentId": "...",
-  "userId": "...",
-  "content": "...",
-  "createdAt": "..."
-}
-```
+* has no skills
+* has very short description
+* EmbeddingStatus != Ready
 
 ---
 
-### ReplyCreatedEvent
+7. **Cache must be version-aware**
 
-```json
-{
-  "eventId": "uuid",
-  "eventType": "post.reply.created",
-  "version": 1,
-  "postId": "...",
-  "commentId": "...",
-  "parentCommentId": "...",
-  "userId": "...",
-  "content": "...",
-  "createdAt": "..."
-}
-```
+Use keys:
+
+* portfolio:{id}:{embeddingVersion}:matched-jobs
+* job:{id}:{embeddingVersion}:matched-portfolios
+
+Do NOT use non-versioned cache.
 
 ---
 
-### NotificationCreatedEvent
+8. **Cross-service calls must be safe**
 
-```json
-{
-  "eventId": "uuid",
-  "eventType": "notification.created",
-  "version": 1,
-  "notificationId": "...",
-  "userId": "...",
-  "type": "...",
-  "content": "...",
-  "createdAt": "..."
-}
-```
+* Add timeout (1–2 seconds)
+* On failure → return empty result
+* Never throw exception to caller
 
 ---
 
-# ✅ TASK 7 — REFACTOR NOTIFICATION SERVICE
+9. **Code structure requirements**
 
-## REMOVE COMPLETELY:
+* Implement:
 
-* SignalR Hub
-* IHubContext usage
-* SignalRPushService
-* Any realtime push logic
-
----
-
-## KEEP:
-
-* RabbitMQ consumer
-* Notification DB persistence
-* Unread cache
-* Business logic
+  * MatchingEngine (full pipeline)
+  * ScoringHelper
+  * CosineSimilaritySafe
+* Shared module MUST be reused by both services
+* No duplicated logic allowed
 
 ---
 
-## ADD:
+## Output
 
-After saving notification:
+Generate full production-ready .NET code:
 
-→ Publish `notification.created`
+* MatchingEngine implementation (end-to-end pipeline)
+* ScoringHelper implementation
+* Safe cosine similarity function
+* DTOs and models
+* Example usage in both Portfolio and Company services
 
----
+Ensure:
 
-# ❗ RULE: NO CHAINING
-
-❌ Notification → Realtime
-✅ Both consume from RabbitMQ independently
-
----
-
-# ✅ TASK 8 — FRONTEND INTEGRATION
-
-## SINGLE CONNECTION
-
-```javascript
-const connection = new signalR.HubConnectionBuilder()
-  .withUrl("/hubs/realtime", {
-    accessTokenFactory: () => token
-  })
-  .build();
-```
-
----
-
-## Subscribe events
-
-```javascript
-connection.on("ReceiveNotification", ...)
-connection.on("ReceiveComment", ...)
-connection.on("ReceiveReply", ...)
-```
-
----
-
-## Reconnect handling (MANDATORY)
-
-```javascript
-connection.onreconnected(() => {
-  connection.invoke("JoinPost", postId);
-});
-```
-
----
-
-## Join group
-
-```javascript
-connection.invoke("JoinPost", postId);
-```
-
----
-
-# ✅ TASK 9 — API GATEWAY
-
-* Enable WebSocket forwarding
-* Route:
-
-  ```
-  /hubs/realtime → Realtime Service
-  ```
-* Ensure upgrade headers work
-
----
-
-# ✅ TASK 10 — OBSERVABILITY (MANDATORY)
-
-Log MUST include:
-
-* eventId
-* routingKey
-* userId / postId
-* connectionId
-
----
-
-# 🎯 FINAL EXPECTATION
-
-* ONLY ONE SignalR connection
-* Notification Service has ZERO realtime logic
-* Realtime Service handles ALL realtime
-* Comment & reply realtime works
-* No duplicate push
-* Fully event-driven, scalable
-
----
-
-# 🚀 GOAL
-
-System must be:
-
-* Scalable (thousands of connections)
-* Clean microservices architecture
-* Ready for chat / presence / live features
+* clean, readable, maintainable code
+* no hidden assumptions
+* no skipped steps

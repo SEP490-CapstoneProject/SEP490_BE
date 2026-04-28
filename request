@@ -1,314 +1,371 @@
-# 🚀 SYSTEM REFACTOR PROMPT — SPLIT REALTIME SERVICE & CLEAN NOTIFICATION ARCHITECTURE
-
-## 🎯 Objective
-
-Refactor the existing system to:
-
-1. Extract a dedicated **Realtime Service (SignalR-based)**.
-2. Refactor **Notification Service** to focus only on notification logic.
-3. Implement **realtime for Comment and Reply (Community feature)**.
-4. Ensure **event-driven architecture (RabbitMQ)** with clean separation of concerns.
-5. Maintain production-grade practices: scalability, idempotency, decoupling.
+You are a senior .NET architect. Update my existing microservices system to add AI-powered moderation and bidirectional matching using embeddings.
 
 ---
 
-# 🧠 Current System (IMPORTANT CONTEXT)
+## Existing System
 
-## Notification Service (existing)
+* Backend: .NET microservices
+* Services:
 
-* Consumes events from **RabbitMQ**
-* Flow:
-  Event → Consumer → Save Notification (DB) → Invalidate cache → Push realtime via SignalR
-* Uses:
-
-  * `IHubContext<NotificationHub>`
-  * Push event: `"ReceiveNotification"`
-  * SignalR group: `user_{userId}`
-* Handles domains:
-
-  * `post.*`, `connection.*`, `portfolio.*`, `job.*`, `system.*`
-
-## Problem
-
-* Notification Service is handling BOTH:
-
-  * Notification logic ❗
-  * Realtime delivery ❗
-* This will not scale when adding:
-
-  * Comment realtime
-  * Chat
-  * Presence
+  * Portfolio Service (user portfolios)
+  * Company Service (job posts)
+* Database: SQL Server
+* Messaging: RabbitMQ (optional)
+* No vector database
+* System already deployed on Azure (low-resource environment)
 
 ---
 
-# 🏗️ TARGET ARCHITECTURE
+## Goals
 
-## Event-driven architecture with separation
+### 1. AI Moderation
 
-Community Service
-↓
-RabbitMQ (Exchange: skillsnap.events)
-↓
-┌─────────────────────────────┬─────────────────────────────┐
-↓                             ↓
-Realtime Service               Notification Service
-(SignalR ONLY)                 (Business Logic ONLY)
+Automatically review portfolios before publishing.
 
----
+### 2. Embedding-based Matching
 
-# ✅ TASK 1 — CREATE REALTIME SERVICE
+Implement semantic matching using embeddings.
 
-## Requirements
+### 3. Bidirectional Matching
 
-### Tech
-
-* ASP.NET Core
-* SignalR
-* RabbitMQ Consumer
+* Candidate → Job
+* Company → Candidate
 
 ---
 
-## 1. Create Realtime Service structure
+## Core Principles
 
-RealtimeService/
-├── Hubs/
-│    ├── NotificationHub.cs
-│    ├── CommunityHub.cs
-│
-├── Consumers/
-│    ├── CommentEventConsumer.cs
-│    ├── ReplyEventConsumer.cs
-│    ├── NotificationEventConsumer.cs (optional)
-│
-├── Services/
-│    ├── IRealtimePushService.cs
-│    ├── SignalRPushService.cs
-│
-├── Extensions/
-├── Program.cs
+* DO NOT call AI during matching
+* Embeddings must be precomputed
+* Use cosine similarity
+* Avoid tight coupling between services
+* Keep system lightweight (suitable for Azure Student tier)
 
 ---
 
-## 2. Implement SignalR Hubs
+# =========================
 
-### NotificationHub
+# PART 1 — DATABASE UPDATE
 
-* Group: `user_{userId}`
+# =========================
 
-### CommunityHub
+Add column:
 
-* Group: `post_{postId}`
+```sql
+ALTER TABLE Portfolios ADD Embedding NVARCHAR(MAX);
+ALTER TABLE Jobs ADD Embedding NVARCHAR(MAX);
+```
 
-Methods:
-
-* JoinPost(postId)
-* LeavePost(postId)
+Store embedding as JSON array of floats.
 
 ---
 
-## 3. Implement Realtime Push Service
+# =========================
 
-Example:
+# PART 2 — EMBEDDING SERVICE
+
+# =========================
+
+Create reusable service:
 
 ```csharp
-await _hubContext.Clients.Group($"post_{postId}")
-    .SendAsync("ReceiveComment", commentDto);
-```
-
----
-
-## 4. Implement RabbitMQ Consumers
-
-Consume events:
-
-* `post.comment.created`
-* `post.reply.created`
-* (optional) `notification.created`
-
----
-
-## Behavior
-
-### On CommentCreatedEvent
-
-* Push:
-  `"ReceiveComment"` → group `post_{postId}`
-
-### On ReplyCreatedEvent
-
-* Push:
-  `"ReceiveReply"` → group `post_{postId}`
-
----
-
-# ✅ TASK 2 — REFACTOR NOTIFICATION SERVICE
-
-## REMOVE ALL REALTIME LOGIC
-
-❌ Remove:
-
-* SignalR Hub
-* IHubContext usage
-* Push logic inside Notification Service
-
----
-
-## KEEP ONLY:
-
-✔️ Event Consumer
-✔️ Notification DB persistence
-✔️ Cache (unread count)
-✔️ Business logic (decide whether to notify)
-
----
-
-## ADD (OPTIONAL BUT RECOMMENDED)
-
-Publish new event:
-
-```json
-NotificationCreatedEvent {
-  NotificationId,
-  UserId,
-  Type,
-  Content,
-  CreatedAt
-}
-```
-
----
-
-## Flow AFTER refactor:
-
-Event (e.g. CommentCreated)
-↓
-Notification Service
-↓
-Save DB
-↓
-Publish NotificationCreatedEvent (optional)
-
----
-
-# ✅ TASK 3 — COMMUNITY SERVICE EVENT CONTRACT
-
-Ensure Community Service publishes:
-
-### CommentCreatedEvent
-
-```json
+public interface IEmbeddingService
 {
-  "eventId": "uuid",
-  "eventType": "post.comment.created",
-  "postId": "...",
-  "commentId": "...",
-  "userId": "...",
-  "content": "...",
-  "createdAt": "..."
+    Task<float[]> CreateEmbeddingAsync(string text);
 }
 ```
 
+Implementation:
+
+* Use OpenAI API
+* Model: text-embedding-3-small
+
 ---
 
-### ReplyCreatedEvent
+# =========================
 
-```json
+# PART 3 — TEXT NORMALIZATION
+
+# =========================
+
+Before embedding, build structured text.
+
+## Portfolio:
+
+* Title
+* Description
+* Skills
+* Projects
+* Custom fields
+
+## Job:
+
+* Title
+* Description
+* Requirements
+* Skills
+
+Rules:
+
+* Missing fields → "N/A"
+* Consistent format
+* Remove noise
+
+---
+
+# =========================
+
+# PART 4 — EMBEDDING TRIGGER
+
+# =========================
+
+Generate embedding ONLY when:
+
+* Portfolio created/updated
+* Job created/updated
+
+DO NOT generate during search.
+
+---
+
+# =========================
+
+# PART 5 — MODERATION SYSTEM
+
+# =========================
+
+## Portfolio Status:
+
+```csharp
+enum PortfolioStatus
 {
-  "eventId": "uuid",
-  "eventType": "post.reply.created",
-  "postId": "...",
-  "commentId": "...",
-  "parentCommentId": "...",
-  "userId": "...",
-  "content": "...",
-  "createdAt": "..."
+    Draft,
+    PendingReview,
+    Approved,
+    Rejected
 }
 ```
 
 ---
 
-# ✅ TASK 4 — FRONTEND INTEGRATION (React)
+## Moderation Service:
 
-## Single connection to Realtime Service
-
-```javascript
-const connection = new signalR.HubConnectionBuilder()
-  .withUrl("/communityHub")
-  .build();
+```csharp
+public interface IModerationService
+{
+    Task<ModerationResult> CheckAsync(string content);
+}
 ```
 
 ---
 
-## Subscribe events
+## Moderation Logic:
 
-```javascript
-connection.on("ReceiveComment", handler);
-connection.on("ReceiveReply", handler);
-connection.on("ReceiveNotification", handler);
+* Rule-based first:
+
+  * Reject if:
+
+    * description too short
+    * no project
+    * spam keywords
+* Optional AI check (OpenAI or local)
+
+---
+
+## Flow:
+
+1. User submits portfolio
+2. Status = PendingReview
+3. Run moderation
+4. Update:
+
+   * Approved → public
+   * Rejected → store reason
+
+---
+
+# =========================
+
+# PART 6 — MATCHING ENGINE
+
+# =========================
+
+Shared similarity logic:
+
+```csharp
+public interface IMatchingEngine
+{
+    double ComputeSimilarity(float[] v1, float[] v2);
+}
+```
+
+Implement cosine similarity once.
+
+---
+
+# =========================
+
+# PART 7 — MATCHING LOGIC
+
+# =========================
+
+## 1. Candidate → Job
+
+Portfolio Service:
+
+```csharp
+Task<List<JobMatchResult>> MatchJobsForPortfolio(Guid portfolioId);
+```
+
+Steps:
+
+1. Get portfolio embedding
+2. Call Company Service API to get jobs (with embeddings)
+3. Deserialize embeddings
+4. Compute similarity
+5. Sort descending
+6. Return top N
+
+---
+
+## 2. Company → Candidate
+
+Company Service:
+
+```csharp
+Task<List<PortfolioMatchResult>> MatchPortfoliosForJob(Guid jobId);
+```
+
+Steps:
+
+1. Get job embedding
+2. Call Portfolio Service API
+3. Compute similarity
+4. Sort
+5. Return top N
+
+---
+
+# =========================
+
+# PART 8 — API ENDPOINTS
+
+# =========================
+
+Portfolio Service:
+
+GET /api/portfolios/{id}/match-jobs
+
+Company Service:
+
+GET /api/jobs/{id}/match-portfolios
+
+---
+
+# =========================
+
+# PART 9 — DTOs
+
+# =========================
+
+```csharp
+class JobMatchResult
+{
+    Guid JobId;
+    string Title;
+    double Score;
+}
+
+class PortfolioMatchResult
+{
+    Guid PortfolioId;
+    string Title;
+    double Score;
+}
 ```
 
 ---
 
-## Join group
+# =========================
 
-```javascript
-connection.invoke("JoinPost", postId);
-```
+# PART 10 — PERFORMANCE
 
----
+# =========================
 
-# ⚠️ IMPORTANT RULES
+* Limit records (100–500)
+* Skip null embeddings
+* Pre-filter:
 
-## 1. DO NOT call SignalR from Notification Service
-
-## 2. DO NOT chain event like:
-
-Notification → Realtime ❌
-
-## 3. BOTH services must consume directly from RabbitMQ
-
-## 4. Ensure idempotency
-
-* Use eventId
-* Prevent duplicate push
+  * skills
+  * category
+* Optional caching
 
 ---
 
-# 🔥 BONUS (IF POSSIBLE)
+# =========================
 
-* Add Redis backplane for SignalR scaling
-* Add retry + DLQ for RabbitMQ
-* Add structured logging (eventId tracing)
+# PART 11 — ARCHITECTURE
 
----
+# =========================
 
-# 🎯 FINAL RESULT EXPECTED
+* Place AI logic in:
+  /Application/AI/
 
-✔️ Clean separation of concerns
-✔️ Realtime Service handles ALL SignalR
-✔️ Notification Service handles ONLY notification
-✔️ Comment & Reply realtime working
-✔️ Event-driven, scalable architecture
+Modules:
 
----
-
-# 📌 OUTPUT REQUIREMENTS
-
-Provide:
-
-1. Folder structure
-2. Key code files (Hub, Consumer, PushService)
-3. Refactored Notification Service code changes
-4. Event contract definitions
-5. Explanation of flow
+* EmbeddingService
+* ModerationService
+* MatchingEngine
 
 ---
 
-# 🚀 GOAL
+# =========================
 
-System should be:
+# PART 12 — OPTIONAL (RabbitMQ)
 
-* Scalable to thousands of concurrent users
-* Clean for microservices architecture
-* Ready for future features (chat, presence, live updates)
+# =========================
+
+Events:
+
+* PortfolioCreated
+* JobCreated
+
+Consumers:
+
+* Generate embedding async
+
+---
+
+# =========================
+
+# PART 13 — CONSTRAINTS
+
+# =========================
+
+* MUST use SQL Server
+* DO NOT use PostgreSQL or vector DB
+* DO NOT call OpenAI during matching
+* Keep solution simple and production-ready
+
+---
+
+# =========================
+
+# OUTPUT REQUIRED
+
+# =========================
+
+Generate:
+
+* EmbeddingService (OpenAI integration)
+* ModerationService (rule-based + optional AI)
+* MatchingEngine (cosine similarity)
+* Matching services (both directions)
+* API controllers
+* DTOs
+* SQL migration scripts
+* Sample requests/responses
+
+---
+
+Deliver clean, maintainable, production-ready .NET code.
