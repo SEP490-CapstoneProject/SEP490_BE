@@ -21,5 +21,5 @@ public interface IConnectionService
     Task<Connection.Domain.Entities.Connection?> UpdateConnectionStatusAsync(int connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus status, int currentUserId);
     Task<IEnumerable<(int Id, int UserIdFrom, int UserIdTo)>> GetRoomUsersAsync(int roomId);
     Task<int> GetUnreadMessageCountAsync(int roomId, int userId);
-    Task<string?> GetConnectionStatusByUsersAsync(int userId1, int userId2);
+    Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2);
 }

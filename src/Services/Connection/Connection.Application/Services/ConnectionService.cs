@@ -159,7 +159,7 @@ public class ConnectionService : IConnectionService
         return await _repo.GetUnreadMessageCountAsync(roomId, userId);
     }
 
-    public async Task<string?> GetConnectionStatusByUsersAsync(int userId1, int userId2)
+    public async Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2)
     {
         return await _repo.GetConnectionStatusByUsersAsync(userId1, userId2);
     }
