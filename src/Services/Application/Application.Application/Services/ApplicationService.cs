@@ -309,6 +309,11 @@ public class ApplicationService : IApplicationService
         EmployeeDto? candidate,
         CompanyPostDto? post)
     {
+        if (updated.Status != ApplicationStatus.ACCEPTED && updated.Status != ApplicationStatus.REJECTED)
+        {
+            return;
+        }
+
         if (candidate is null || candidate.UserId <= 0)
         {
             return;

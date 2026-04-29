@@ -115,7 +115,66 @@ await realtimeClient.chatConnection?.invoke("LeaveRoom", roomId);
 
 ---
 
-## 5. Các Lỗi Phổ Biến & Cách Sửa Nhanh
+## 5. Setup Notification Realtime Theo 2 Nhóm (System / Community)
+
+Sau khi `notifyConnection` start thành công, FE nên tách state rõ ràng:
+- `systemNotifications[]`
+- `communityNotifications[]`
+
+```typescript
+type NotificationDto = {
+  notificationId: number;
+  userId: string;
+  title: string;
+  content: string;
+  type: string;
+  category?: "system" | "community";
+  objectId?: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+// 1) Kênh system (khuyến nghị dùng cho tab/system panel)
+realtimeClient.notifyConnection?.on("ReceiveSystemNotification", (n: NotificationDto) => {
+  // prepend để hiện item mới nhất trên đầu
+  setSystemNotifications(prev => [n, ...prev]);
+});
+
+// 2) Kênh community (khuyến nghị dùng cho tab/community panel)
+realtimeClient.notifyConnection?.on("ReceiveCommunityNotification", (n: NotificationDto) => {
+  setCommunityNotifications(prev => [n, ...prev]);
+});
+
+// 3) Kênh generic (backward compatibility)
+// Nếu đang migrate dần FE cũ -> mới, có thể giữ listener này tạm thời.
+realtimeClient.notifyConnection?.on("ReceiveNotification", (n: NotificationDto) => {
+  if (n.category === "community") {
+    setCommunityNotifications(prev => [n, ...prev]);
+  } else {
+    setSystemNotifications(prev => [n, ...prev]);
+  }
+});
+```
+
+### Mapping khuyến nghị ở FE
+
+| Event Name | Nhóm hiển thị | Ghi chú |
+|---|---|---|
+| `ReceiveSystemNotification` | System | Event mới cho thông báo hệ thống |
+| `ReceiveCommunityNotification` | Community | Event mới cho thông báo community |
+| `ReceiveNotification` | Fallback | Event cũ, giữ để tương thích ngược |
+
+### Luồng load dữ liệu ban đầu + realtime
+
+1. Khi mở trang notification: gọi API REST ban đầu
+   - `GET /api/notifications/system`
+   - `GET /api/notifications/community`
+2. Sau đó merge thêm item mới từ SignalR events vào đúng list.
+3. Khi mark-read/mark-all-read: update đúng list tương ứng để UI không lệch unread badge.
+
+---
+
+## 6. Các Lỗi Phổ Biến & Cách Sửa Nhanh
 
 - **Lỗi 404:** Hiện tại BE đã thêm URL proxy vô Gateway nên lỗi này sẽ hết. Đảm bảo bạn đang trỏ tới đúng URL của API Gateway (Project ApiGateway - Port mặc định 5000), không phải cổng lẻ của Service Connection (8080).
 - **Lỗi Connection Disconnected/NegotiationFailed:** Chắc chắn bạn đã gửi đúng Token Bearer dạng `accessTokenFactory: () => accessToken`.

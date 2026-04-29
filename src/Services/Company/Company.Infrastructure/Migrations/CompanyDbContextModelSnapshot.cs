@@ -109,6 +109,19 @@ namespace Company.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("requirementsPreferred");
 
+                    b.Property<string>("ReviewReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("reviewReason");
+
+                    b.Property<int?>("ReviewStatus")
+                        .HasColumnType("int")
+                        .HasColumnName("reviewStatus");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("reviewedAt");
+
                     b.Property<string>("Salary")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")

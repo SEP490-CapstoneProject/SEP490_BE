@@ -114,7 +114,14 @@ public class PortfolioController : ControllerBase
         try
         {
             var result = await _portfolioService.CreatePortfolioAsync(request, fileMap);
-            return StatusCode(201, result);
+            
+            // Return appropriate HTTP status based on moderation result
+            if (result.ModerationStatus?.Equals("Rejected", StringComparison.OrdinalIgnoreCase) == true)
+                return StatusCode(400, result);
+            else if (result.ModerationStatus?.Equals("PendingReview", StringComparison.OrdinalIgnoreCase) == true)
+                return StatusCode(202, result);
+            else
+                return StatusCode(201, result);
         }
         catch (ArgumentException ex)
         {

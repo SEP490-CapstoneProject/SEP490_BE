@@ -24,6 +24,7 @@ public class PortfolioService : IPortfolioService
     private readonly IReviewerProfileClient _reviewerProfileClient;
     private readonly ICompanyMatchingClient _companyMatchingClient;
     private readonly IPortfolioEmbeddingEventPublisher _embeddingEventPublisher;
+    private readonly IPortfolioModerationEventPublisher _moderationEventPublisher;
     private readonly IMatchingEngine _matchingEngine;
     private readonly ITextNormalizer _textNormalizer;
     private readonly IEmbeddingService _embeddingService;
@@ -41,6 +42,7 @@ public class PortfolioService : IPortfolioService
         IReviewerProfileClient reviewerProfileClient,
         ICompanyMatchingClient companyMatchingClient,
         IPortfolioEmbeddingEventPublisher embeddingEventPublisher,
+        IPortfolioModerationEventPublisher moderationEventPublisher,
         IMatchingEngine matchingEngine,
         ITextNormalizer textNormalizer,
         IEmbeddingService embeddingService,
@@ -57,6 +59,7 @@ public class PortfolioService : IPortfolioService
         _reviewerProfileClient = reviewerProfileClient;
         _companyMatchingClient = companyMatchingClient;
         _embeddingEventPublisher = embeddingEventPublisher;
+        _moderationEventPublisher = moderationEventPublisher;
         _matchingEngine = matchingEngine;
         _textNormalizer = textNormalizer;
         _embeddingService = embeddingService;
@@ -346,6 +349,123 @@ public class PortfolioService : IPortfolioService
         _repo.AddAsync(portfolio);
         await _repo.CommitAsync();
         await TryPublishEmbeddingEventAsync(portfolio.Id);
+        
+        // Publish moderation notifications
+        var moderationStatus = portfolio.ModerationStatus ?? "Approved";
+        var userId = request.EmployeeId.ToString();
+
+        if (string.Equals(moderationStatus, "Rejected", StringComparison.OrdinalIgnoreCase))
+        {
+            var rejectEvt = new Models.Events.PortfolioRejectedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "portfolio.rejected",
+                Version = 1,
+                UserId = userId,
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = portfolio.Id.ToString(),
+                Title = "Your portfolio was rejected",
+                Content = $"Your portfolio was rejected. Reason: {portfolio.ModerationReason}",
+                Type = "PORTFOLIO_REJECTED",
+                CreatedAt = VietnamTime.Now()
+            };
+
+            await _moderationEventPublisher.PublishPortfolioRejectedNotificationAsync(rejectEvt);
+
+            // Publish realtime event
+            var realtimeEvt = new RecruitmentPlatform.Contracts.Realtime.PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "portfolio.moderation",
+                Version = 1,
+                PostId = portfolio.Id,
+                UserId = userId,
+                Status = "REJECTED",
+                Reason = portfolio.ModerationReason ?? "Portfolio does not meet quality standards",
+                PostType = "Portfolio",
+                Title = "Your portfolio was rejected",
+                Content = $"Your portfolio was rejected. Reason: {portfolio.ModerationReason}",
+                CreatedAt = VietnamTime.Now()
+            };
+
+            await _moderationEventPublisher.PublishPortfolioModerationEventAsync(realtimeEvt);
+        }
+        else if (string.Equals(moderationStatus, "PendingReview", StringComparison.OrdinalIgnoreCase))
+        {
+            var pendingEvt = new Models.Events.PortfolioPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "portfolio.pending.review",
+                Version = 1,
+                UserId = userId,
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = portfolio.Id.ToString(),
+                Title = "Your portfolio is under review",
+                Content = $"Your portfolio is pending manual review. Reason: {portfolio.ModerationReason}",
+                Type = "PORTFOLIO_PENDING_REVIEW",
+                CreatedAt = VietnamTime.Now()
+            };
+
+            await _moderationEventPublisher.PublishPortfolioPendingReviewNotificationAsync(pendingEvt);
+
+            // Publish realtime event
+            var realtimeEvt = new RecruitmentPlatform.Contracts.Realtime.PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "portfolio.moderation",
+                Version = 1,
+                PostId = portfolio.Id,
+                UserId = userId,
+                Status = "PENDING_REVIEW",
+                Reason = portfolio.ModerationReason ?? "Portfolio pending manual review",
+                PostType = "Portfolio",
+                Title = "Your portfolio is under review",
+                Content = $"Your portfolio is pending manual review. Reason: {portfolio.ModerationReason}",
+                CreatedAt = VietnamTime.Now()
+            };
+
+            await _moderationEventPublisher.PublishPortfolioModerationEventAsync(realtimeEvt);
+        }
+        else
+        {
+            var approveEvt = new Models.Events.PortfolioApprovedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "portfolio.approved",
+                Version = 1,
+                UserId = userId,
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = portfolio.Id.ToString(),
+                Title = "Your portfolio has been approved",
+                Content = "Your portfolio has been approved and is now live.",
+                Type = "PORTFOLIO_APPROVED",
+                CreatedAt = VietnamTime.Now()
+            };
+
+            await _moderationEventPublisher.PublishPortfolioApprovedNotificationAsync(approveEvt);
+
+            // Publish realtime event
+            var realtimeEvt = new RecruitmentPlatform.Contracts.Realtime.PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "portfolio.moderation",
+                Version = 1,
+                PostId = portfolio.Id,
+                UserId = userId,
+                Status = "APPROVED",
+                Reason = "Portfolio approved",
+                PostType = "Portfolio",
+                Title = "Your portfolio has been approved",
+                Content = "Your portfolio has been approved and is now live.",
+                CreatedAt = VietnamTime.Now()
+            };
+
+            await _moderationEventPublisher.PublishPortfolioModerationEventAsync(realtimeEvt);
+        }
+
         if (request.IsMain)
         {
             await _repo.SetMainPortfolioAsync(request.EmployeeId, portfolio.Id);
@@ -357,7 +477,13 @@ public class PortfolioService : IPortfolioService
         _logger.LogInformation("Portfolio {Id} created with {BlockCount} blocks for employee {EmployeeId}",
             portfolio.Id, portfolio.Blocks.Count, request.EmployeeId);
 
-        return new CreatePortfolioResponse { PortfolioId = portfolio.Id, Message = "Portfolio created successfully" };
+        return new CreatePortfolioResponse 
+        { 
+            PortfolioId = portfolio.Id, 
+            Message = "Portfolio created successfully",
+            ModerationStatus = portfolio.ModerationStatus,
+            ModerationReason = portfolio.ModerationReason
+        };
     }
 
     private static void ValidateBlockMultiplicity(

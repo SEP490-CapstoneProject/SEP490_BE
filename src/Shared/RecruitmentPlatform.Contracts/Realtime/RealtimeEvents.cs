@@ -78,6 +78,17 @@ public sealed class NotificationCreatedEvent : RealtimeEventBase
     public bool IsRead { get; set; }
 }
 
+public sealed class PostModerationEvent : RealtimeEventBase
+{
+    public int PostId { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty; // "APPROVED" or "REJECTED"
+    public string Reason { get; set; } = string.Empty;
+    public string PostType { get; set; } = string.Empty; // "Community", "Company", "Portfolio"
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+}
+
 /// <summary>
 /// Fired when user A sends a connection request to user B.
 /// Realtime pushes "ConnectionRequested" to group user_{ToUserId}.

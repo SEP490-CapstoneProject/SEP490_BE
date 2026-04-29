@@ -8,6 +8,7 @@ using Community.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using RecruitmentPlatform.Contracts.Realtime;
+using RecruitmentPlatform.AI.Services;
 
 namespace Community.Application.Services;
 
@@ -23,6 +24,7 @@ public class CommunityService : ICommunityService
     private readonly IMediaUploadClient _mediaUploadClient;
     private readonly ICommunityEventPublisher _eventPublisher;
     private readonly INotificationEventPublisher _notificationPublisher;
+    private readonly ModerationService _moderationService;
     private readonly ILogger<CommunityService> _logger;
 
     public CommunityService(
@@ -32,6 +34,7 @@ public class CommunityService : ICommunityService
         IMediaUploadClient mediaUploadClient,
         ICommunityEventPublisher eventPublisher,
         INotificationEventPublisher notificationPublisher,
+        ModerationService moderationService,
         ILogger<CommunityService> logger)
     {
         _repository = repository;
@@ -40,6 +43,7 @@ public class CommunityService : ICommunityService
         _mediaUploadClient = mediaUploadClient;
         _eventPublisher = eventPublisher;
         _notificationPublisher = notificationPublisher;
+        _moderationService = moderationService;
         _logger = logger;
     }
 
@@ -327,6 +331,9 @@ public class CommunityService : ICommunityService
         int userId,
         Dictionary<string, IFormFile> fileMap)
     {
+        // Run moderation check before creating post
+        var moderationResult = _moderationService.CheckPost(request.Description);
+
         var post = new CommunityPost
         {
             UserId = userId,
@@ -337,7 +344,143 @@ public class CommunityService : ICommunityService
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
 
+        // Set moderation fields based on check result
+        if (moderationResult.Status == "Rejected")
+        {
+            post.Status = CommunityPost.StatusInactive;
+            post.ReviewStatus = CommunityPost.StatusRejected;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+        else if (moderationResult.Status == "PendingReview")
+        {
+            post.ReviewStatus = CommunityPost.StatusPendingReview;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+        // else: Approved stays as StatusActive (default)
+
         var created = await _repository.CreatePostAsync(post);
+
+        // Publish notifications based on moderation result
+        if (created.ReviewStatus == CommunityPost.StatusRejected)
+        {
+            // Auto-rejected - notify user
+            var evt = new PostRejectedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.rejected",
+                Version = 1,
+                UserId = created.UserId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.Id.ToString(),
+                Title = "Your post was rejected",
+                Content = $"Your community post was automatically rejected. Reason: {moderationResult.Reason}",
+                Type = "POST_REJECTED",
+                PostType = "Community",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+
+            // Also publish realtime event for instant feedback
+            var realtimeEvt = new PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.moderation",
+                Version = 1,
+                PostId = created.Id,
+                UserId = created.UserId.ToString(),
+                Status = "REJECTED",
+                Reason = moderationResult.Reason,
+                PostType = "Community",
+                Title = "Your post was rejected",
+                Content = $"Your community post was automatically rejected. Reason: {moderationResult.Reason}",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+        }
+        else if (created.ReviewStatus == CommunityPost.StatusPendingReview)
+        {
+            // Needs manual review - notify user
+            var evt = new PostPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = created.UserId.ToString(),
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.Id.ToString(),
+                Title = "Your post is under review",
+                Content = $"Your community post is awaiting manual review. Reason: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Community",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
+
+            // Also publish realtime event
+            var realtimeEvt = new PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.moderation",
+                Version = 1,
+                PostId = created.Id,
+                UserId = created.UserId.ToString(),
+                Status = "PENDING_REVIEW",
+                Reason = moderationResult.Reason,
+                PostType = "Community",
+                Title = "Your post is under review",
+                Content = $"Your community post is awaiting manual review. Reason: {moderationResult.Reason}",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+        }
+        else
+        {
+            // Auto-approved - notify user
+            var evt = new PostApprovedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.approved",
+                Version = 1,
+                UserId = created.UserId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.Id.ToString(),
+                Title = "Your post was approved",
+                Content = "Your community post has been approved and is now live.",
+                Type = "POST_APPROVED",
+                PostType = "Community",
+                ApproverNotes = "Auto-approved by content moderation system",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
+
+            // Also publish realtime event
+            var realtimeEvt = new PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.moderation",
+                Version = 1,
+                PostId = created.Id,
+                UserId = created.UserId.ToString(),
+                Status = "APPROVED",
+                Reason = "Auto-approved by content moderation system",
+                PostType = "Community",
+                Title = "Your post was approved",
+                Content = "Your community post has been approved and is now live.",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+        }
 
         if (fileMap.Count == 0)
         {
@@ -897,7 +1040,9 @@ public class CommunityService : ICommunityService
             CommentCount = counts.CommentCounts.TryGetValue(p.Id, out var cc) ? cc : 0,
             IsFavorited = counts.FavoritedPostIds.Contains(p.Id),
             IsSaved = counts.SavedPostIds.Contains(p.Id),
-            CreatedAt = p.CreatedAt.ToString("o")
+            CreatedAt = p.CreatedAt.ToString("o"),
+            ReviewStatus = p.ReviewStatus,
+            ReviewReason = p.ReviewReason
         };
     }
 
@@ -922,6 +1067,8 @@ public class CommunityService : ICommunityService
             IsFavorited = dto.IsFavorited,
             IsSaved = dto.IsSaved,
             CreatedAt = dto.CreatedAt,
+            ReviewStatus = dto.ReviewStatus,
+            ReviewReason = dto.ReviewReason,
             Status = p.Status
         };
     }
@@ -965,6 +1112,169 @@ public class CommunityService : ICommunityService
         }
 
         return "USER";
+    }
+
+    // ─── Admin moderation ─────────────────────────────────────────────────────
+
+    public async Task<OffsetPagedResult<AdminCommunityPostDto>> GetPendingPostsAsync(int skip, int take)
+    {
+        if (take < 1) take = 20;
+        if (take > 100) take = 100;
+
+        var posts = await _repository.GetAdminPostsAsync(CommunityPost.StatusPendingReview, skip / take + 1, take + 1);
+        var hasMore = posts.Count > take;
+        if (hasMore) posts = posts.Take(take).ToList();
+
+        if (posts.Count == 0)
+        {
+            return new OffsetPagedResult<AdminCommunityPostDto>
+            {
+                Items = new(),
+                PageNumber = skip / take + 1,
+                PageSize = take,
+                HasMore = false
+            };
+        }
+
+        var postIds = posts.Select(p => p.Id).ToList();
+        var uniqueUserIds = posts.Select(p => p.UserId).Distinct().ToList();
+
+        var countsTask = _repository.GetFeedCountsAsync(postIds, null);
+        var authorsTask = _userInfoClient.GetAuthorsBatchAsync(uniqueUserIds);
+
+        await Task.WhenAll(countsTask, authorsTask);
+        var counts = countsTask.Result;
+        var authors = authorsTask.Result;
+
+        var portfolioIds = posts.Where(p => p.PortfolioId.HasValue)
+            .Select(p => p.PortfolioId!.Value)
+            .Distinct()
+            .ToList();
+
+        var previews = new Dictionary<int, PortfolioPreviewDto?>();
+        if (portfolioIds.Count > 0)
+        {
+            var previewTasks = portfolioIds.Select(async pid =>
+                (pid, preview: await _portfolioPreviewClient.GetPreviewAsync(pid)));
+            var previewResults = await Task.WhenAll(previewTasks);
+            foreach (var (pid, preview) in previewResults)
+                previews[pid] = preview;
+        }
+
+        return new OffsetPagedResult<AdminCommunityPostDto>
+        {
+            Items = posts.Select(p => MapToAdminDto(p, authors, counts, previews)).ToList(),
+            PageNumber = skip / take + 1,
+            PageSize = take,
+            HasMore = hasMore
+        };
+    }
+
+    public async Task<CommunityPost> ApprovePostAsync(int postId, string? notes)
+    {
+        var post = await _repository.GetPostByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CommunityPost.StatusActive;
+        post.ReviewStatus = CommunityPost.StatusActive;
+        post.ReviewReason = notes;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish approval notification
+        var evt = new PostApprovedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.approved",
+            Version = 1,
+            UserId = post.UserId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.Id.ToString(),
+            Title = "Your post has been approved",
+            Content = "Your community post has been approved and is now live.",
+            Type = "POST_APPROVED",
+            PostType = "Community",
+            ApproverNotes = notes,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
+
+        // Publish realtime event
+        var realtimeEvt = new PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.moderation",
+            Version = 1,
+            PostId = post.Id,
+            UserId = post.UserId.ToString(),
+            Status = "APPROVED",
+            Reason = notes ?? "Post approved",
+            PostType = "Community",
+            Title = "Your post has been approved",
+            Content = "Your community post has been approved and is now live.",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+
+        return post;
+    }
+
+    public async Task<CommunityPost> RejectPostAsync(int postId, string reason)
+    {
+        var post = await _repository.GetPostByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CommunityPost.StatusInactive;
+        post.ReviewStatus = CommunityPost.StatusRejected;
+        post.ReviewReason = reason;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish rejection notification
+        var evt = new PostRejectedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.rejected",
+            Version = 1,
+            UserId = post.UserId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.Id.ToString(),
+            Title = "Your post was rejected",
+            Content = $"Your community post was rejected. Reason: {reason}",
+            Type = "POST_REJECTED",
+            PostType = "Community",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+
+        // Publish realtime event
+        var realtimeEvt = new PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.moderation",
+            Version = 1,
+            PostId = post.Id,
+            UserId = post.UserId.ToString(),
+            Status = "REJECTED",
+            Reason = reason,
+            PostType = "Community",
+            Title = "Your post was rejected",
+            Content = $"Your community post was rejected. Reason: {reason}",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+
+        return post;
     }
 }
 
