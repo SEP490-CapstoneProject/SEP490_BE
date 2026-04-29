@@ -14,9 +14,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddAzureKeyVault();
 
-var jwtKey = builder.Configuration["JwtSettings:SecretKey"] ?? "default-secret-key-32-characters!";
-var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "SkillSnapAuth";
-var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "SkillSnapUsers";
+var jwtKey = builder.Configuration["JwtSettings:Secret"] ?? "default-secret-key-32-characters!";
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "RecruitmentPlatform";
+var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "RecruitmentPlatformUsers";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

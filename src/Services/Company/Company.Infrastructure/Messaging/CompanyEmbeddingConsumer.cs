@@ -34,16 +34,23 @@ public sealed class CompanyEmbeddingConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var host = GetRabbitSetting("HostName", "Host", "localhost");
-        var userName = GetRabbitSetting("UserName", "Username", "guest");
-        var factory = new ConnectionFactory
+        var uri = _configuration["RabbitMQ:Uri"];
+        var factory = new ConnectionFactory();
+
+        if (!string.IsNullOrEmpty(uri))
         {
-            HostName = host,
-            UserName = userName,
-            Password = GetRabbitSetting("Password", defaultValue: "guest"),
-            VirtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/"),
-            Port = int.TryParse(GetRabbitSetting("Port", defaultValue: "5672"), out var port) ? port : 5672
-        };
+            factory.Uri = new Uri(uri);
+        }
+        else
+        {
+            var host = GetRabbitSetting("HostName", "Host", "localhost");
+            var userName = GetRabbitSetting("UserName", "Username", "guest");
+            factory.HostName = host;
+            factory.UserName = userName;
+            factory.Password = GetRabbitSetting("Password", defaultValue: "guest");
+            factory.VirtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/");
+            factory.Port = int.TryParse(GetRabbitSetting("Port", defaultValue: "5672"), out var port) ? port : 5672;
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {

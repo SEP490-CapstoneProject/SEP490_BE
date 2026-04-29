@@ -64,7 +64,7 @@ builder.Services.AddDbContext<PortfolioDbContext>(options =>
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
+var secretKey = jwtSettings["Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -79,8 +79,8 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = jwtSettings["Issuer"] ?? "RecruitmentPlatform",
+        ValidAudience = jwtSettings["Audience"] ?? "RecruitmentPlatformUsers",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
 });
@@ -111,6 +111,7 @@ builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCategoryService>();
 builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
 builder.Services.AddScoped<IPortfolioNotificationEventPublisher, PortfolioNotificationEventPublisher>();
+builder.Services.AddScoped<IPortfolioModerationEventPublisher, PortfolioModerationEventPublisher>();
 builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
 builder.Services.AddHostedService<PortfolioEmbeddingConsumer>();
 builder.Services.AddHostedService<PortfolioEmbeddingBackfillWorker>();

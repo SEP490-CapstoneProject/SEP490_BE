@@ -42,16 +42,23 @@ public abstract class RealtimeConsumerBase<TEvent> : BackgroundService where TEv
     {
         await Task.Delay(2000, stoppingToken);
 
-        var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
-        var userName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
-        var factory = new ConnectionFactory
+        var uri = _configuration["RabbitMQ:Uri"];
+        var factory = new ConnectionFactory();
+
+        if (!string.IsNullOrEmpty(uri))
         {
-            HostName = host,
-            UserName = userName,
-            Password = _configuration["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
-        };
+            factory.Uri = new Uri(uri);
+        }
+        else
+        {
+            var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
+            var userName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
+            factory.HostName = host;
+            factory.UserName = userName;
+            factory.Password = _configuration["RabbitMQ:Password"] ?? "guest";
+            factory.VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/";
+            factory.Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672;
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {

@@ -12,14 +12,20 @@ using Notification.Infrastructure.Data;
 using Notification.Infrastructure.Messaging;
 using Notification.Infrastructure.Repositories;
 using Notification.Infrastructure.Services;
+using RecruitmentPlatform.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddAzureKeyVault();
 
-var jwtKey = builder.Configuration["JwtSettings:SecretKey"] ?? "default-secret-key-32-characters!";
-var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "SkillSnapAuth";
-var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "SkillSnapUsers";
+// Use consistent JwtSettings configuration across all services
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings
+{
+    Secret = "default-secret-key-32-characters!",
+    Issuer = "RecruitmentPlatform",
+    Audience = "RecruitmentPlatformUsers"
+};
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -27,19 +33,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
             ValidateIssuer = true,
-            ValidIssuer = jwtIssuer,
+            ValidIssuer = jwtSettings.Issuer,
             ValidateAudience = true,
-            ValidAudience = jwtAudience,
+            ValidAudience = jwtSettings.Audience,
             ValidateLifetime = true
-        };
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                return Task.CompletedTask;
-            }
         };
     });
 

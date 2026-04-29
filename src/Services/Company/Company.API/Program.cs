@@ -11,7 +11,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RecruitmentPlatform.AI.DependencyInjection;
+using RecruitmentPlatform.AI.Services;
 using System.Text;
+using RecruitmentPlatform.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +63,8 @@ builder.Services.AddScoped<ICompanyPostRepository, CompanyPostRepository>();
 builder.Services.AddScoped<ICompanyPostService, CompanyPostService>();
 builder.Services.AddScoped<ICompanyCacheRepository, CompanyCacheRepository>();
 builder.Services.AddScoped<ICompanyEmbeddingEventPublisher, CompanyEmbeddingEventPublisher>();
+builder.Services.AddScoped<ICompanyNotificationEventPublisher, RabbitMqCompanyNotificationEventPublisher>();
+builder.Services.AddScoped<ModerationService>();
 builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
 builder.Services.AddHostedService<CompanyEmbeddingConsumer>();
 builder.Services.AddHostedService<CompanyEmbeddingBackfillWorker>();
@@ -86,26 +90,28 @@ builder.Services.AddHttpClient<IPortfolioMatchingClient, PortfolioMatchingClient
     client.Timeout = TimeSpan.FromSeconds(2);
 });
 
-var jwtSecret = builder.Configuration["JwtSettings:Secret"];
-if (!string.IsNullOrEmpty(jwtSecret))
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings
 {
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
+    Secret = "default-secret-key-32-characters!",
+    Issuer = "RecruitmentPlatform",
+    Audience = "RecruitmentPlatformUsers"
+};
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
-            };
-        });
-}
-else
-{
-    builder.Services.AddAuthentication();
-}
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audience,
+            ValidateLifetime = true
+        };
+    });
 builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>

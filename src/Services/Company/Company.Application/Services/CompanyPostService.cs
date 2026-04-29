@@ -2,12 +2,15 @@ using Company.Application.Clients;
 using Company.Application.DTOs;
 using Company.Application.Helpers;
 using Company.Application.Interfaces;
+using Company.Application.Models.Events;
 using Company.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using RecruitmentPlatform.AI.Abstractions;
 using RecruitmentPlatform.AI.Models;
+using RecruitmentPlatform.AI.Services;
+using RecruitmentPlatform.Contracts.Realtime;
 using System.Text.Json;
 
 namespace Company.Application.Services;
@@ -20,10 +23,12 @@ public class CompanyPostService : ICompanyPostService
     private readonly IMediaUploadClient _mediaUploadClient;
     private readonly IPortfolioMatchingClient _portfolioMatchingClient;
     private readonly ICompanyEmbeddingEventPublisher _embeddingEventPublisher;
+    private readonly ICompanyNotificationEventPublisher _notificationPublisher;
     private readonly IMatchingEngine _matchingEngine;
     private readonly ITextNormalizer _textNormalizer;
     private readonly IEmbeddingService _embeddingService;
     private readonly IMemoryCache _cache;
+    private readonly ModerationService _moderationService;
     private readonly ILogger<CompanyPostService> _logger;
 
     public CompanyPostService(
@@ -33,10 +38,12 @@ public class CompanyPostService : ICompanyPostService
         IMediaUploadClient mediaUploadClient,
         IPortfolioMatchingClient portfolioMatchingClient,
         ICompanyEmbeddingEventPublisher embeddingEventPublisher,
+        ICompanyNotificationEventPublisher notificationPublisher,
         IMatchingEngine matchingEngine,
         ITextNormalizer textNormalizer,
         IEmbeddingService embeddingService,
         IMemoryCache cache,
+        ModerationService moderationService,
         ILogger<CompanyPostService> logger)
     {
         _repository = repository;
@@ -45,10 +52,12 @@ public class CompanyPostService : ICompanyPostService
         _mediaUploadClient = mediaUploadClient;
         _portfolioMatchingClient = portfolioMatchingClient;
         _embeddingEventPublisher = embeddingEventPublisher;
+        _notificationPublisher = notificationPublisher;
         _matchingEngine = matchingEngine;
         _textNormalizer = textNormalizer;
         _embeddingService = embeddingService;
         _cache = cache;
+        _moderationService = moderationService;
         _logger = logger;
     }
 
@@ -95,6 +104,19 @@ public class CompanyPostService : ICompanyPostService
             throw new InvalidOperationException("Company profile not found.");
         }
 
+        // Combine job description content for moderation check
+        var contentToCheck = string.Join(" ", new[] 
+        { 
+            request.Position ?? "",
+            request.JobDescription ?? "",
+            request.RequirementsMandatory ?? "",
+            request.RequirementsPreferred ?? "",
+            request.Benefits ?? ""
+        }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        // Run moderation check before creating post
+        var moderationResult = _moderationService.CheckPost(contentToCheck);
+
         await _companyCacheRepository.UpsertAsync(new CompanyEntity
         {
             Id = profile.Id,
@@ -118,9 +140,91 @@ public class CompanyPostService : ICompanyPostService
             Status = request.Status,
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
+
+        // Set moderation fields based on check result
+        if (moderationResult.Status == "Rejected")
+        {
+            post.Status = CompanyPost.StatusInactive;
+            post.ReviewStatus = CompanyPost.StatusRejected;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+        else if (moderationResult.Status == "PendingReview")
+        {
+            post.ReviewStatus = CompanyPost.StatusPendingReview;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+
         await UpdateEmbeddingStateAsync(post);
 
         var created = await _repository.CreatePostAsync(post);
+
+        // Publish notifications based on moderation result
+        if (created.ReviewStatus == CompanyPost.StatusRejected)
+        {
+            // Auto-rejected - notify company
+            var evt = new PostRejectedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.rejected",
+                Version = 1,
+                UserId = created.CompanyId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "Your job post was rejected",
+                Content = $"Your company job post was automatically rejected. Reason: {moderationResult.Reason}",
+                Type = "POST_REJECTED",
+                PostType = "Company",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+        }
+        else if (created.ReviewStatus == CompanyPost.StatusPendingReview)
+        {
+            // Needs manual review - notify company
+            var evt = new PostPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = created.CompanyId.ToString(),
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "Your job post is under review",
+                Content = $"Your company job post is awaiting manual review. Reason: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Company",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
+        }
+        else
+        {
+            // Auto-approved - notify company
+            var evt = new PostApprovedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.approved",
+                Version = 1,
+                UserId = created.CompanyId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "Your job post was approved",
+                Content = "Your company job post has been approved and is now live.",
+                Type = "POST_APPROVED",
+                PostType = "Company",
+                ApproverNotes = "Auto-approved by content moderation system",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
+        }
 
         await UploadPostMediaAsync(created, request.CoverImageKey, fileMap, replaceAllMedia: false);
         await _repository.UpdatePostAsync(created);
@@ -485,6 +589,119 @@ public class CompanyPostService : ICompanyPostService
         {
             _logger.LogWarning(ex, "Failed to publish embedding event for company post {PostId}", postId);
         }
+    }
+
+    // ─── Admin moderation ─────────────────────────────────────────────────────
+
+    public async Task<List<CompanyPostDetailDto>> GetPendingPostsAsync(int skip, int take)
+    {
+        if (take < 1) take = 20;
+        if (take > 100) take = 100;
+
+        // Get pending posts - need to filter by ReviewStatus = 3
+        var pageNumber = (skip / take) + 1;
+        var posts = await _repository.GetPendingPostsAsync(pageNumber, take + 1);
+        
+        var items = new List<CompanyPostDetailDto>();
+        foreach (var post in posts)
+        {
+            var detail = await _repository.GetPostDetailAsync(post.PostId, null);
+            if (detail != null)
+            {
+                items.Add(detail);
+            }
+        }
+
+        return items;
+    }
+
+    public async Task<CompanyPost> ApprovePostAsync(int postId, string? notes)
+    {
+        var post = await _repository.GetByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CompanyPost.StatusActive;
+        post.ReviewStatus = CompanyPost.StatusActive;
+        post.ReviewReason = notes;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish approval notification
+        var evt = new PostApprovedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.approved",
+            Version = 1,
+            UserId = post.CompanyId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.PostId.ToString(),
+            Title = "Your job post has been approved",
+            Content = "Your company job post has been approved and is now live.",
+            Type = "POST_APPROVED",
+            PostType = "Company",
+            ApproverNotes = notes,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
+
+        // Publish realtime event
+        var realtimeEvt = new PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.moderation",
+            Version = 1,
+            PostId = post.PostId,
+            UserId = post.CompanyId.ToString(),
+            Status = "APPROVED",
+            Reason = notes ?? "Post approved",
+            PostType = "Company",
+            Title = "Your job post has been approved",
+            Content = "Your company job post has been approved and is now live.",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _embeddingEventPublisher.PublishCompanyPostChangedAsync(post.PostId);
+
+        return post;
+    }
+
+    public async Task<CompanyPost> RejectPostAsync(int postId, string reason)
+    {
+        var post = await _repository.GetByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CompanyPost.StatusInactive;
+        post.ReviewStatus = CompanyPost.StatusRejected;
+        post.ReviewReason = reason;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish rejection notification
+        var evt = new PostRejectedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.rejected",
+            Version = 1,
+            UserId = post.CompanyId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.PostId.ToString(),
+            Title = "Your job post was rejected",
+            Content = $"Your company job post was rejected. Reason: {reason}",
+            Type = "POST_REJECTED",
+            PostType = "Company",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+
+        return post;
     }
 }
 

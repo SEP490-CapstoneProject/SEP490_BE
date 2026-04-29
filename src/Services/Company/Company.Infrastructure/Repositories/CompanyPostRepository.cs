@@ -332,4 +332,21 @@ public class CompanyPostRepository : ICompanyPostRepository
         _context.CompanyPostMedia.Add(media);
         await _context.SaveChangesAsync();
     }
+
+    public async Task<CompanyPost?> GetByIdAsync(int postId)
+    {
+        return await _context.CompanyPosts.FindAsync(postId);
+    }
+
+    public async Task<List<CompanyPost>> GetPendingPostsAsync(int pageNumber, int pageSize)
+    {
+        var skip = (pageNumber - 1) * pageSize;
+        return await _context.CompanyPosts
+            .Where(p => p.ReviewStatus == 3) // PendingReview
+            .OrderByDescending(p => p.ReviewedAt)
+            .Skip(skip)
+            .Take(pageSize)
+            .ToListAsync();
+    }
 }
+

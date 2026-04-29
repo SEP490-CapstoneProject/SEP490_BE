@@ -29,7 +29,7 @@ public class RabbitMQConsumer : BackgroundService
     private const string DlxExchange = "skillsnap.events.dlx";
     private const string DlqQueue = "notification.events.dlq";
 
-    private static readonly string[] BindingKeys = { "post.#", "connection.*", "portfolio.*", "job.*", "system.*" };
+    private static readonly string[] BindingKeys = { "post.#", "connection.#", "portfolio.#", "job.#", "system.#" };
     private static readonly HashSet<string> NotificationEventTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "post.favorite",
@@ -56,16 +56,23 @@ public class RabbitMQConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var host = _config["RabbitMQ:HostName"] ?? _config["RabbitMQ:Host"] ?? "localhost";
-        var userName = _config["RabbitMQ:UserName"] ?? _config["RabbitMQ:Username"] ?? "guest";
-        var factory = new ConnectionFactory
+        var uri = _config["RabbitMQ:Uri"];
+        var factory = new ConnectionFactory();
+
+        if (!string.IsNullOrEmpty(uri))
         {
-            HostName = host,
-            UserName = userName,
-            Password = _config["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _config["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_config["RabbitMQ:Port"], out var port) ? port : 5672
-        };
+            factory.Uri = new Uri(uri);
+        }
+        else
+        {
+            var host = _config["RabbitMQ:HostName"] ?? _config["RabbitMQ:Host"] ?? "localhost";
+            var userName = _config["RabbitMQ:UserName"] ?? _config["RabbitMQ:Username"] ?? "guest";
+            factory.HostName = host;
+            factory.UserName = userName;
+            factory.Password = _config["RabbitMQ:Password"] ?? "guest";
+            factory.VirtualHost = _config["RabbitMQ:VirtualHost"] ?? "/";
+            factory.Port = int.TryParse(_config["RabbitMQ:Port"], out var port) ? port : 5672;
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {
