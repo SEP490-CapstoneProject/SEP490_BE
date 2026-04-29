@@ -12,8 +12,10 @@ public interface ICompanyPostRepository
     Task<List<CompanyPostDetailDto>> GetPostsByIdsAsync(List<int> postIds, int? userId);
     Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId);
     Task<CompanyPost?> GetPostEntityByIdAsync(int postId);
+    Task<CompanyPost?> GetByIdAsync(int postId);
     Task<List<CompanyPost>> GetActivePostsForMatchingAsync(int limit);
     Task<List<CompanyPost>> GetPostsForEmbeddingBackfillAsync(int limit);
+    Task<List<CompanyPost>> GetPendingPostsAsync(int pageNumber, int pageSize);
     Task UpdateEmbeddingAsync(int postId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus);
     Task<bool> CheckPostSavedAsync(int userId, int postId);
     Task SavePostAsync(int userId, int postId);
@@ -24,3 +26,4 @@ public interface ICompanyPostRepository
     Task SoftDeletePostAsync(int postId);
     Task AddPostMediaAsync(CompanyPostMedia media);
 }
+

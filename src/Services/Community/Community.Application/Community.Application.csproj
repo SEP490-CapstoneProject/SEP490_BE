@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.AI\RecruitmentPlatform.AI.csproj" />
     <ProjectReference Include="..\Community.Domain\Community.Domain.csproj" />
   </ItemGroup>
 

@@ -12,6 +12,16 @@ public class ReviewPostReportRequest
     public string? ReviewNote { get; set; }
 }
 
+public class ApprovePostRequest
+{
+    public string? ApproverNotes { get; set; }
+}
+
+public class RejectPostRequest
+{
+    public string Reason { get; set; } = string.Empty;
+}
+
 public class AdminPostReportFilter
 {
     public int? PostId { get; set; }
