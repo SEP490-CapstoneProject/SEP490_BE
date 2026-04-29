@@ -33,6 +33,9 @@ public class CommunityDbContext : DbContext
             entity.Property(e => e.FavoriteCount).HasColumnName("favoriteCount").HasDefaultValue(0);
             entity.Property(e => e.CreatedAt).HasColumnName("createAt");
             entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.ReviewStatus).HasColumnName("reviewStatus");
+            entity.Property(e => e.ReviewReason).HasColumnName("reviewReason").HasMaxLength(500);
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewedAt");
 
             entity.HasIndex(e => e.UserId).HasDatabaseName("IX_CommunityPost_UserId");
         });

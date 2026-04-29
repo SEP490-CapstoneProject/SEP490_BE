@@ -30,6 +30,9 @@ public class RabbitMqCommunityEventPublisher : ICommunityEventPublisher
     public Task PublishPostFavoriteChangedAsync(PostFavoriteChangedEvent evt, CancellationToken cancellationToken = default)
         => PublishAsync("post.favorite.changed", evt, cancellationToken);
 
+    public Task PublishPostModerationEventAsync(PostModerationEvent evt, CancellationToken cancellationToken = default)
+        => PublishAsync("post.moderation", evt, cancellationToken);
+
     private async Task PublishAsync<T>(string routingKey, T evt, CancellationToken cancellationToken)
     {
         var uri = _configuration["RabbitMQ:Uri"];

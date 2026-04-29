@@ -41,8 +41,9 @@ public class CommunityController : ControllerBase
             || string.Equals(role, "MODERATOR", StringComparison.OrdinalIgnoreCase);
     }
 
-    // ─── Feed endpoints (Public) ──────────────────────────────────────────────
+    // ─── Feed endpoints (Require Authentication) ──────────────────────────────────────────────
 
+    [Authorize]
     [HttpGet("posts")]
     public async Task<IActionResult> GetFeed(
         [FromQuery] int pageSize = 20,
@@ -54,6 +55,7 @@ public class CommunityController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize]
     [HttpGet("posts/{id:int}")]
     public async Task<IActionResult> GetPostById(int id)
     {
@@ -67,6 +69,7 @@ public class CommunityController : ControllerBase
         return Ok(post);
     }
 
+    [Authorize]
     [HttpGet("posts/{postId:int}/comments")]
     public async Task<IActionResult> GetComments(int postId)
     {
@@ -74,6 +77,7 @@ public class CommunityController : ControllerBase
         return Ok(response);
     }
 
+    [Authorize]
     [HttpGet("posts/user/{userId:int}")]
     public async Task<IActionResult> GetPostsByUser(int userId)
     {
@@ -111,8 +115,29 @@ public class CommunityController : ControllerBase
                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, IFormFile>(StringComparer.OrdinalIgnoreCase);
 
-        var created = await _service.CreatePostAsync(request, userId.Value, fileMap);
-        return StatusCode(201, created);
+        try
+        {
+            var created = await _service.CreatePostAsync(request, userId.Value, fileMap);
+            
+            if (created != null && created.ReviewStatus == 4)
+            {
+                // Rejected by auto-moderation
+                return StatusCode(400, new { message = "Post was rejected by content moderation", reason = created.ReviewReason, data = created });
+            }
+            
+            if (created != null && created.ReviewStatus == 3)
+            {
+                // Pending manual review
+                return StatusCode(202, new { message = "Post awaiting manual review", reason = created.ReviewReason, data = created });
+            }
+            
+            // Approved
+            return StatusCode(201, created);
+        }
+        catch (BadHttpRequestException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [Authorize]

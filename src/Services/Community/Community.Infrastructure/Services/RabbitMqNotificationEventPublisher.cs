@@ -36,6 +36,21 @@ public class RabbitMqNotificationEventPublisher : INotificationEventPublisher
         await PublishAsync("post.report.created", evt, cancellationToken);
     }
 
+    public async Task PublishPostApprovedNotificationAsync(PostApprovedNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.approved", evt, cancellationToken);
+    }
+
+    public async Task PublishPostRejectedNotificationAsync(PostRejectedNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.rejected", evt, cancellationToken);
+    }
+
+    public async Task PublishPostPendingReviewNotificationAsync(PostPendingReviewNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.pending.review", evt, cancellationToken);
+    }
+
     private async Task PublishAsync<T>(string routingKey, T evt, CancellationToken cancellationToken)
     {
         try
@@ -80,3 +95,4 @@ public class RabbitMqNotificationEventPublisher : INotificationEventPublisher
         }
     }
 }
+
