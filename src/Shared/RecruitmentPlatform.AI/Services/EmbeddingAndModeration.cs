@@ -96,7 +96,7 @@ public sealed class ModerationService
         "github.com", "linkedin.com", "youtube.com", "instagram.com", "twitter.com", "facebook.com",
         "portfolio.com", "behance.net", "dribbble.com", "medium.com", "dev.to", "stackoverflow.com",
         "skillsnap.com", "skillsnap.local", "vercel.app", "netlify.app", "heroku.com",
-        "azure.microsoft.com", "aws.amazon.com", "firebase.google.com"
+        "azure.microsoft.com", "aws.amazon.com", "firebase.google.com", "res.cloudinary.com"
     };
     
     // Blacklist of known malicious domains
@@ -130,6 +130,13 @@ public sealed class ModerationService
             };
         }
 
+        // Verify links (check for malicious URLs)
+        var linkCheck = VerifyLinks(content);
+        if (linkCheck.Status == "Rejected")
+        {
+            return linkCheck;
+        }
+
         var score = 0d;
         if (normalized.Length >= 250) score += 0.4;
         else if (normalized.Length >= 120) score += 0.25;
@@ -143,7 +150,7 @@ public sealed class ModerationService
             return new ModerationResult { Status = "Rejected", Reason = "Content quality below minimum threshold." };
         }
 
-        if (score < 0.75)
+        if (score < 0.70)
         {
             return new ModerationResult { Status = "PendingReview", Reason = "Requires manual review." };
         }
@@ -236,12 +243,14 @@ public sealed class ModerationService
     public ModerationResult CheckPost(string content)
     {
         var normalized = content?.Trim() ?? string.Empty;
+        
+        // 1. Check minimum length
         if (normalized.Length < 20)
         {
             return new ModerationResult { Status = "Rejected", Reason = "Content is too short (minimum 20 characters)." };
         }
 
-        // 1. Check for ban words (auto-reject)
+        // 2. Check for ban words (auto-reject)
         var lowered = normalized.ToLowerInvariant();
         var detectedKeyword = SpamKeywords.FirstOrDefault(keyword => lowered.Contains(keyword));
         if (detectedKeyword != null)
@@ -254,32 +263,14 @@ public sealed class ModerationService
             };
         }
 
-        // 2. Check for suspicious links (auto-reject)
+        // 3. Check for suspicious links (auto-reject)
         var linkCheck = VerifyLinks(content);
         if (linkCheck.Status == "Rejected")
         {
             return linkCheck;
         }
 
-        // 3. Quality scoring (like portfolio)
-        var score = 0d;
-        if (normalized.Length >= 250) score += 0.4;
-        else if (normalized.Length >= 120) score += 0.25;
-        else score += 0.1;
-
-        if (normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 40) score += 0.2;
-        if (linkCheck.LinkVerification?.IsValid == true) score += 0.1; // Bonus for having verified links
-
-        if (score < 0.45)
-        {
-            return new ModerationResult { Status = "Rejected", Reason = "Content quality below minimum threshold." };
-        }
-
-        if (score < 0.75)
-        {
-            return new ModerationResult { Status = "PendingReview", Reason = "Content requires manual review." };
-        }
-
+        // All checks passed - approve immediately (no scoring, no pending review)
         return new ModerationResult { Status = "Approved", Reason = "Content passed moderation." };
     }
 }
