@@ -37,11 +37,17 @@ public class RabbitMQConsumer : BackgroundService
         "post.reply.created",
         "post.report.removed",
         "post.report.created",
+        "post.rejected",
+        "post.approved",
+        "post.pending.review",
         "job.application.created",
         "job.application.status.updated",
         "connection.request.created",
         "connection.request.accepted",
-        "portfolio.compliment.created"
+        "portfolio.compliment.created",
+        "portfolio.rejected",
+        "portfolio.approved",
+        "portfolio.pending.review"
     };
 
     public RabbitMQConsumer(
