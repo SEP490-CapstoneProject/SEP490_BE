@@ -110,6 +110,8 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
             ToUserId = toUserId,
             ProfileId = profileId,
             RequestedAt = requestedAt,
+            ActorId = fromUserId.ToString(),
+            ActorType = "USER",
             CreatedAt = DateTime.UtcNow
         };
         return PublishAsync("connection.requested", evt, cancellationToken);
@@ -126,6 +128,8 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
             FromUserId = fromUserId,
             ToUserId = toUserId,
             AcceptedAt = acceptedAt,
+            ActorId = toUserId.ToString(),
+            ActorType = "USER",
             CreatedAt = DateTime.UtcNow
         };
         return PublishAsync("connection.accepted", evt, cancellationToken);
@@ -144,6 +148,8 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
             ToUserId = toUserId,
             Content = content,
             SentAt = sentAt,
+            ActorId = fromUserId.ToString(),
+            ActorType = "USER",
             CreatedAt = DateTime.UtcNow
         };
         return PublishAsync("message.new", evt, cancellationToken);

@@ -395,8 +395,10 @@ public class CommunityService : ICommunityService
                 Status = "REJECTED",
                 Reason = moderationResult.Reason,
                 PostType = "Community",
-                Title = "Your post was rejected",
-                Content = $"Your community post was automatically rejected. Reason: {moderationResult.Reason}",
+                Title = "Bài đăng của bạn đã bị từ chối",
+                Content = $"Bài đăng cộng đồng của bạn đã bị từ chối. Lý do: {moderationResult.Reason}",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
                 CreatedAt = DateTimeHelper.GetVietnamTime()
             };
 
@@ -414,8 +416,8 @@ public class CommunityService : ICommunityService
                 ActorId = null,
                 ActorType = "SYSTEM",
                 ObjectId = created.Id.ToString(),
-                Title = "Your post is under review",
-                Content = $"Your community post is awaiting manual review. Reason: {moderationResult.Reason}",
+                Title = "Bài đăng của bạn đang được xem xét",
+                Content = $"Bài đăng cộng đồng của bạn đang chờ xem xét thủ công. Lý do: {moderationResult.Reason}",
                 Type = "POST_PENDING_REVIEW",
                 PostType = "Community",
                 CreatedAt = DateTimeHelper.GetVietnamTime()
@@ -434,8 +436,10 @@ public class CommunityService : ICommunityService
                 Status = "PENDING_REVIEW",
                 Reason = moderationResult.Reason,
                 PostType = "Community",
-                Title = "Your post is under review",
-                Content = $"Your community post is awaiting manual review. Reason: {moderationResult.Reason}",
+                Title = "Bài đăng của bạn đang được xem xét",
+                Content = $"Bài đăng cộng đồng của bạn đang chờ xem xét thủ công. Lý do: {moderationResult.Reason}",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
                 CreatedAt = DateTimeHelper.GetVietnamTime()
             };
 
@@ -453,8 +457,8 @@ public class CommunityService : ICommunityService
                 ActorId = "SYSTEM",
                 ActorType = "SYSTEM",
                 ObjectId = created.Id.ToString(),
-                Title = "Your post was approved",
-                Content = "Your community post has been approved and is now live.",
+                Title = "Bài đăng của bạn đã được duyệt",
+                Content = "Bài đăng cộng đồng của bạn đã được tự động duyệt và hiện đang hiển thị.",
                 Type = "POST_APPROVED",
                 PostType = "Community",
                 ApproverNotes = "Auto-approved by content moderation system",
@@ -474,8 +478,10 @@ public class CommunityService : ICommunityService
                 Status = "APPROVED",
                 Reason = "Auto-approved by content moderation system",
                 PostType = "Community",
-                Title = "Your post was approved",
-                Content = "Your community post has been approved and is now live.",
+                Title = "Bài đăng của bạn đã được duyệt",
+                Content = "Bài đăng cộng đồng của bạn đã được tự động duyệt và hiện đang hiển thị.",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
                 CreatedAt = DateTimeHelper.GetVietnamTime()
             };
 

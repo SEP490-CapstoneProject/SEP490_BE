@@ -245,9 +245,9 @@ public sealed class ModerationService
         var normalized = content?.Trim() ?? string.Empty;
         
         // 1. Check minimum length
-        if (normalized.Length < 20)
+        if (normalized.Length < 5)
         {
-            return new ModerationResult { Status = "Rejected", Reason = "Content is too short (minimum 20 characters)." };
+            return new ModerationResult { Status = "Rejected", Reason = "Content is too short (minimum 5 characters)." };
         }
 
         // 2. Check for ban words (auto-reject)
