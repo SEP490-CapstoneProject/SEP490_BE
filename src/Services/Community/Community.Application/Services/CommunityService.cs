@@ -749,6 +749,10 @@ public class CommunityService : ICommunityService
 
             // Get new favorite count for realtime update
             var favoriteCount = await _repository.GetPostFavoriteCountAsync(postId);
+            
+            // Get actor info for realtime event (who did the favorite)
+            var actorData = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
+            var favoriterInfo = actorData.FirstOrDefault().Value;
 
             var realtimeEvt = new PostFavoriteChangedEvent
             {
@@ -759,6 +763,13 @@ public class CommunityService : ICommunityService
                 UserId = userId,
                 Action = "FAVORITE",
                 NewFavoriteCount = favoriteCount,
+                Actor = favoriterInfo != null ? new NotificationActorDto
+                {
+                    Id = userId,
+                    Name = favoriterInfo.Name ?? "Unknown",
+                    Avatar = favoriterInfo.Avatar ?? string.Empty,
+                    Role = "USER"
+                } : null,
                 CreatedAt = DateTimeHelper.GetVietnamTime()
             };
 

@@ -10,6 +10,9 @@ namespace Notification.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Add ActorName and ActorAvatar columns
+            // (EventId already added by 20260501000000_AddEventIdAndUniqueConstraint)
+            
             migrationBuilder.AddColumn<string>(
                 name: "ActorName",
                 table: "NOTIFICATION",
