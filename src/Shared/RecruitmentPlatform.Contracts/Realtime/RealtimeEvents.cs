@@ -63,6 +63,7 @@ public sealed class PostFavoriteChangedEvent : RealtimeEventBase
     public int UserId { get; set; }
     public string Action { get; set; } = "FAVORITE"; // "FAVORITE" or "UNFAVORITE"
     public int NewFavoriteCount { get; set; }
+    public NotificationActorDto? Actor { get; set; }
 }
 
 public sealed class NotificationCreatedEvent : RealtimeEventBase

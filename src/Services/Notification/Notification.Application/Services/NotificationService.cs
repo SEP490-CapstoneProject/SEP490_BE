@@ -110,7 +110,27 @@ public class NotificationService : INotificationService
 
     public async Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity)
     {
-        var actor = await ResolveActorAsync(entity.ActorId, entity.ActorType);
+        ActorDto? actor = null;
+
+        // PRIORITY 1: Use stored actor data (from event.Author)
+        // This eliminates dependency on HTTP enrichment for fresh events
+        if (!string.IsNullOrWhiteSpace(entity.ActorName) && entity.ActorType != "SYSTEM")
+        {
+            actor = new ActorDto
+            {
+                Id = int.TryParse(entity.ActorId, out var parsedId) ? parsedId : 0,
+                Name = entity.ActorName,
+                Avatar = entity.ActorAvatar ?? string.Empty,
+                Role = entity.ActorType == "COMPANY" ? "COMPANY" : "USER"
+            };
+        }
+        else if (entity.ActorType != "SYSTEM")
+        {
+            // PRIORITY 2: Fallback to HTTP enrichment only if stored data missing
+            actor = await ResolveActorAsync(entity.ActorId, entity.ActorType);
+        }
+        // If ActorType == "SYSTEM", actor stays NULL (don't show system actor)
+
         return new NotificationCreatedEventDto
         {
             NotificationId = entity.Id,
