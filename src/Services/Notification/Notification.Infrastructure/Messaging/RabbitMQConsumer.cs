@@ -204,6 +204,30 @@ public class RabbitMQConsumer : BackgroundService
                 return;
             }
 
+            var cache = scope.ServiceProvider.GetService<IDistributedCache>();
+
+            // CRITICAL: Idempotency check BEFORE aggregation - ensures all notification types are protected
+            // This prevents duplicates even if Redis fails or events are redelivered
+            if (!string.IsNullOrWhiteSpace(evt.EventId) && cache != null)
+            {
+                var idempotencyKey = $"notification-event:{evt.EventId}";
+                var existingEntry = await cache.GetStringAsync(idempotencyKey);
+                if (existingEntry != null)
+                {
+                    _logger.LogDebug("Skipped duplicate notification event: EventId={EventId}, EventType={EventType}", 
+                        evt.EventId, evt.EventType);
+                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    return;
+                }
+
+                // Mark this EventId as processed for 24 hours
+                await cache.SetStringAsync(idempotencyKey, "processed", 
+                    new DistributedCacheEntryOptions 
+                    { 
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) 
+                    });
+            }
+
             // Check if this is a post.favorite event for aggregation
             if (evt.EventType == "post.favorite")
             {
@@ -255,6 +279,7 @@ public class RabbitMQConsumer : BackgroundService
             var entity = new NotificationEntity
             {
                 UserId = evt.UserId,
+                EventId = evt.EventId,
                 Title = evt.Title,
                 Content = ResolveNotificationContent(evt, actorNameForContent),
                 Type = evt.Type,
@@ -271,7 +296,6 @@ public class RabbitMQConsumer : BackgroundService
                 createdEvent.EventId = evt.EventId;
             }
 
-            var cache = scope.ServiceProvider.GetService<IDistributedCache>();
             if (cache != null)
                 await cache.RemoveAsync($"unread:{evt.UserId}");
 
