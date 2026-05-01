@@ -23,6 +23,8 @@ public class NotificationDbContext : DbContext
             e.Property(x => x.Type).HasMaxLength(50).IsRequired();
             e.Property(x => x.ObjectId).HasMaxLength(50);
             e.Property(x => x.ActorId).HasMaxLength(50);
+            e.Property(x => x.ActorName).HasMaxLength(255);
+            e.Property(x => x.ActorAvatar).HasMaxLength(500);
             e.Property(x => x.ActorType).HasMaxLength(20).HasDefaultValue("SYSTEM");
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             e.Property(x => x.IsRead).HasDefaultValue(false);
