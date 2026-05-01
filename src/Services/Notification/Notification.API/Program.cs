@@ -9,6 +9,7 @@ using Notification.Infrastructure.Azure;
 using Notification.Infrastructure.Clients;
 using Notification.Infrastructure.Configuration;
 using Notification.Infrastructure.Data;
+using Notification.Infrastructure.Extensions;
 using Notification.Infrastructure.Messaging;
 using Notification.Infrastructure.Repositories;
 using Notification.Infrastructure.Services;
@@ -134,10 +135,15 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// Apply all pending migrations with proper error handling and logging
+try
 {
-    var db = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
-    db.Database.Migrate();
+    await app.Services.ApplyMigrationsAsync();
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"❌ FATAL: Failed to apply database migrations: {ex}");
+    throw;
 }
 
 app.UseSwagger();
