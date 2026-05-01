@@ -47,16 +47,35 @@ public class NotificationService : INotificationService
     private async Task<CursorPagedResult<UserNotificationDto>> BuildPagedResultAsync(List<NotificationEntity> items, int? nextCursor)
     {
         var actorMap = new Dictionary<string, ActorDto>();
+        
+        // First, try to use stored actor data from notifications
         var uniqueActors = items
             .Where(n => n.ActorId != null && n.ActorType != "SYSTEM")
-            .Select(n => (n.ActorId!, n.ActorType))
+            .Select(n => (n.ActorId!, n.ActorType, n.ActorName, n.ActorAvatar))
             .Distinct()
             .ToList();
 
-        foreach (var (actorId, actorType) in uniqueActors)
+        foreach (var (actorId, actorType, storedName, storedAvatar) in uniqueActors)
         {
             if (!actorMap.ContainsKey(actorId))
-                actorMap[actorId] = await ResolveActorAsync(actorId, actorType) ?? BuildFallbackActor(actorId);
+            {
+                // Use stored actor data if available
+                if (!string.IsNullOrWhiteSpace(storedName))
+                {
+                    actorMap[actorId] = new ActorDto
+                    {
+                        Id = int.TryParse(actorId, out var parsedId) ? parsedId : 0,
+                        Name = storedName,
+                        Avatar = storedAvatar ?? string.Empty,
+                        Role = actorType == "COMPANY" ? "COMPANY" : "USER"
+                    };
+                }
+                else
+                {
+                    // Fallback to HTTP enrichment if stored data missing
+                    actorMap[actorId] = await ResolveActorAsync(actorId, actorType) ?? BuildFallbackActor(actorId);
+                }
+            }
         }
 
         var dtos = items.Select(n => new UserNotificationDto

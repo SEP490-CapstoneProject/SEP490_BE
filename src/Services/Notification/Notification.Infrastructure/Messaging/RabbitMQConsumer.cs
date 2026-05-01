@@ -285,6 +285,8 @@ public class RabbitMQConsumer : BackgroundService
                 Type = evt.Type,
                 ObjectId = evt.ObjectId,
                 ActorId = evt.ActorId,
+                ActorName = evt.Author?.Name,
+                ActorAvatar = evt.Author?.Avatar,
                 ActorType = evt.ActorType,
                 CreatedAt = evt.CreatedAt == default ? VietnamTime.Now() : evt.CreatedAt
             };
