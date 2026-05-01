@@ -17,6 +17,7 @@ public class NotificationDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).UseIdentityColumn();
             e.Property(x => x.UserId).HasMaxLength(50).IsRequired();
+            e.Property(x => x.EventId).HasMaxLength(100);
             e.Property(x => x.Title).HasMaxLength(200).IsRequired();
             e.Property(x => x.Content).HasMaxLength(1000).IsRequired();
             e.Property(x => x.Type).HasMaxLength(50).IsRequired();
@@ -30,6 +31,13 @@ public class NotificationDbContext : DbContext
                 .HasDatabaseName("IX_Notification_UserId_Id");
             e.HasIndex(x => new { x.UserId, x.IsRead })
                 .HasDatabaseName("IX_Notification_UserId_IsRead");
+            
+            // Unique constraint to prevent duplicate notifications from the same event
+            // Allows null EventId for backward compatibility with events that don't have EventId
+            e.HasIndex(x => new { x.EventId, x.UserId, x.Type, x.ObjectId })
+                .IsUnique()
+                .HasDatabaseName("IX_Unique_Notification_Event")
+                .HasFilter("[EventId] IS NOT NULL");
         });
     }
 }

@@ -4,6 +4,7 @@ public class NotificationEntity
 {
     public int Id { get; set; }
     public string UserId { get; set; } = default!;
+    public string? EventId { get; set; }
     public string Title { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Type { get; set; } = default!;
