@@ -721,31 +721,17 @@ public class CommunityService : ICommunityService
         var result = await _repository.FavoritePostAsync(postId, userId);
         if (result)
         {
-            // Get post details to check owner
-            var post = await _repository.GetPostByIdAsync(postId);
-            if (post != null && post.UserId != userId) // Don't notify self-favorite
-            {
-                // Get actor (favoriter) info for notification
-                var actors = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
-                var actorInfo = actors.FirstOrDefault().Value; // Get AuthorDto from KeyValuePair
-                
-                var notificationEvt = new PostFavoriteNotificationEvent
-                {
-                    EventId = Guid.NewGuid().ToString("N"),
-                    EventType = "post.favorite",
-                    Version = 1,
-                    UserId = post.UserId.ToString(), // Post owner receives notification
-                    ActorId = userId.ToString(),     // Person who favorited
-                    ActorType = "USER",
-                    ObjectId = postId.ToString(),
-                    Title = "Lượt thích mới",
-                    Content = $"{actorInfo?.Name ?? "Ai đó"} đã thích bài viết của bạn",
-                    Type = "POST_FAVORITE",
-                    CreatedAt = DateTimeHelper.GetVietnamTime()
-                };
-
-                await _notificationPublisher.PublishPostFavoriteNotificationAsync(notificationEvt);
-            }
+            // AGGREGATION STRATEGY: Post favorite notifications are aggregated by AggregationFlushService
+            // This means:
+            // - First like in 3-minute window: stored in Redis aggregation, no immediate DB notification
+            // - Subsequent likes: added to aggregation bucket
+            // - After 3-minute window expires: one aggregated notification created ("N people liked...")
+            // This prevents duplicate notifications (immediate + aggregated)
+            
+            // NOTE: The PostFavoriteNotificationEvent is NO LONGER published here.
+            // Previously (line 747): await _notificationPublisher.PublishPostFavoriteNotificationAsync(notificationEvt);
+            // This was causing duplicate notifications (immediate + later aggregated).
+            // Now: Only realtime events are published, aggregated notifications handled by AggregationFlushService.
 
             // Get new favorite count for realtime update
             var favoriteCount = await _repository.GetPostFavoriteCountAsync(postId);
@@ -754,6 +740,7 @@ public class CommunityService : ICommunityService
             var actorData = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
             var favoriterInfo = actorData.FirstOrDefault().Value;
 
+            // Publish realtime event for live count updates (no aggregation, continuous)
             var realtimeEvt = new PostFavoriteChangedEvent
             {
                 EventId = Guid.NewGuid().ToString("N"),
