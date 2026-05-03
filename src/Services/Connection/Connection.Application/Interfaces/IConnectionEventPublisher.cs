@@ -25,5 +25,6 @@ public class ConnectionNotificationEventPayload
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
+    public Connection.Application.DTOs.NotificationActorDto? Author { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

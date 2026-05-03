@@ -41,6 +41,7 @@ public class RabbitMQConsumer : BackgroundService
         "post.approved",
         "post.pending.review",
         "job.application.created",
+        "job.application.received",
         "job.application.status.updated",
         "connection.request.created",
         "connection.request.accepted",
