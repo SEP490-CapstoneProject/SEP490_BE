@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Notification.Application.DTOs;
+using Notification.Application.Interfaces;
 using RabbitMQ.Client;
 using RecruitmentPlatform.Contracts.Realtime;
 
