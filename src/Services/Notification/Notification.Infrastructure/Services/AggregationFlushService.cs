@@ -36,8 +36,17 @@ public class AggregationFlushService : BackgroundService
         var pollSeconds = configuration.GetValue<int?>("FavoriteAggregation:PollIntervalSeconds") ?? 30;
         _pollInterval = TimeSpan.FromSeconds(pollSeconds);
         
-        var windowMinutes = configuration.GetValue<int?>("FavoriteAggregation:WindowMinutes") ?? 3;
-        _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        // Sliding window: prefer seconds (new) over minutes (legacy)
+        var windowSeconds = configuration.GetValue<int?>("FavoriteAggregation:WindowSeconds");
+        if (windowSeconds.HasValue)
+        {
+            _aggregationWindow = TimeSpan.FromSeconds(windowSeconds.Value);
+        }
+        else
+        {
+            var windowMinutes = configuration.GetValue<int?>("FavoriteAggregation:WindowMinutes") ?? 3;
+            _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        }
 
         var postReportWindowMinutes = configuration.GetValue<int?>("PostReportAggregation:WindowMinutes") ?? 10;
         _postReportAggregationWindow = TimeSpan.FromMinutes(postReportWindowMinutes);
@@ -46,6 +55,26 @@ public class AggregationFlushService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("AggregationFlushService started. Poll interval: {PollInterval}", _pollInterval);
+        
+        // Subscribe to Redis key expiration events for real-time notification triggers (fire and forget)
+        try
+        {
+            var subscriber = _redis.GetSubscriber();
+            await subscriber.SubscribeAsync("__keyevent@0__:expired", (channel, value) =>
+            {
+                // Fire and forget - don't await inside the callback
+                var keyName = value.ToString();
+                if (keyName.StartsWith("favorite_agg:") || keyName.StartsWith("comment_reply_agg:"))
+                {
+                    _logger.LogDebug("Redis key expired: {KeyName}, polling will handle aggregation flush", keyName);
+                }
+            });
+            _logger.LogInformation("Redis key expiration listener subscribed to __keyevent@0__:expired");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to setup Redis key expiration listener. Will fall back to polling.");
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {

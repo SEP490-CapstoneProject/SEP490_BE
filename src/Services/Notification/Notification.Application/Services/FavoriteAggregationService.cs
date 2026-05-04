@@ -13,8 +13,22 @@ public class FavoriteAggregationService
     public FavoriteAggregationService(IDistributedCache cache, IConfiguration configuration)
     {
         _cache = cache;
-        var windowMinutes = configuration.GetValue<int?>("FavoriteAggregation:WindowMinutes") ?? 3;
-        _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        
+        // Sliding window: prefer seconds (new) over minutes (legacy)
+        // Each event resets the TTL, so window adapts to event frequency
+        // Example: 15s window means notification sent 15s after last event
+        var windowSeconds = configuration.GetValue<int?>("FavoriteAggregation:WindowSeconds");
+        if (windowSeconds.HasValue)
+        {
+            _aggregationWindow = TimeSpan.FromSeconds(windowSeconds.Value);
+        }
+        else
+        {
+            // Fallback to minutes for backward compatibility
+            var windowMinutes = configuration.GetValue<int?>("FavoriteAggregation:WindowMinutes") ?? 3;
+            _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        }
+        
         // Keep key alive slightly longer than aggregation window so flush service
         // has time to read and process it on next poll cycle.
         _cacheTtl = _aggregationWindow + TimeSpan.FromSeconds(90);
