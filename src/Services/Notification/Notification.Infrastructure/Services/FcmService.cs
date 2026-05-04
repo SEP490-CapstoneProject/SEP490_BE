@@ -1,18 +1,12 @@
 using FirebaseAdmin.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Notification.Application.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Notification.Infrastructure.Services
 {
-    public interface IFcmService
-    {
-        Task<string?> SendNotificationAsync(string deviceToken, string title, string body, Dictionary<string, string>? data = null);
-        Task<List<SendResponse>?> SendMulticastAsync(List<string> deviceTokens, string title, string body, Dictionary<string, string>? data = null);
-        Task<bool> ValidateTokenAsync(string deviceToken);
-    }
-
     public class FcmService : IFcmService
     {
         private readonly ILogger<FcmService> _logger;
@@ -72,14 +66,14 @@ namespace Notification.Infrastructure.Services
             }
         }
 
-        public async Task<List<SendResponse>?> SendMulticastAsync(List<string> deviceTokens, string title, string body, Dictionary<string, string>? data = null)
+        public async Task<bool> SendMulticastAsync(List<string> deviceTokens, string title, string body, Dictionary<string, string>? data = null)
         {
             try
             {
                 if (deviceTokens == null || deviceTokens.Count == 0)
                 {
                     _logger.LogWarning("Device tokens list is empty");
-                    return new List<SendResponse>();
+                    return false;
                 }
 
                 var message = new MulticastMessage
@@ -106,17 +100,17 @@ namespace Notification.Infrastructure.Services
 
                 var response = await FirebaseMessaging.DefaultInstance.SendMulticastAsync(message);
                 _logger.LogInformation($"FCM multicast sent. Success: {response.SuccessCount}, Failed: {response.FailureCount}");
-                return new List<SendResponse>(response.Responses);
+                return response.SuccessCount > 0;
             }
             catch (FirebaseMessagingException ex)
             {
                 _logger.LogError($"FCM error sending multicast: {ex.Message}", ex);
-                return new List<SendResponse>();
+                return false;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Unexpected error sending multicast: {ex.Message}", ex);
-                return new List<SendResponse>();
+                return false;
             }
         }
 

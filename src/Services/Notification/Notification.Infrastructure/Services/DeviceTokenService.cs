@@ -1,20 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Notification.Application.Interfaces;
 using Notification.Domain.Entities;
 using Notification.Infrastructure.Data;
 
 namespace Notification.Infrastructure.Services
 {
-    public interface IDeviceTokenService
-    {
-        Task<bool> RegisterTokenAsync(string userId, string deviceToken, string deviceType = "Android", string? appVersion = null);
-        Task<bool> UnregisterTokenAsync(string deviceToken);
-        Task<List<DeviceTokenEntity>> GetActiveTokensForUserAsync(string userId);
-        Task<bool> DeactivateTokenAsync(string deviceToken);
-        Task<bool> UpdateLastUsedAsync(string deviceToken);
-        Task CleanupInactiveTokensAsync(int inactiveDaysThreshold = 30);
-    }
-
     public class DeviceTokenService : IDeviceTokenService
     {
         private readonly NotificationDbContext _dbContext;
