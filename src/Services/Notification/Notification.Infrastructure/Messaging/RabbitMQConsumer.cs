@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Notification.Application.Helpers;
 using Notification.Application.Interfaces;
+using Notification.Application.Mappers;
 using Notification.Application.Services;
 using Notification.Domain.Entities;
 using RabbitMQ.Client;
@@ -41,6 +42,7 @@ public class RabbitMQConsumer : BackgroundService
         "post.approved",
         "post.pending.review",
         "job.application.created",
+        "job.application.received",
         "job.application.status.updated",
         "connection.request.created",
         "connection.request.accepted",
@@ -204,6 +206,30 @@ public class RabbitMQConsumer : BackgroundService
                 return;
             }
 
+            var cache = scope.ServiceProvider.GetService<IDistributedCache>();
+
+            // CRITICAL: Idempotency check BEFORE aggregation - ensures all notification types are protected
+            // This prevents duplicates even if Redis fails or events are redelivered
+            if (!string.IsNullOrWhiteSpace(evt.EventId) && cache != null)
+            {
+                var idempotencyKey = $"notification-event:{evt.EventId}";
+                var existingEntry = await cache.GetStringAsync(idempotencyKey);
+                if (existingEntry != null)
+                {
+                    _logger.LogDebug("Skipped duplicate notification event: EventId={EventId}, EventType={EventType}", 
+                        evt.EventId, evt.EventType);
+                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    return;
+                }
+
+                // Mark this EventId as processed for 24 hours
+                await cache.SetStringAsync(idempotencyKey, "processed", 
+                    new DistributedCacheEntryOptions 
+                    { 
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) 
+                    });
+            }
+
             // Check if this is a post.favorite event for aggregation
             if (evt.EventType == "post.favorite")
             {
@@ -255,11 +281,14 @@ public class RabbitMQConsumer : BackgroundService
             var entity = new NotificationEntity
             {
                 UserId = evt.UserId,
+                EventId = evt.EventId,
                 Title = evt.Title,
                 Content = ResolveNotificationContent(evt, actorNameForContent),
                 Type = evt.Type,
                 ObjectId = evt.ObjectId,
                 ActorId = evt.ActorId,
+                ActorName = evt.Author?.Name,
+                ActorAvatar = evt.Author?.Avatar,
                 ActorType = evt.ActorType,
                 CreatedAt = evt.CreatedAt == default ? VietnamTime.Now() : evt.CreatedAt
             };
@@ -271,7 +300,9 @@ public class RabbitMQConsumer : BackgroundService
                 createdEvent.EventId = evt.EventId;
             }
 
-            var cache = scope.ServiceProvider.GetService<IDistributedCache>();
+            // Send FCM push notification to all user's active devices
+            await SendFcmPushAsync(scope.ServiceProvider, entity);
+
             if (cache != null)
                 await cache.RemoveAsync($"unread:{evt.UserId}");
 
@@ -371,12 +402,88 @@ public class RabbitMQConsumer : BackgroundService
                 createdEvent.EventId = evt.EventId;
             }
 
+            // Send FCM push notification to all user's active devices
+            await SendFcmPushAsync(services, entity);
+
             if (cache != null)
             {
                 await cache.RemoveAsync($"unread:{recipientUserId}");
             }
 
             await eventPublisher.PublishNotificationCreatedAsync(createdEvent);
+        }
+    }
+
+    private async Task SendFcmPushAsync(IServiceProvider services, NotificationEntity notification)
+    {
+        try
+        {
+            var fcmService = services.GetService<IFcmService>();
+            var deviceTokenService = services.GetService<IDeviceTokenService>();
+            var settingsService = services.GetService<INotificationSettingsService>();
+
+            if (fcmService == null || deviceTokenService == null)
+            {
+                _logger.LogDebug("FCM or DeviceTokenService not available, skipping push notification");
+                return;
+            }
+
+            // Get user's notification settings
+            if (settingsService != null)
+            {
+                var userSettings = await settingsService.GetUserSettingsAsync(notification.UserId);
+                if (userSettings != null && !userSettings.PushNotificationsEnabled)
+                {
+                    _logger.LogDebug("Push notifications disabled for user {UserId}", notification.UserId);
+                    return;
+                }
+            }
+
+            // Get active device tokens for user
+            var deviceTokens = await deviceTokenService.GetActiveTokensForUserAsync(notification.UserId);
+
+            if (deviceTokens == null || deviceTokens.Count == 0)
+            {
+                _logger.LogDebug("No active device tokens for user {UserId}", notification.UserId);
+                return;
+            }
+
+            // Convert notification to FCM format
+            var (title, body) = FcmNotificationMapper.ToFcmNotificationText(notification);
+            var data = FcmNotificationMapper.ToFcmDataPayload(notification);
+
+            // Send to all devices
+            if (deviceTokens.Count == 1)
+            {
+                var messageId = await fcmService.SendNotificationAsync(
+                    deviceTokens[0].DeviceToken,
+                    title,
+                    body,
+                    data);
+
+                if (!string.IsNullOrEmpty(messageId))
+                {
+                    _logger.LogInformation(
+                        "FCM notification sent to user {UserId}. NotificationId={NotificationId}, MessageId={MessageId}",
+                        notification.UserId, notification.Id, messageId);
+                }
+            }
+            else
+            {
+                var tokens = deviceTokens.Select(dt => dt.DeviceToken).ToList();
+                var success = await fcmService.SendMulticastAsync(tokens, title, body, data);
+
+                if (success)
+                {
+                    _logger.LogInformation(
+                        "FCM multicast sent to user {UserId}. NotificationId={NotificationId}, DeviceCount={DeviceCount}",
+                        notification.UserId, notification.Id, deviceTokens.Count);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending FCM push notification for notification {NotificationId}", notification.Id);
         }
     }
 

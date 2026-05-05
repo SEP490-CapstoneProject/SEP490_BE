@@ -281,7 +281,8 @@ public class ApplicationService : IApplicationService
         EmployeeDto employee,
         CompanyPostDto post)
     {
-        var eventPayload = new ApplicationNotificationEventPayload
+        // EVENT 1: Notify employee of their application submission
+        var employeeEvent = new ApplicationNotificationEventPayload
         {
             EventType = "job.application.created",
             UserId = employee.UserId.ToString(),
@@ -291,16 +292,45 @@ public class ApplicationService : IApplicationService
             Title = "Ứng tuyển thành công",
             Content = $"Bạn đã ứng tuyển thành công vị trí {post.Position}.",
             Type = "APPLICATION_SUBMITTED",
+            Author = new NotificationActorDto { Name = employee.Name, Avatar = employee.Avatar },
             CreatedAt = VietnamTime.Now()
         };
 
         try
         {
-            await _notificationEventPublisher.PublishAsync(eventPayload);
+            await _notificationEventPublisher.PublishAsync(employeeEvent);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to publish application created notification. ApplicationId={ApplicationId}", created.ApplicationId);
+            _logger.LogWarning(ex, "Failed to publish application created notification to employee. ApplicationId={ApplicationId}", created.ApplicationId);
+        }
+
+        // EVENT 2: Notify company of new application (NEW)
+        var company = await _userProfileClient.GetCompanyByIdAsync(post.CompanyId);
+        if (company != null)
+        {
+            var companyEvent = new ApplicationNotificationEventPayload
+            {
+                EventType = "job.application.received",
+                UserId = company.CompanyId.ToString(),
+                ActorId = employee.UserId.ToString(),
+                ActorType = "USER",
+                ObjectId = created.ApplicationId.ToString(),
+                Title = "Ứng tuyển mới",
+                Content = $"{employee.Name} đã ứng tuyển vị trí {post.Position}.",
+                Type = "APPLICATION_RECEIVED",
+                Author = new NotificationActorDto { Name = employee.Name, Avatar = employee.Avatar },
+                CreatedAt = VietnamTime.Now()
+            };
+
+            try
+            {
+                await _notificationEventPublisher.PublishAsync(companyEvent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish application received notification to company. ApplicationId={ApplicationId}, CompanyId={CompanyId}", created.ApplicationId, company.CompanyId);
+            }
         }
     }
 
@@ -339,6 +369,7 @@ public class ApplicationService : IApplicationService
             Title = title,
             Content = content,
             Type = statusType,
+            Author = new NotificationActorDto { Name = _currentUser.GetUserId().ToString() },
             CreatedAt = VietnamTime.Now()
         };
 

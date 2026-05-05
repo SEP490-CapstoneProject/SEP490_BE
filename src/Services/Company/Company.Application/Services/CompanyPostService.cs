@@ -173,8 +173,8 @@ public class CompanyPostService : ICompanyPostService
                 ActorId = "SYSTEM",
                 ActorType = "SYSTEM",
                 ObjectId = created.PostId.ToString(),
-                Title = "Your job post was rejected",
-                Content = $"Your company job post was automatically rejected. Reason: {moderationResult.Reason}",
+                Title = "bài đăng của bạn đã bị từ chối",
+                Content = $"Bài đăng công việc của bạn đã bị từ chối. Lý do: {moderationResult.Reason}",
                 Type = "POST_REJECTED",
                 PostType = "Company",
                 CreatedAt = DateTimeHelper.GetVietnamTime()
@@ -194,8 +194,8 @@ public class CompanyPostService : ICompanyPostService
                 ActorId = null,
                 ActorType = "SYSTEM",
                 ObjectId = created.PostId.ToString(),
-                Title = "Your job post is under review",
-                Content = $"Your company job post is awaiting manual review. Reason: {moderationResult.Reason}",
+                Title = "bài đăng của bạn đang được xem xét",
+                Content = $"Bài đăng công việc của bạn đang chờ xem xét thủ công. Lý do: {moderationResult.Reason}",
                 Type = "POST_PENDING_REVIEW",
                 PostType = "Company",
                 CreatedAt = DateTimeHelper.GetVietnamTime()
@@ -215,8 +215,8 @@ public class CompanyPostService : ICompanyPostService
                 ActorId = "SYSTEM",
                 ActorType = "SYSTEM",
                 ObjectId = created.PostId.ToString(),
-                Title = "Your job post was approved",
-                Content = "Your company job post has been approved and is now live.",
+                Title = "bài đăng của bạn đã được duyệt",
+                Content = "Bài đăng công việc của bạn đã được duyệt và hiện đang hiển thị.",
                 Type = "POST_APPROVED",
                 PostType = "Company",
                 ApproverNotes = "Auto-approved by content moderation system",
@@ -661,6 +661,8 @@ public class CompanyPostService : ICompanyPostService
             PostType = "Company",
             Title = "Your job post has been approved",
             Content = "Your company job post has been approved and is now live.",
+            ActorId = "SYSTEM",
+            ActorType = "SYSTEM",
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
 
