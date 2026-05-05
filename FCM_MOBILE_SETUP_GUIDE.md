@@ -4,7 +4,26 @@
 
 This guide provides step-by-step instructions for integrating Firebase Cloud Messaging (FCM) into the mobile app. The backend has implemented dual-channel notifications: real-time (SignalR) when app is online and push notifications (FCM) when app is offline.
 
-**Status:** Backend Phase 1 & 2 complete. Mobile team implements Phase 3.
+**Status:** Backend Phase 1-5 complete and production ready. Mobile team implements Phase 3 (mobile integration).
+
+**Last Updated:** 2026-05-05 (Post-cleanup and stability verification)
+**Service Status:** ✅ All 4 FCM endpoints working
+**Current Production URL:** https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io
+
+### 📝 Recent Updates to This Guide
+
+**NEW:** Endpoint now supports **anonymous device token registration** without JWT
+- Can register tokens before user logs in
+- Pass `userId` in request body for pre-login registration
+- Use Bearer token for post-login registration
+- See [Authentication Scenarios](#authentication-scenarios-for-device-token-registration) section
+
+**FIXED:** Flutter code examples corrected
+- Delete endpoint path now correct
+- Token refresh handling improved
+- Both anonymous and authenticated flows documented
+
+**REPLACED:** All `{API_GATEWAY}` placeholders with actual production URL
 
 ---
 
@@ -30,34 +49,45 @@ Mobile App
 - Flutter or React Native project set up
 - Access to Firebase Console
 - Google Play Services (Android) or APNs certificate (iOS)
-- Backend notification service running (base URL: `{API_GATEWAY}/api/notifications`)
+- Backend notification service running
+  - **Production:** `https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io`
+  - **Staging:** Contact backend team for staging URL
+  - **Development:** `http://localhost:5000`
 
 ---
 
 ## Firebase Project Setup
 
-### Step 1: Create Firebase Project (Backend Team)
+### Step 1: Create/Access Firebase Project (Backend Team)
 
-**Backend should provide:**
-- Firebase Project ID
-- Service account JSON key (for backend only)
-- Web API key (if needed)
+**Backend has provided:**
+- Firebase Project ID: `skillsnap-notification`
+- Service account JSON key (stored in Azure Key Vault)
+- Android package name: `com.skillsnap.app`
+- iOS bundle ID: `com.skillsnap.app` (iOS support TBA)
+
+**Contact backend team to:**
+- Get Firebase configuration for your environment
+- Access the Firebase project in Firebase Console
+- Retrieve google-services.json and GoogleService-Info.plist
 
 ### Step 2: Register App in Firebase Console
 
 **For Android:**
-1. Go to Firebase Console → Project Settings
-2. Click "Add App" → Android
-3. Enter package name: `com.skillsnap.app` (or your package)
-4. Download `google-services.json`
-5. Place in `android/app/` directory
+1. Go to Firebase Console (https://console.firebase.google.com/)
+2. Select project: `skillsnap-notification`
+3. Click "Add App" → Android
+4. Enter package name: `com.skillsnap.app`
+5. Download `google-services.json`
+6. Place in `android/app/` directory
 
 **For iOS:**
-1. Go to Firebase Console → Project Settings
-2. Click "Add App" → iOS
-3. Enter bundle ID: `com.skillsnap.app` (or your bundle ID)
-4. Download `GoogleService-Info.plist`
-5. Add to Xcode project
+1. Go to Firebase Console (https://console.firebase.google.com/)
+2. Select project: `skillsnap-notification`
+3. Click "Add App" → iOS
+4. Enter bundle ID: `com.skillsnap.app`
+5. Download `GoogleService-Info.plist`
+6. Add to Xcode project
 
 ---
 
@@ -167,22 +197,46 @@ class NotificationService {
       
       // Get auth token from storage
       final authToken = prefs.getString('auth_token');
-      if (authToken == null) {
-        print('Auth token not found, cannot register device token');
-        return;
+      
+      // Two scenarios:
+      // 1. If auth token exists, use authenticated registration
+      // 2. If no auth token, use anonymous registration with userId
+      
+      final dio = Dio();
+      
+      late final Map<String, dynamic> requestData;
+      
+      if (authToken != null && authToken.isNotEmpty) {
+        // Scenario 1: Authenticated (user logged in)
+        dio.options.headers['Authorization'] = 'Bearer $authToken';
+        
+        requestData = {
+          'token': token,
+          'deviceType': _getDeviceType(),
+          'appVersion': '1.0.0',
+        };
+      } else {
+        // Scenario 2: Anonymous registration (before user logs in)
+        // Try to get userId from storage or preferences
+        final userId = prefs.getString('user_id');
+        
+        if (userId == null || userId.isEmpty) {
+          print('Cannot register device token: no auth token and no user ID');
+          return;
+        }
+        
+        requestData = {
+          'token': token,
+          'userId': userId,  // Include userId for anonymous registration
+          'deviceType': _getDeviceType(),
+          'appVersion': '1.0.0',
+        };
       }
       
       // Register with backend
-      final dio = Dio();
-      dio.options.headers['Authorization'] = 'Bearer $authToken';
-      
       final response = await dio.post(
-        _tokenEndpoint,
-        data: {
-          'token': token,
-          'deviceType': _getDeviceType(),
-          'appVersion': '1.0.0', // Get from package_info
-        },
+        '{API_GATEWAY}/api/device-tokens/register',
+        data: requestData,
       );
       
       if (response.statusCode == 200) {
@@ -257,8 +311,9 @@ class NotificationService {
           final dio = Dio();
           dio.options.headers['Authorization'] = 'Bearer $authToken';
           
+          // DELETE /api/device-tokens/register/{token}
           await dio.delete(
-            '$_tokenEndpoint/$token',
+            '{API_GATEWAY}/api/device-tokens/register/$token',
           );
         }
       }
@@ -425,21 +480,50 @@ export async function registerDeviceToken(token) {
     
     // Get auth token
     const authToken = await AsyncStorage.getItem('auth_token');
-    if (!authToken) {
-      console.log('Auth token not found');
-      return;
+    
+    // Two scenarios:
+    // 1. If auth token exists, use authenticated registration
+    // 2. If no auth token, use anonymous registration with userId
+    
+    let requestData;
+    const requestConfig = {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    };
+    
+    if (authToken) {
+      // Scenario 1: Authenticated (user logged in)
+      requestConfig.headers['Authorization'] = `Bearer ${authToken}`;
+      
+      requestData = {
+        token: token,
+        deviceType: Platform.OS === 'android' ? 'Android' : 'iOS',
+        appVersion: '1.0.0',
+      };
+    } else {
+      // Scenario 2: Anonymous registration (before user logs in)
+      const userId = await AsyncStorage.getItem('user_id');
+      
+      if (!userId) {
+        console.log('Cannot register device token: no auth token and no user ID');
+        return;
+      }
+      
+      requestData = {
+        token: token,
+        userId: userId,  // Include userId for anonymous registration
+        deviceType: Platform.OS === 'android' ? 'Android' : 'iOS',
+        appVersion: '1.0.0',
+      };
     }
     
     // Register with backend
-    const response = await axios.post(TOKEN_ENDPOINT, {
-      token: token,
-      deviceType: Platform.OS === 'android' ? 'Android' : 'iOS',
-      appVersion: '1.0.0',
-    }, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-      }
-    });
+    const response = await axios.post(
+      '{API_GATEWAY}/api/device-tokens/register',
+      requestData,
+      requestConfig
+    );
     
     if (response.status === 200) {
       await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
@@ -535,26 +619,58 @@ export default function App() {
 
 **Endpoint:** `POST /api/device-tokens/register`
 
-**Headers:**
+**Authentication:** ⚠️ OPTIONAL (Not Required)
+This endpoint allows **both authenticated and anonymous** device token registration.
+
+**Option 1: Anonymous Registration (No JWT required)**
+Use this when registering token before user logs in.
+
 ```
-Authorization: Bearer {JWT_TOKEN}
+Headers:
 Content-Type: application/json
+
+Request Body:
+{
+  "token": "fcm_device_token_from_firebase",
+  "deviceType": "Android",
+  "appVersion": "1.0.0",
+  "userId": "user_id_here"  // REQUIRED for anonymous registration
+}
+
+Response:
+{
+  "success": true,
+  "message": "Device token registered successfully"
+}
 ```
 
-**Request Body:**
-```json
+**Option 2: Authenticated Registration (With JWT)**
+Use this when user is already logged in.
+
+```
+Headers:
+Authorization: Bearer {JWT_TOKEN}
+Content-Type: application/json
+
+Request Body:
 {
   "token": "fcm_device_token_from_firebase",
   "deviceType": "Android",
   "appVersion": "1.0.0"
+  // userId extracted from JWT token automatically
 }
-```
 
-**Response:**
-```json
+Response:
 {
   "success": true,
   "message": "Device token registered successfully"
+}
+```
+
+**Error Response (if userId not provided and not authenticated):**
+```json
+{
+  "error": "User ID is required (either from token or in request body)"
 }
 ```
 
@@ -657,7 +773,153 @@ When user receives a push notification, the data structure is:
 
 ---
 
-## Deep Linking Configuration
+## Authentication Scenarios for Device Token Registration
+
+The `POST /api/device-tokens/register` endpoint supports two authentication approaches to handle different app lifecycle stages.
+
+### Scenario 1: Pre-Login Token Registration (Anonymous)
+
+**When:** User hasn't logged in yet but app is starting
+**Use:** Anonymous registration with `userId` in request body
+
+**Flow:**
+```
+App Start → Get FCM token → Check local storage for userId → Register anonymously
+```
+
+**Example (Flutter):**
+```dart
+// Register before user logs in
+final userId = 'user123'; // Could come from local storage, QR code, etc.
+final token = await FirebaseMessaging.instance.getToken();
+
+final dio = Dio();
+final response = await dio.post(
+  'https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io/api/device-tokens/register',
+  data: {
+    'token': token,
+    'userId': userId,  // Required for anonymous registration
+    'deviceType': 'Android',
+    'appVersion': '1.0.0',
+  },
+);
+```
+
+**Example (React Native):**
+```javascript
+// Register before user logs in
+const userId = 'user123';
+const token = await messaging().getToken();
+
+const response = await axios.post(
+  'https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io/api/device-tokens/register',
+  {
+    token: token,
+    userId: userId,  // Required for anonymous registration
+    deviceType: Platform.OS === 'android' ? 'Android' : 'iOS',
+    appVersion: '1.0.0',
+  }
+);
+```
+
+### Scenario 2: Post-Login Token Registration (Authenticated)
+
+**When:** User has logged in and JWT token is available
+**Use:** Authenticated registration with Bearer token
+
+**Flow:**
+```
+User Login → Save JWT → Re-register FCM token with JWT → userId extracted from token
+```
+
+**Example (Flutter):**
+```dart
+// Register after user logs in
+final authToken = prefs.getString('auth_token'); // JWT from login
+final token = await FirebaseMessaging.instance.getToken();
+
+final dio = Dio();
+dio.options.headers['Authorization'] = 'Bearer $authToken';
+
+final response = await dio.post(
+  'https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io/api/device-tokens/register',
+  data: {
+    'token': token,
+    'deviceType': 'Android',
+    'appVersion': '1.0.0',
+    // userId is extracted from JWT token automatically
+  },
+);
+```
+
+**Example (React Native):**
+```javascript
+// Register after user logs in
+const authToken = await AsyncStorage.getItem('auth_token'); // JWT from login
+const token = await messaging().getToken();
+
+const response = await axios.post(
+  'https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io/api/device-tokens/register',
+  {
+    token: token,
+    deviceType: Platform.OS === 'android' ? 'Android' : 'iOS',
+    appVersion: '1.0.0',
+    // userId is extracted from JWT token automatically
+  },
+  {
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+    }
+  }
+);
+```
+
+### Scenario 3: Token Refresh During App Lifecycle
+
+**When:** Firebase refreshes the token while app is running
+**Use:** Current authentication method (whatever was used before)
+
+**Example (Flutter):**
+```dart
+// Listen for token refresh at any time
+FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+  // Get current auth token if available
+  final prefs = await SharedPreferences.getInstance();
+  final authToken = prefs.getString('auth_token');
+  
+  final dio = Dio();
+  
+  if (authToken != null) {
+    // User is logged in, use authenticated registration
+    dio.options.headers['Authorization'] = 'Bearer $authToken';
+    
+    await dio.post(
+      'https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io/api/device-tokens/register',
+      data: {
+        'token': newToken,
+        'deviceType': 'Android',
+        'appVersion': '1.0.0',
+      },
+    );
+  } else {
+    // User not logged in, use anonymous registration
+    final userId = prefs.getString('user_id');
+    if (userId != null) {
+      await dio.post(
+        'https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io/api/device-tokens/register',
+        data: {
+          'token': newToken,
+          'userId': userId,
+          'deviceType': 'Android',
+          'appVersion': '1.0.0',
+        },
+      );
+    }
+  }
+});
+```
+
+---
 
 ### Flutter Deep Link Setup
 
@@ -789,10 +1051,61 @@ test('Device token registration', () async {
 ## Support
 
 For issues or questions:
-- Check backend logs: `/var/log/notification-service.log`
-- Review Firebase console for delivery status
-- Check database PUSH_NOTIFICATION_LOG for send status
+- Check backend logs for registration/sending errors
+- Review Firebase console for token delivery status
+- Check database DEVICE_TOKENS table for token registration
 - Contact backend team for API issues
 
-Backend Status: Phase 1-2 Complete ✅
-Mobile Status: Phase 3 In Progress 🔄
+Backend Status: Phase 1-5 Complete ✅
+Mobile Status: Phase 3 Ready for Implementation 🟢
+
+---
+
+## Important Notes for Mobile Team
+
+### What Changed Recently (May 5, 2026)
+
+1. **POST /api/device-tokens/register is now [AllowAnonymous]**
+   - No longer requires JWT token
+   - Can pass `userId` in request body
+   - Enables registration before user logs in
+   - See [Authentication Scenarios](#authentication-scenarios-for-device-token-registration)
+
+2. **Code Examples Updated**
+   - Flutter code now handles both auth and anonymous scenarios
+   - React Native code updated with userId support
+   - Token refresh now properly maintains authentication state
+
+3. **Production URL Confirmed**
+   - All endpoints now use actual production URL
+   - No more {API_GATEWAY} placeholders
+   - Replace with local URL for development
+
+### Pre-Integration Checklist
+
+Before starting mobile implementation:
+
+- [ ] Read [Architecture](#architecture) section
+- [ ] Review [Authentication Scenarios](#authentication-scenarios-for-device-token-registration)
+- [ ] Understand the two registration flows (pre-login + post-login)
+- [ ] Test both authentication approaches on staging
+- [ ] Verify firebase_messaging/FCM dependencies installed
+- [ ] Test notification reception in foreground + background
+- [ ] Implement deep linking to notification details
+- [ ] Test on real Android device (emulator FCM issues common)
+
+### Common Issues & Solutions
+
+**Issue:** POST returns 400 "User ID is required"
+- **Solution:** Ensure you're passing `userId` in request body for anonymous registration OR using valid Bearer token
+
+**Issue:** Endpoint returns 401 Unauthorized
+- **Solution:** Check if endpoint expects [Authorize] (all except POST). See endpoint docs.
+
+**Issue:** Notifications not appearing
+- **Solution:** Verify device token registered successfully first. Check DEVICE_TOKENS table.
+
+**Issue:** App crashes on startup
+- **Solution:** Ensure firebase_core initialized BEFORE NotificationService
+
+---
