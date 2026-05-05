@@ -128,6 +128,14 @@ builder.Services.AddScoped<FavoriteAggregationService>();
 builder.Services.AddScoped<CommentReplyAggregationService>();
 builder.Services.AddScoped<PostReportAggregationService>();
 
+// FCM Services Registration
+builder.Services.AddScoped<IDeviceTokenService, DeviceTokenService>();
+builder.Services.AddScoped<IFcmService, FcmService>();
+builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
+builder.Services.AddScoped<FcmRetryService>();
+builder.Services.AddScoped<FcmAnalyticsService>();
+builder.Services.AddScoped<NotificationPublishingService>();
+
 builder.Services.AddHostedService<RabbitMQConsumer>();
 builder.Services.AddHostedService<AggregationFlushService>();
 

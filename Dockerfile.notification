@@ -1,0 +1,47 @@
+# Multi-stage build for Notification Service
+
+# Stage 1: Build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+
+WORKDIR /src
+
+# Copy Notification service project files
+COPY src/Services/Notification/ ./Notification/
+
+WORKDIR /src/Notification
+
+# Restore and build
+RUN dotnet restore Notification.API/Notification.API.csproj
+
+RUN dotnet build Notification.API/Notification.API.csproj -c Release --no-restore
+
+# Publish
+RUN dotnet publish Notification.API/Notification.API.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-build
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
+WORKDIR /app
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Copy published application
+COPY --from=builder /app/publish .
+
+# Create non-root user
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose port
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost/health || exit 1
+
+# Entry point
+ENTRYPOINT ["dotnet", "Notification.API.dll"]
