@@ -3,12 +3,12 @@
 # Stage 1: Build
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
 
-WORKDIR /src
+WORKDIR /build
 
-# Copy Notification service project files
-COPY src/Services/Notification/ ./Notification/
+# Copy entire src structure to match project reference paths
+COPY src/ ./
 
-WORKDIR /src/Notification
+WORKDIR /build/Services/Notification
 
 # Restore and build
 RUN dotnet restore Notification.API/Notification.API.csproj
