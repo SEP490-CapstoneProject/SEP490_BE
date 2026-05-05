@@ -386,6 +386,8 @@ public class PortfolioService : IPortfolioService
                 PostType = "Portfolio",
                 Title = "Your portfolio was rejected",
                 Content = $"Your portfolio was rejected. Reason: {portfolio.ModerationReason}",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
                 CreatedAt = VietnamTime.Now()
             };
 
@@ -423,6 +425,8 @@ public class PortfolioService : IPortfolioService
                 PostType = "Portfolio",
                 Title = "Your portfolio is under review",
                 Content = $"Your portfolio is pending manual review. Reason: {portfolio.ModerationReason}",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
                 CreatedAt = VietnamTime.Now()
             };
 
@@ -460,6 +464,8 @@ public class PortfolioService : IPortfolioService
                 PostType = "Portfolio",
                 Title = "Your portfolio has been approved",
                 Content = "Your portfolio has been approved and is now live.",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
                 CreatedAt = VietnamTime.Now()
             };
 

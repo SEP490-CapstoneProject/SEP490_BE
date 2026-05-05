@@ -16,11 +16,24 @@ public static class AiServiceCollectionExtensions
         services.AddScoped<IMatchingEngine, MatchingEngine>();
         services.AddScoped<ModerationService>();
 
-        services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>(client =>
+        var embeddingProvider = configuration["EmbeddingProvider"] ?? "OpenAI";
+
+        if (embeddingProvider.Equals("GoogleAI", StringComparison.OrdinalIgnoreCase))
         {
-            client.BaseAddress = new Uri(configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com");
-            client.Timeout = TimeSpan.FromSeconds(15);
-        });
+            services.AddHttpClient<IEmbeddingService, GoogleAiEmbeddingService>(client =>
+            {
+                client.BaseAddress = new Uri(configuration["GoogleAI:BaseUrl"] ?? "https://generativelanguage.googleapis.com");
+                client.Timeout = TimeSpan.FromSeconds(15);
+            });
+        }
+        else
+        {
+            services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>(client =>
+            {
+                client.BaseAddress = new Uri(configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com");
+                client.Timeout = TimeSpan.FromSeconds(15);
+            });
+        }
 
         return services;
     }

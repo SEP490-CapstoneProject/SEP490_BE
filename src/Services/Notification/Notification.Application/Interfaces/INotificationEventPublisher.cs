@@ -1,6 +1,6 @@
 using Notification.Application.DTOs;
 
-namespace Notification.Infrastructure.Messaging;
+namespace Notification.Application.Interfaces;
 
 public interface INotificationEventPublisher
 {
