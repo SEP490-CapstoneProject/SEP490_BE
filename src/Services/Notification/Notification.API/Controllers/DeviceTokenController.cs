@@ -26,6 +26,11 @@ public class DeviceTokenController : ControllerBase
         ?? User.FindFirst("nameid")?.Value
         ?? throw new UnauthorizedAccessException("User ID not found in token");
 
+    private string? TryGetUserIdFromClaims() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? User.FindFirst("sub")?.Value
+        ?? User.FindFirst("nameid")?.Value;
+
     /// <summary>Register a device token for push notifications</summary>
     /// <remarks>
     /// Mobile app calls this endpoint to register its FCM device token.
@@ -35,7 +40,17 @@ public class DeviceTokenController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> RegisterToken([FromBody] RegisterDeviceTokenRequest request)
     {
-        var userId = GetUserId();
+        // Try to get userId from JWT token first, otherwise use userId from request
+        var userId = TryGetUserIdFromClaims();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            userId = request.UserId;
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest(new { error = "User ID is required (either from token or in request body)" });
+        }
 
         if (string.IsNullOrWhiteSpace(request.Token))
         {
@@ -159,6 +174,7 @@ public class DeviceTokenController : ControllerBase
 
 public class RegisterDeviceTokenRequest
 {
+    public string? UserId { get; set; }
     public string Token { get; set; } = "";
     public string? DeviceType { get; set; } // "Android" or "iOS"
     public string? AppVersion { get; set; }
