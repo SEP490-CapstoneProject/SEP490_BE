@@ -2,6 +2,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS base
 WORKDIR /app
 EXPOSE 8080
 
+# Install required libraries for Alpine (fixes globalization issue)
+RUN apk add --no-cache icu-libs
+
 # Create non-root user for security
 RUN addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser
@@ -54,6 +57,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Set environment
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_URLS=http://+:8080 \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 
 ENTRYPOINT ["dotnet", "Notification.API.dll"]
