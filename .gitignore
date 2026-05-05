@@ -126,7 +126,6 @@ ServiceFabricBackup/
 *.VisualState.xml
 TestResult.xml
 *.odx.cs
-*.md
 *.ps1
 *.txt
 *.sql

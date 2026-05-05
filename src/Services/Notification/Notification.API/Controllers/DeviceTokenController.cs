@@ -31,6 +31,7 @@ public class DeviceTokenController : ControllerBase
     /// Mobile app calls this endpoint to register its FCM device token.
     /// When the token is refreshed by Firebase, this endpoint should be called again with the new token.
     /// </remarks>
+    [AllowAnonymous]
     [HttpPost("register")]
     public async Task<IActionResult> RegisterToken([FromBody] RegisterDeviceTokenRequest request)
     {
