@@ -24,6 +24,12 @@ public sealed class CompanyEmbeddingBackfillWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.Enabled)
+        {
+            _logger.LogInformation("Company embedding backfill is disabled");
+            return;
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
