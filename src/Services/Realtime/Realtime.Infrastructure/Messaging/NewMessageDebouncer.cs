@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using Realtime.Application.Clients;
 using Realtime.Application.Interfaces;
 using RecruitmentPlatform.Contracts.Realtime;
 
@@ -11,6 +12,8 @@ namespace Realtime.Infrastructure.Messaging;
 /// 
 /// Ví dụ: Room A gửi 2 tin, Room B gửi 3 tin trong 2 giây
 ///   → Push 1 lần: { toUserId: X, totalNewMessages: 5 }
+/// 
+/// Then sends FCM push notification for offline delivery.
 /// </summary>
 public sealed class NewMessageDebouncer : IDisposable
 {
@@ -26,12 +29,17 @@ public sealed class NewMessageDebouncer : IDisposable
     private static readonly TimeSpan DebounceWindow = TimeSpan.FromSeconds(2);
 
     private readonly IRealtimePushService _pushService;
+    private readonly INotificationServiceClient? _notificationClient;
     private readonly ILogger<NewMessageDebouncer> _logger;
     private readonly ConcurrentDictionary<int, PendingBatch> _pending = new();
 
-    public NewMessageDebouncer(IRealtimePushService pushService, ILogger<NewMessageDebouncer> logger)
+    public NewMessageDebouncer(
+        IRealtimePushService pushService,
+        INotificationServiceClient? notificationClient,
+        ILogger<NewMessageDebouncer> logger)
     {
         _pushService = pushService;
+        _notificationClient = notificationClient;
         _logger      = logger;
     }
 
@@ -81,7 +89,24 @@ public sealed class NewMessageDebouncer : IDisposable
             "Debouncer: push {Total} new message(s) to user {ToUserId}",
             batch.TotalCount, toUserId);
 
+        // Send realtime push notification (SignalR)
         _ = _pushService.PushNewMessageNotificationAsync(toUserId, batch.TotalCount);
+
+        // Send FCM push notification for offline delivery
+        if (_notificationClient != null)
+        {
+            _ = _notificationClient.SendAggregatedMessageNotificationAsync(toUserId, batch.TotalCount)
+                .ContinueWith(task =>
+                {
+                    if (task.IsFaulted)
+                    {
+                        _logger.LogError(
+                            task.Exception,
+                            "Error sending FCM notification to user {ToUserId}",
+                            toUserId);
+                    }
+                });
+        }
     }
 
     public void Dispose()
