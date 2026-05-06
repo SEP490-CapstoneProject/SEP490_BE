@@ -188,4 +188,14 @@ public class ConnectionRepository : IConnectionRepository
 
         return conn == null ? (0, null) : (conn.Id, conn.Status);
     }
+
+    public async Task<string?> GetConnectionStatusByIdAsync(int connectionId)
+    {
+        var status = await _context.Connections
+            .Where(c => c.Id == connectionId)
+            .Select(c => c.Status)
+            .FirstOrDefaultAsync();
+
+        return status;
+    }
 }

@@ -22,4 +22,5 @@ public interface IConnectionService
     Task<IEnumerable<(int Id, int UserIdFrom, int UserIdTo)>> GetRoomUsersAsync(int roomId);
     Task<int> GetUnreadMessageCountAsync(int roomId, int userId);
     Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2);
+    Task<string?> GetConnectionStatusByIdAsync(int connectionId);
 }
