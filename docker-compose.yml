@@ -345,9 +345,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=${SQLSERVER_PASSWORD:-YourStrong@Passw0rd};TrustServerCertificate=True;
-      - Jwt__Secret=${JWT_SECRET:-your-256-bit-secret-key-here-must-be-at-least-32-characters-long}
-      - Jwt__Issuer=${JWT_ISSUER:-skillsnap-api}
-      - Jwt__Audience=${JWT_AUDIENCE:-skillsnap-client}
+      - JwtSettings__Secret=${JWT_SECRET:-YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456}
+      - JwtSettings__Issuer=${JWT_ISSUER:-RecruitmentPlatform}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-RecruitmentPlatformUsers}
       - RabbitMQ__Host=${RABBITMQ_HOST:-rabbitmq}
       - RabbitMQ__Port=${RABBITMQ_PORT:-5672}
       - RabbitMQ__Username=${RABBITMQ_USERNAME:-guest}

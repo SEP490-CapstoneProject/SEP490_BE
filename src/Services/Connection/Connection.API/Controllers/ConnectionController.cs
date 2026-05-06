@@ -180,6 +180,24 @@ public class ConnectionController : ControllerBase
         return Ok(new { connectionId, status });
     }
 
+    /// <summary>
+    /// Lấy trạng thái connection theo connectionId.
+    /// STORED trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
+    /// Trả về 404 nếu không tìm thấy connection.
+    /// </summary>
+    [HttpGet("{connectionId}/status")]
+    public async Task<IActionResult> GetConnectionStatusById(int connectionId)
+    {
+        if (connectionId <= 0)
+            return BadRequest(new { error = "connectionId must be greater than 0" });
+
+        var status = await _service.GetConnectionStatusByIdAsync(connectionId);
+        if (status == null)
+            return NotFound(new { error = $"Connection {connectionId} not found" });
+
+        return Ok(new { connectionId, status });
+    }
+
     [HttpGet("rooms/summary/{userId}")]
     public async Task<IActionResult> GetRoomSummaries(int userId)
     {
