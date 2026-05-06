@@ -122,7 +122,7 @@ builder.Services.AddHostedService<ReconciliationService>();
 if (!builder.Environment.IsDevelopment())
 {
     builder.Configuration.ValidateRequiredSecrets(
-        "Jwt:Secret",
+        "JwtSettings:Secret",
         "PayOS:ClientId",
         "PayOS:ApiKey",
         "PayOS:ChecksumKey"
@@ -130,7 +130,7 @@ if (!builder.Environment.IsDevelopment())
 }
 
 // JWT Authentication
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
+var jwtSecret = builder.Configuration["JwtSettings:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -140,8 +140,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+            ValidAudience = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
     });

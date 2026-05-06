@@ -163,4 +163,21 @@ public class ConnectionService : IConnectionService
     {
         return await _repo.GetConnectionStatusByUsersAsync(userId1, userId2);
     }
+
+    /// <summary>
+    /// Lấy status của connection theo connectionId.
+    /// STORED trả về "0", các status khác trả về tên string (PENDING/MATCHED/BLOCK).
+    /// Trả về null nếu không tìm thấy connection.
+    /// </summary>
+    public async Task<string?> GetConnectionStatusByIdAsync(int connectionId)
+    {
+        var status = await _repo.GetConnectionStatusByIdAsync(connectionId);
+        if (status == null) return null;
+
+        if (status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString(),
+                System.StringComparison.OrdinalIgnoreCase))
+            return "0";
+
+        return status;
+    }
 }
