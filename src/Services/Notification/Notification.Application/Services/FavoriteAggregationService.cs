@@ -47,6 +47,7 @@ public class FavoriteAggregationService
             {
                 data.Count++;
                 data.LastAt = GetVietnamTime();
+                data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
                 await _cache.SetStringAsync(key, JsonSerializer.Serialize(data), 
                     new DistributedCacheEntryOptions 

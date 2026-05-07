@@ -13,8 +13,17 @@ public class CommentReplyAggregationService
     public CommentReplyAggregationService(IDistributedCache cache, IConfiguration configuration)
     {
         _cache = cache;
-        var windowMinutes = configuration.GetValue<int?>("CommentReplyAggregation:WindowMinutes") ?? 3;
-        _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        // Sliding window: prefer seconds (new) over minutes (legacy)
+        var windowSeconds = configuration.GetValue<int?>("CommentReplyAggregation:WindowSeconds");
+        if (windowSeconds.HasValue)
+        {
+            _aggregationWindow = TimeSpan.FromSeconds(windowSeconds.Value);
+        }
+        else
+        {
+            var windowMinutes = configuration.GetValue<int?>("CommentReplyAggregation:WindowMinutes") ?? 3;
+            _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        }
         _cacheTtl = _aggregationWindow + TimeSpan.FromSeconds(90);
     }
 
@@ -36,6 +45,7 @@ public class CommentReplyAggregationService
             {
                 data.Count++;
                 data.LastAt = GetVietnamTime();
+                data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
                 await _cache.SetStringAsync(
                     key,

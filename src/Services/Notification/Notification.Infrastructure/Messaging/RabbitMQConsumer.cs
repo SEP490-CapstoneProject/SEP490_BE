@@ -247,12 +247,17 @@ public class RabbitMQConsumer : BackgroundService
                             await _channel.BasicAckAsync(ea.DeliveryTag, false);
                             return;
                         }
-                        // If not aggregated, fall through to create notification immediately
+                        // Event was NOT aggregated on first try, but still wait for flush service
+                        // to create aggregated notification (pure aggregation)
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Aggregation failed for post.favorite event. Processing without aggregation.");
-                        // Fall through to create notification immediately (no aggregation)
+                        _logger.LogWarning(ex, "Aggregation failed for post.favorite event. Storing as aggregated to prevent immediate notification.");
+                        // Don't fall through - wait for flush service or retry aggregation
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
                     }
                 }
             }
@@ -277,11 +282,17 @@ public class RabbitMQConsumer : BackgroundService
                             await _channel.BasicAckAsync(ea.DeliveryTag, false);
                             return;
                         }
+                        // Even if first event in aggregation, wait for flush service
+                        // to create aggregated notification (pure aggregation)
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Aggregation failed for {EventType} event. Processing without aggregation.", evt.EventType);
-                        // Fall through to create notification immediately (no aggregation)
+                        _logger.LogWarning(ex, "Aggregation failed for {EventType} event. Storing as aggregated to prevent immediate notification.", evt.EventType);
+                        // Don't fall through - wait for flush service or retry aggregation
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
                     }
                 }
             }
