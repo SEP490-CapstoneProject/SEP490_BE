@@ -13,8 +13,17 @@ public class PostReportAggregationService
     public PostReportAggregationService(IDistributedCache cache, IConfiguration configuration)
     {
         _cache = cache;
-        var windowMinutes = configuration.GetValue<int?>("PostReportAggregation:WindowMinutes") ?? 10;
-        _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        // Sliding window: prefer seconds (new) over minutes (legacy)
+        var windowSeconds = configuration.GetValue<int?>("PostReportAggregation:WindowSeconds");
+        if (windowSeconds.HasValue)
+        {
+            _aggregationWindow = TimeSpan.FromSeconds(windowSeconds.Value);
+        }
+        else
+        {
+            var windowMinutes = configuration.GetValue<int?>("PostReportAggregation:WindowMinutes") ?? 10;
+            _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        }
         _cacheTtl = _aggregationWindow + TimeSpan.FromSeconds(90);
     }
 
@@ -30,6 +39,7 @@ public class PostReportAggregationService
             {
                 data.AdditionalCount++;
                 data.LastAt = GetVietnamTime();
+                data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
                 await _cache.SetStringAsync(
                     key,
