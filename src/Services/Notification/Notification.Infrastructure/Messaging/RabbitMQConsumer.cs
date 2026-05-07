@@ -51,6 +51,10 @@ public class RabbitMQConsumer : BackgroundService
         "portfolio.approved",
         "portfolio.pending.review"
     };
+    
+    // Fallback in-memory cache when Redis fails - maps EventId → processed timestamp
+    private static readonly Dictionary<string, DateTime> ProcessedEvents = new();
+    private static readonly object ProcessedEventsLock = new object();
 
     public RabbitMQConsumer(
         IServiceScopeFactory scopeFactory,
@@ -209,25 +213,17 @@ public class RabbitMQConsumer : BackgroundService
             var cache = scope.ServiceProvider.GetService<IDistributedCache>();
 
             // CRITICAL: Idempotency check BEFORE aggregation - ensures all notification types are protected
-            // This prevents duplicates even if Redis fails or events are redelivered
-            if (!string.IsNullOrWhiteSpace(evt.EventId) && cache != null)
+            // Supports both Redis (primary) and in-memory fallback (if Redis unavailable)
+            if (!string.IsNullOrWhiteSpace(evt.EventId))
             {
-                var idempotencyKey = $"notification-event:{evt.EventId}";
-                var existingEntry = await cache.GetStringAsync(idempotencyKey);
-                if (existingEntry != null)
+                var isDuplicate = await CheckAndMarkIdempotencyAsync(evt.EventId, cache);
+                if (isDuplicate)
                 {
                     _logger.LogDebug("Skipped duplicate notification event: EventId={EventId}, EventType={EventType}", 
                         evt.EventId, evt.EventType);
                     await _channel.BasicAckAsync(ea.DeliveryTag, false);
                     return;
                 }
-
-                // Mark this EventId as processed for 24 hours
-                await cache.SetStringAsync(idempotencyKey, "processed", 
-                    new DistributedCacheEntryOptions 
-                    { 
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) 
-                    });
             }
 
             // Check if this is a post.favorite event for aggregation
@@ -484,6 +480,73 @@ public class RabbitMQConsumer : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending FCM push notification for notification {NotificationId}", notification.Id);
+        }
+    }
+
+    private async Task<bool> CheckAndMarkIdempotencyAsync(string eventId, IDistributedCache? cache)
+    {
+        var idempotencyKey = $"notification-event:{eventId}";
+        
+        // Try Redis first (primary cache)
+        if (cache != null)
+        {
+            try
+            {
+                var existingEntry = await cache.GetStringAsync(idempotencyKey);
+                if (existingEntry != null)
+                {
+                    return true; // Duplicate found in Redis
+                }
+
+                // Mark as processed for 24 hours
+                await cache.SetStringAsync(idempotencyKey, "processed", 
+                    new DistributedCacheEntryOptions 
+                    { 
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) 
+                    });
+                return false; // Not a duplicate, marked in Redis
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Redis idempotency check failed for EventId={EventId}. Falling back to in-memory cache.", eventId);
+                // Fall through to in-memory fallback
+            }
+        }
+
+        // Fallback: Use in-memory cache when Redis is unavailable
+        lock (ProcessedEventsLock)
+        {
+            if (ProcessedEvents.TryGetValue(eventId, out var timestamp))
+            {
+                // Check if still within 24-hour window
+                if (DateTime.UtcNow - timestamp < TimeSpan.FromHours(24))
+                {
+                    return true; // Duplicate found in in-memory cache
+                }
+                else
+                {
+                    ProcessedEvents.Remove(eventId); // Cleanup expired entry
+                }
+            }
+
+            // Mark as processed
+            ProcessedEvents[eventId] = DateTime.UtcNow;
+            
+            // Cleanup entries older than 24 hours periodically
+            if (ProcessedEvents.Count > 10000)
+            {
+                var cutoff = DateTime.UtcNow.AddHours(-24);
+                var expiredKeys = ProcessedEvents
+                    .Where(kvp => kvp.Value < cutoff)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var key in expiredKeys)
+                {
+                    ProcessedEvents.Remove(key);
+                }
+            }
+
+            return false; // Not a duplicate, marked in in-memory cache
         }
     }
 
