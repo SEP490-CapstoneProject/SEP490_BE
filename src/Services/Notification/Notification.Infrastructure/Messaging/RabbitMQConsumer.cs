@@ -232,20 +232,28 @@ public class RabbitMQConsumer : BackgroundService
                 var aggregationService = scope.ServiceProvider.GetService<FavoriteAggregationService>();
                 if (aggregationService != null)
                 {
-                    var actorName = ExtractActorNameFromContent(evt.Content);
-                    var isAggregated = await aggregationService.TryAggregateAsync(
-                        int.Parse(evt.ObjectId ?? "0"), 
-                        evt.UserId, 
-                        evt.ActorId ?? "", 
-                        actorName);
-
-                    if (isAggregated)
+                    try
                     {
-                        // Event was aggregated, don't create notification yet
-                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
-                        return;
+                        var actorName = ExtractActorNameFromContent(evt.Content);
+                        var isAggregated = await aggregationService.TryAggregateAsync(
+                            int.Parse(evt.ObjectId ?? "0"), 
+                            evt.UserId, 
+                            evt.ActorId ?? "", 
+                            actorName);
+
+                        if (isAggregated)
+                        {
+                            // Event was aggregated, don't create notification yet
+                            await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                            return;
+                        }
+                        // If not aggregated, fall through to create notification immediately
                     }
-                    // If not aggregated, fall through to create notification immediately
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Aggregation failed for post.favorite event. Processing without aggregation.");
+                        // Fall through to create notification immediately (no aggregation)
+                    }
                 }
             }
             else if (evt.EventType == "post.comment.created" || evt.EventType == "post.reply.created")
@@ -253,19 +261,27 @@ public class RabbitMQConsumer : BackgroundService
                 var aggregationService = scope.ServiceProvider.GetService<CommentReplyAggregationService>();
                 if (aggregationService != null && !string.IsNullOrWhiteSpace(evt.ActorId))
                 {
-                    var actorName = !string.IsNullOrWhiteSpace(evt.Author?.Name) ? evt.Author.Name : "Ai đó";
-                    var objectId = string.IsNullOrWhiteSpace(evt.ObjectId) ? "0" : evt.ObjectId;
-                    var isAggregated = await aggregationService.TryAggregateAsync(
-                        evt.EventType,
-                        objectId,
-                        evt.UserId,
-                        evt.ActorId,
-                        actorName);
-
-                    if (isAggregated)
+                    try
                     {
-                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
-                        return;
+                        var actorName = !string.IsNullOrWhiteSpace(evt.Author?.Name) ? evt.Author.Name : "Ai đó";
+                        var objectId = string.IsNullOrWhiteSpace(evt.ObjectId) ? "0" : evt.ObjectId;
+                        var isAggregated = await aggregationService.TryAggregateAsync(
+                            evt.EventType,
+                            objectId,
+                            evt.UserId,
+                            evt.ActorId,
+                            actorName);
+
+                        if (isAggregated)
+                        {
+                            await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Aggregation failed for {EventType} event. Processing without aggregation.", evt.EventType);
+                        // Fall through to create notification immediately (no aggregation)
                     }
                 }
             }
