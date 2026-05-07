@@ -119,13 +119,12 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
-            var rawData = await db.HashGetAsync(key, "data");
+            var rawData = await db.StringGetAsync(key);
             if (!rawData.HasValue) return;
 
-            var bytes = (byte[]?)rawData;
-            if (bytes == null || bytes.Length == 0) return;
+            var json = rawData.ToString();
+            if (string.IsNullOrWhiteSpace(json)) return;
 
-            var json = Encoding.UTF8.GetString(bytes);
             var data = JsonSerializer.Deserialize<AggregationData>(json);
             if (data == null) return;
 
@@ -147,13 +146,12 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
-            var rawData = await db.HashGetAsync(key, "data");
+            var rawData = await db.StringGetAsync(key);
             if (!rawData.HasValue) return;
 
-            var bytes = (byte[]?)rawData;
-            if (bytes == null || bytes.Length == 0) return;
+            var json = rawData.ToString();
+            if (string.IsNullOrWhiteSpace(json)) return;
 
-            var json = Encoding.UTF8.GetString(bytes);
             var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
             if (data == null) return;
 
@@ -175,13 +173,12 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
-            var rawData = await db.HashGetAsync(key, "data");
+            var rawData = await db.StringGetAsync(key);
             if (!rawData.HasValue) return;
 
-            var bytes = (byte[]?)rawData;
-            if (bytes == null || bytes.Length == 0) return;
+            var json = rawData.ToString();
+            if (string.IsNullOrWhiteSpace(json)) return;
 
-            var json = Encoding.UTF8.GetString(bytes);
             var data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
             if (data == null) return;
 
@@ -222,6 +219,8 @@ public class AggregationFlushService : BackgroundService
             Type = "POST_FAVORITE",
             ObjectId = data.PostId.ToString(),
             ActorId = data.Count == 1 ? data.FirstActorId : null,
+            ActorName = data.Count == 1 ? data.FirstActorName : null,
+            ActorAvatar = null,
             ActorType = data.Count == 1 ? "USER" : "SYSTEM",
             CreatedAt = GetVietnamTime(),
             IsRead = false
@@ -253,6 +252,8 @@ public class AggregationFlushService : BackgroundService
             Type = "COMMUNITY",
             ObjectId = data.ObjectId,
             ActorId = data.Count == 1 ? data.FirstActorId : null,
+            ActorName = data.Count == 1 ? data.FirstActorName : null,
+            ActorAvatar = null,
             ActorType = data.Count == 1 ? "USER" : "SYSTEM",
             CreatedAt = GetVietnamTime(),
             IsRead = false
