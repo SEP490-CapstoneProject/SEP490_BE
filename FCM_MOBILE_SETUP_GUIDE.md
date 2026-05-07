@@ -4,13 +4,20 @@
 
 This guide provides step-by-step instructions for integrating Firebase Cloud Messaging (FCM) into the mobile app. The backend has implemented dual-channel notifications: real-time (SignalR) when app is online and push notifications (FCM) when app is offline.
 
-**Status:** Backend Phase 1-5 complete and production ready. Mobile team implements Phase 3 (mobile integration).
+**Status:** Backend Phase 1-5 complete and production ready. Chat FCM implemented (May 5, 2026). Mobile team implements Phase 3 (mobile integration).
 
-**Last Updated:** 2026-05-05 (Post-cleanup and stability verification)
-**Service Status:** ✅ All 4 FCM endpoints working
+**Last Updated:** 2026-05-05 (Chat message FCM support added)
+**Service Status:** ✅ All FCM endpoints working + Chat messaging enabled
 **Current Production URL:** https://notification-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io
 
 ### 📝 Recent Updates to This Guide
+
+**NEW:** Chat Message FCM Notifications Implemented (May 5, 2026)
+- Chat messages now sent via push notification when app closed
+- Message batching: Multiple messages → Single notification
+- Deep linking to chat rooms included
+- See [Chat Message Notifications](#-chat-message-notifications-new--may-2026) section
+- Mobile: Just add chat message handlers, no setup changes needed!
 
 **NEW:** Endpoint now supports **anonymous device token registration** without JWT
 - Can register tokens before user logs in
@@ -41,6 +48,237 @@ Mobile App
     ├─ Display notification in tray
     └─ Handle user tap (deep link to details)
 ```
+
+---
+
+## 🆕 Chat Message Notifications (NEW - May 2026)
+
+### Overview
+
+As of May 5, 2026, the backend now sends **Firebase Cloud Messaging (FCM) push notifications for chat messages** when the app is closed. This complements the existing real-time SignalR delivery for when the app is online.
+
+**Key Features:**
+- ✅ Chat messages delivered even when app is closed
+- ✅ No message loss - messages arrive via push notification
+- ✅ Automatic message batching: Multiple messages within 2 seconds → Single notification
+- ✅ Deep linking: Tapping notification opens correct chat room
+- ✅ **NO CODE CHANGES NEEDED** - Just add notification handlers!
+
+### How It Works
+
+1. **Message Sent:** User A sends message to User B
+2. **Backend Processing:** Message batched with others (2-second window)
+3. **Dual Delivery:**
+   - If app is OPEN → SignalR realtime delivery (instant)
+   - If app is CLOSED → FCM push notification (offline)
+4. **User Receives:** Push notification in notification tray (even if app closed)
+5. **User Action:** Tapping notification opens app to correct chat room
+
+### Message Batching
+
+The backend intelligently batches messages for each recipient within a 2-second window:
+
+- **1 message:** Push shows sender name
+  - Title: "Message from John Doe"
+  - Body: "How are you?"
+
+- **3-5 messages:** Aggregated notification
+  - Title: "New Messages"
+  - Body: "You have 3 new messages"
+
+- **5+ messages:** Single aggregated notification
+  - Title: "New Messages"
+  - Body: "You have 8 new messages"
+
+**Benefit:** Reduces notification spam while ensuring messages aren't missed.
+
+### Notification Types
+
+#### Type 1: Aggregated Message Notification
+Sent for multiple messages within the 2-second window:
+
+```json
+{
+  "notification": {
+    "title": "New Messages",
+    "body": "You have 3 new messages"
+  },
+  "data": {
+    "type": "aggregated_messages",
+    "messageCount": "3",
+    "deepLink": "app://chat"
+  }
+}
+```
+
+#### Type 2: Single Message Notification
+Sent for the first message or when appropriate:
+
+```json
+{
+  "notification": {
+    "title": "Message from John Doe",
+    "body": "Hey, how are you?"
+  },
+  "data": {
+    "type": "chat_message",
+    "messageId": "123",
+    "roomId": "45",
+    "senderName": "John Doe",
+    "deepLink": "app://chat/45"
+  }
+}
+```
+
+### Mobile Implementation Requirements
+
+#### For Flutter
+Add handlers for chat notification types:
+
+```dart
+static Future<void> _handleForegroundMessage(RemoteMessage message) async {
+  final messageType = message.data['type'];
+  
+  // Handle aggregated notifications
+  if (messageType == 'aggregated_messages') {
+    int count = int.parse(message.data['messageCount'] ?? '1');
+    print('Received $count new messages');
+    // Navigate to chat list
+    _navigateToChatList();
+  }
+  
+  // Handle single message notifications
+  if (messageType == 'chat_message') {
+    String roomId = message.data['roomId'] ?? '';
+    String senderName = message.data['senderName'] ?? '';
+    print('Message from $senderName in room $roomId');
+    // Navigate to specific chat room
+    _navigateToChatRoom(roomId: int.parse(roomId));
+  }
+  
+  // Existing notification display code...
+}
+
+static Future<void> _handleNotificationTap(NotificationResponse response) async {
+  final deepLink = response.payload;
+  
+  if (deepLink != null && deepLink.contains('app://chat')) {
+    // Extract room ID from deep link (e.g., "app://chat/45" → "45")
+    if (deepLink.contains('app://chat/')) {
+      final roomId = deepLink.split('/').last;
+      _navigateToChatRoom(roomId: int.parse(roomId));
+    } else {
+      // Navigate to chat list
+      _navigateToChatList();
+    }
+  }
+}
+```
+
+#### For React Native
+Add handlers for chat notification types:
+
+```javascript
+async function handleForegroundMessage(remoteMessage) {
+  const messageType = remoteMessage.data?.type;
+  
+  // Handle aggregated notifications
+  if (messageType === 'aggregated_messages') {
+    const count = parseInt(remoteMessage.data?.messageCount ?? '1');
+    console.log(`Received ${count} new messages`);
+    // Navigate to chat list
+    navigateToChatList();
+  }
+  
+  // Handle single message notifications
+  if (messageType === 'chat_message') {
+    const roomId = remoteMessage.data?.roomId ?? '';
+    const senderName = remoteMessage.data?.senderName ?? '';
+    console.log(`Message from ${senderName} in room ${roomId}`);
+    // Navigate to specific chat room
+    navigateToChatRoom({ roomId: parseInt(roomId) });
+  }
+  
+  // Existing notification display code...
+}
+
+async function handleNotificationTap(remoteMessage) {
+  const deepLink = remoteMessage.data?.deepLink;
+  
+  if (deepLink?.includes('app://chat')) {
+    // Extract room ID from deep link
+    if (deepLink.includes('app://chat/')) {
+      const roomId = deepLink.split('/').pop();
+      navigateToChatRoom({ roomId: parseInt(roomId) });
+    } else {
+      // Navigate to chat list
+      navigateToChatList();
+    }
+  }
+}
+```
+
+### Testing Chat Notifications
+
+#### Test 1: Single Message
+1. Register device token from mobile app
+2. Send 1 message to this user from another device
+3. Close the receiving app
+4. Send the message
+5. **Expected:** Push notification appears with sender name
+6. **Action:** Tap notification
+7. **Expected:** App opens directly to chat with sender
+
+#### Test 2: Message Batching
+1. Close the receiving app
+2. Send 5 messages from another device within 2 seconds
+3. **Expected:** Single push notification appears (not 5!)
+   - Title: "New Messages"
+   - Body: "You have 5 new messages"
+4. **Action:** Tap notification
+5. **Expected:** App opens to chat list (or chat room if in deep-link)
+6. **Action:** Open chat with sender
+7. **Expected:** All 5 messages are there (no data loss)
+
+#### Test 3: Deep Linking
+1. App is closed
+2. Another user sends message in a specific room (e.g., Room #45)
+3. **Expected:** Push notification arrives
+4. **Action:** Tap notification
+5. **Expected:** App opens AND navigates directly to Room #45
+6. **Expected:** New message is visible
+
+#### Test 4: Realtime vs Offline
+1. **With app open:**
+   - Message appears instantly in chat (SignalR realtime)
+   - No push notification (already online)
+2. **With app closed:**
+   - Message arrives via push notification
+   - User taps notification
+   - App opens with message visible
+
+### Important Notes
+
+✅ **Already Works** - Backend sends FCM automatically  
+✅ **No Configuration Changes** - Device token registration unchanged  
+✅ **No New Endpoints** - Mobile just receives notifications  
+✅ **Backward Compatible** - Realtime (SignalR) still works  
+❌ **Not Optional** - Chat messages are now sent via FCM when app closed
+
+### Troubleshooting
+
+**Problem:** Push notifications not appearing
+- **Solution 1:** Verify device token is registered (check device-tokens endpoint)
+- **Solution 2:** Check app notification permissions (Android/iOS)
+- **Solution 3:** Check Firebase Console → Cloud Messaging enabled
+
+**Problem:** Deep linking not working
+- **Solution:** Verify deep link URLs in notification payload match your app's deep link configuration
+- **Solution:** Use FirebaseDeepLinkingPlugin or similar for routing
+
+**Problem:** Messages appearing multiple times
+- **Solution:** Ensure your notification handler checks for duplicate notifications
+- **Solution:** Store message IDs to deduplicate if needed
 
 ---
 
