@@ -1,18 +1,21 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Notification.Application.Services;
 
 public class PostReportAggregationService
 {
     private readonly IDistributedCache _cache;
+    private readonly ILogger<PostReportAggregationService> _logger;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
 
-    public PostReportAggregationService(IDistributedCache cache, IConfiguration configuration)
+    public PostReportAggregationService(IDistributedCache cache, ILogger<PostReportAggregationService> logger, IConfiguration configuration)
     {
         _cache = cache;
+        _logger = logger;
         // Sliding window: prefer seconds (new) over minutes (legacy)
         var windowSeconds = configuration.GetValue<int?>("PostReportAggregation:WindowSeconds");
         if (windowSeconds.HasValue)
@@ -41,6 +44,16 @@ public class PostReportAggregationService
                 data.LastAt = GetVietnamTime();
                 data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
+                try
+                {
+                    _cache.Remove(key);
+                    _logger.LogInformation("📋 [RPT_CACHE_CLEAN] Removed old key {Key}", key);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("📋 [RPT_CACHE_CLEAN_FAIL] Failed to remove key {Key}: {Error}", key, ex.Message);
+                }
+
                 await _cache.SetStringAsync(
                     key,
                     JsonSerializer.Serialize(data),
@@ -62,6 +75,16 @@ public class PostReportAggregationService
             FirstAt = GetVietnamTime(),
             LastAt = GetVietnamTime()
         };
+
+        try
+        {
+            _cache.Remove(key);
+            _logger.LogInformation("📋 [RPT_CACHE_CLEAN] Removed old key {Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("📋 [RPT_CACHE_CLEAN_FAIL] Failed to remove key {Key}: {Error}", key, ex.Message);
+        }
 
         await _cache.SetStringAsync(
             key,

@@ -158,7 +158,31 @@ public class AggregationFlushService : BackgroundService
             await ProcessCommentReplyAggregationKeyAsync(db, key, cancellationToken);
         }
 
-        foreach (var key in server.Keys(pattern: "post_report_agg:*"))
+        var reportKeys = server.Keys(pattern: "post_report_agg:*").ToList();
+        
+        // First pass: Clean up any old HASH format data before processing STRING keys
+        // This prevents WRONGTYPE errors when trying to read old HASH data as STRING
+        foreach (var key in reportKeys)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            try
+            {
+                // Try to read as STRING first
+                var type = await db.KeyTypeAsync(key);
+                if (type == StackExchange.Redis.RedisType.Hash)
+                {
+                    // Old HASH format found - delete it immediately
+                    await db.KeyDeleteAsync(key);
+                    _logger.LogWarning("📋 [RPT_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("📋 [RPT_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
+            }
+        }
+        
+        foreach (var key in reportKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
             await ProcessPostReportAggregationKeyAsync(db, key, cancellationToken);
