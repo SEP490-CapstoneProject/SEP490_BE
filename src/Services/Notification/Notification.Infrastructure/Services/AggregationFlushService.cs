@@ -99,6 +99,28 @@ public class AggregationFlushService : BackgroundService
         var favoriteKeys = server.Keys(pattern: "favorite_agg:*").ToList();
         _logger.LogInformation("🔔 [FAV_FLUSH_SCAN] Found {FavoriteKeyCount} favorite aggregations", favoriteKeys.Count);
         
+        // First pass: Clean up any old HASH format data before processing STRING keys
+        // This prevents WRONGTYPE errors when trying to read old HASH data as STRING
+        foreach (var key in favoriteKeys)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            try
+            {
+                // Try to read as STRING first
+                var type = await db.KeyTypeAsync(key);
+                if (type == StackExchange.Redis.RedisType.Hash)
+                {
+                    // Old HASH format found - delete it immediately
+                    await db.KeyDeleteAsync(key);
+                    _logger.LogWarning("🔔 [FAV_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("🔔 [FAV_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
+            }
+        }
+        
         foreach (var key in favoriteKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
@@ -107,6 +129,28 @@ public class AggregationFlushService : BackgroundService
 
         var commentKeys = server.Keys(pattern: "comment_reply_agg:*").ToList();
         _logger.LogInformation("💬 [COM_FLUSH_SCAN] Found {CommentKeyCount} comment aggregations", commentKeys.Count);
+        
+        // First pass: Clean up any old HASH format data before processing STRING keys
+        // This prevents WRONGTYPE errors when trying to read old HASH data as STRING
+        foreach (var key in commentKeys)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            try
+            {
+                // Try to read as STRING first
+                var type = await db.KeyTypeAsync(key);
+                if (type == StackExchange.Redis.RedisType.Hash)
+                {
+                    // Old HASH format found - delete it immediately
+                    await db.KeyDeleteAsync(key);
+                    _logger.LogWarning("💬 [COM_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("💬 [COM_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
+            }
+        }
         
         foreach (var key in commentKeys)
         {
