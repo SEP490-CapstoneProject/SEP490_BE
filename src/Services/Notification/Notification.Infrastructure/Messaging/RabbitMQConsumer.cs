@@ -235,11 +235,17 @@ public class RabbitMQConsumer : BackgroundService
                     try
                     {
                         var actorName = ExtractActorNameFromContent(evt.Content);
+                        _logger.LogInformation("🔔 [FAV_RCV] EventType={EventType}, PostId={PostId}, ActorId={ActorId}, ActorName={ActorName}", 
+                            evt.EventType, evt.ObjectId, evt.ActorId, actorName);
+                        
                         var isAggregated = await aggregationService.TryAggregateAsync(
                             int.Parse(evt.ObjectId ?? "0"), 
                             evt.UserId, 
                             evt.ActorId ?? "", 
                             actorName);
+
+                        _logger.LogInformation("🔔 [FAV_AGG_RESULT] IsAggregated={IsAggregated}, PostId={PostId}", 
+                            isAggregated, evt.ObjectId);
 
                         if (isAggregated)
                         {
@@ -254,7 +260,7 @@ public class RabbitMQConsumer : BackgroundService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Aggregation failed for post.favorite event. Storing as aggregated to prevent immediate notification.");
+                        _logger.LogWarning(ex, "🔔 [FAV_ERROR] Aggregation failed for post.favorite event. Storing as aggregated to prevent immediate notification.");
                         // Don't fall through - wait for flush service or retry aggregation
                         await _channel.BasicAckAsync(ea.DeliveryTag, false);
                         return;

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Notification.Application.Services;
 
@@ -9,10 +10,12 @@ public class CommentReplyAggregationService
     private readonly IDistributedCache _cache;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
+    private readonly ILogger<CommentReplyAggregationService> _logger;
 
-    public CommentReplyAggregationService(IDistributedCache cache, IConfiguration configuration)
+    public CommentReplyAggregationService(IDistributedCache cache, IConfiguration configuration, ILogger<CommentReplyAggregationService> logger)
     {
         _cache = cache;
+        _logger = logger;
         // Sliding window: prefer seconds (new) over minutes (legacy)
         var windowSeconds = configuration.GetValue<int?>("CommentReplyAggregation:WindowSeconds");
         if (windowSeconds.HasValue)
@@ -53,6 +56,7 @@ public class CommentReplyAggregationService
                     new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
                     cancellationToken);
 
+                _logger.LogInformation("💬 [COM_AGG] CacheHit=true, Count={Count}, FirstActorName={FirstActorName}", data.Count, data.FirstActorName);
                 return true;
             }
         }
@@ -75,6 +79,7 @@ public class CommentReplyAggregationService
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
             cancellationToken);
 
+        _logger.LogInformation("💬 [COM_AGG] CacheHit=false, FirstEvent, ActorName={ActorName}", actorName);
         return false;
     }
 
