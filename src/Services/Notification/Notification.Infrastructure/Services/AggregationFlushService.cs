@@ -434,8 +434,8 @@ public class AggregationFlushService : BackgroundService
             ObjectId = data.PostId.ToString(),
             ActorId = data.Count == 1 ? data.FirstActorId : null,
             ActorName = data.Count == 1 ? actorName : null,
-            ActorAvatar = actorAvatar,
-            ActorType = data.Count == 1 ? "USER" : "SYSTEM",
+            ActorAvatar = data.Count == 1 ? actorAvatar : null,
+            ActorType = "USER",
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };
@@ -494,8 +494,8 @@ public class AggregationFlushService : BackgroundService
             ObjectId = data.ObjectId,
             ActorId = data.Count == 1 ? data.FirstActorId : null,
             ActorName = data.Count == 1 ? actorName : null,
-            ActorAvatar = actorAvatar,
-            ActorType = data.Count == 1 ? "USER" : "SYSTEM",
+            ActorAvatar = data.Count == 1 ? actorAvatar : null,
+            ActorType = "USER",
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };
