@@ -85,16 +85,25 @@ public class SignalRPushService : IRealtimePushService
             .SendAsync("ConnectionAccepted", evt, cancellationToken);
 
     /// <summary>
-    /// Push tổng số tin nhắn mới cho user (gom từ tất cả room, debounced 2s).
-    /// FE listens: connection.on("NewMessageNotification", data => data.totalNewMessages)
+    /// Push thông báo tin nhắn mới với đầy đủ thông tin người gửi.
+    /// FE listens: connection.on("NewMessageNotification", data => { data.roomId, data.sender.name, data.sender.avatar, ... })
     /// </summary>
-    public Task PushNewMessageNotificationAsync(int toUserId, int totalNewMessages, CancellationToken cancellationToken = default)
+    public Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
         => _hubContext.Clients
-            .Group($"user_{toUserId}")
+            .Group($"user_{evt.ToUserId}")
             .SendAsync("NewMessageNotification", new
             {
-                toUserId,
-                totalNewMessages
+                messageId   = evt.MessageId,
+                roomId      = evt.RoomId,
+                content     = evt.Content,
+                sentAt      = evt.SentAt,
+                sender = evt.Author == null ? null : new
+                {
+                    id     = evt.Author.Id,
+                    name   = evt.Author.Name,
+                    avatar = evt.Author.Avatar,
+                    role   = evt.Author.Role
+                }
             }, cancellationToken);
 
     private static bool IsCommunity(NotificationCreatedEvent evt)
