@@ -161,57 +161,77 @@ public class AggregationFlushService : BackgroundService
             _logger.LogInformation("🔔 [FAV_FLUSH_SUCCESS] Flushed favorite aggregation for post {PostId}, owner {OwnerId}, count {Count}",
                 data.PostId, data.OwnerId, data.Count);
         }
+        catch (StackExchange.Redis.RedisServerException ex) when (ex.Message.Contains("WRONGTYPE"))
+        {
+            // Old data stored as hash, delete and skip
+            _logger.LogWarning("🔔 [FAV_FLUSH_WRONGTYPE] Deleting corrupted hash key {Key}", key.ToString());
+            try
+            {
+                await db.KeyDeleteAsync(key);
+            }
+            catch { /* ignore cleanup errors */ }
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "🔔 [FAV_FLUSH_ERROR] Error processing favorite aggregation key {Key}", key.ToString());
         }
     }
 
-    private async Task ProcessCommentReplyAggregationKeyAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var rawData = await db.StringGetAsync(key);
-            _logger.LogInformation("💬 [COM_FLUSH_READ] Key={Key}, HasValue={HasValue}", key.ToString(), rawData.HasValue);
-            
-            if (!rawData.HasValue) return;
+     private async Task ProcessCommentReplyAggregationKeyAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, CancellationToken cancellationToken)
+     {
+         try
+         {
+             var rawData = await db.StringGetAsync(key);
+             _logger.LogInformation("💬 [COM_FLUSH_READ] Key={Key}, HasValue={HasValue}", key.ToString(), rawData.HasValue);
+             
+             if (!rawData.HasValue) return;
 
-            var json = rawData.ToString();
-            if (string.IsNullOrWhiteSpace(json)) 
-            {
-                _logger.LogWarning("💬 [COM_FLUSH_READ] Empty JSON for key {Key}", key);
-                return;
-            }
+             var json = rawData.ToString();
+             if (string.IsNullOrWhiteSpace(json)) 
+             {
+                 _logger.LogWarning("💬 [COM_FLUSH_READ] Empty JSON for key {Key}", key);
+                 return;
+             }
 
-            var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
-            if (data == null) 
-            {
-                _logger.LogWarning("💬 [COM_FLUSH_READ] Deserialization failed for key {Key}", key);
-                return;
-            }
+             var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
+             if (data == null) 
+             {
+                 _logger.LogWarning("💬 [COM_FLUSH_READ] Deserialization failed for key {Key}", key);
+                 return;
+             }
 
-            var timeDiff = GetVietnamTime() - data.FirstAt;
-            _logger.LogInformation("💬 [COM_FLUSH_WINDOW] Count={Count}, FirstActorName={FirstActorName}, TimeSinceFirst={TimeDiff}ms",
-                data.Count, data.FirstActorName, timeDiff.TotalMilliseconds);
+             var timeDiff = GetVietnamTime() - data.FirstAt;
+             _logger.LogInformation("💬 [COM_FLUSH_WINDOW] Count={Count}, FirstActorName={FirstActorName}, TimeSinceFirst={TimeDiff}ms",
+                 data.Count, data.FirstActorName, timeDiff.TotalMilliseconds);
 
-            if (timeDiff < _aggregationWindow) 
-            {
-                _logger.LogInformation("💬 [COM_FLUSH_WINDOW_NOT_EXPIRED] Skipping, time {TimeDiff}ms < window {Window}ms", 
-                    timeDiff.TotalMilliseconds, _aggregationWindow.TotalMilliseconds);
-                return;
-            }
+             if (timeDiff < _aggregationWindow) 
+             {
+                 _logger.LogInformation("💬 [COM_FLUSH_WINDOW_NOT_EXPIRED] Skipping, time {TimeDiff}ms < window {Window}ms", 
+                     timeDiff.TotalMilliseconds, _aggregationWindow.TotalMilliseconds);
+                 return;
+             }
 
-            await CreateCommentReplyAggregatedNotificationAsync(data, cancellationToken);
-            await db.KeyDeleteAsync(key);
+             await CreateCommentReplyAggregatedNotificationAsync(data, cancellationToken);
+             await db.KeyDeleteAsync(key);
 
-            _logger.LogInformation("💬 [COM_FLUSH_SUCCESS] Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}, actorName={ActorName}",
-                data.ObjectId, data.OwnerId, data.Count, data.EventType, data.FirstActorName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "💬 [COM_FLUSH_ERROR] Error processing comment/reply aggregation key {Key}", key.ToString());
-        }
-    }
+             _logger.LogInformation("💬 [COM_FLUSH_SUCCESS] Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}, actorName={ActorName}",
+                 data.ObjectId, data.OwnerId, data.Count, data.EventType, data.FirstActorName);
+         }
+         catch (StackExchange.Redis.RedisServerException ex) when (ex.Message.Contains("WRONGTYPE"))
+         {
+             // Old data stored as hash, delete and skip
+             _logger.LogWarning("💬 [COM_FLUSH_WRONGTYPE] Deleting corrupted hash key {Key}", key.ToString());
+             try
+             {
+                 await db.KeyDeleteAsync(key);
+             }
+             catch { /* ignore cleanup errors */ }
+         }
+         catch (Exception ex)
+         {
+             _logger.LogError(ex, "💬 [COM_FLUSH_ERROR] Error processing comment/reply aggregation key {Key}", key.ToString());
+         }
+     }
 
     private async Task ProcessPostReportAggregationKeyAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, CancellationToken cancellationToken)
     {
