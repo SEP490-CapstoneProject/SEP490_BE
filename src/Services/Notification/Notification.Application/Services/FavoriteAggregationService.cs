@@ -40,6 +40,15 @@ public class FavoriteAggregationService
     public async Task<bool> TryAggregateAsync(int postId, string ownerId, string actorId, string actorName, CancellationToken cancellationToken = default)
     {
         var key = $"favorite_agg:{postId}:{ownerId}";
+        
+        // First, try to remove any old HASH data that might be stored with this key
+        // This handles migration from old HASH storage to new STRING storage
+        try
+        {
+            _cache.Remove(key);
+        }
+        catch { /* Ignore - key might not exist */ }
+        
         var cached = await _cache.GetStringAsync(key, cancellationToken);
 
         if (cached != null)

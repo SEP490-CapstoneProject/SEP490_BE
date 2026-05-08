@@ -39,6 +39,15 @@ public class CommentReplyAggregationService
         CancellationToken cancellationToken = default)
     {
         var key = BuildAggregationKey(eventType, objectId, ownerId);
+        
+        // First, try to remove any old HASH data that might be stored with this key
+        // This handles migration from old HASH storage to new STRING storage
+        try
+        {
+            _cache.Remove(key);
+        }
+        catch { /* Ignore - key might not exist */ }
+        
         var cached = await _cache.GetStringAsync(key, cancellationToken);
 
         if (cached != null)
