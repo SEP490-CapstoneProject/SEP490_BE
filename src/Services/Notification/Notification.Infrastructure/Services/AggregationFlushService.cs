@@ -193,28 +193,46 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
+            _logger.LogInformation("🔔 [FAV_PREREAD] About to read key {Key}", key.ToString());
             var rawData = await db.StringGetAsync(key);
-            _logger.LogInformation("🔔 [FAV_FLUSH_READ] Key={Key}, HasValue={HasValue}", key.ToString(), rawData.HasValue);
+            var dataLength = rawData.HasValue ? rawData.ToString().Length : 0;
+            _logger.LogInformation("🔔 [FAV_POSTREAD] Key={Key}, HasValue={HasValue}, DataLength={Length}", 
+                key.ToString(), rawData.HasValue, dataLength);
             
-            if (!rawData.HasValue) return;
+            if (!rawData.HasValue) 
+            {
+                _logger.LogWarning("🔔 [FAV_POSTREAD_EMPTY] HasValue=false for key {Key} - data was lost!", key.ToString());
+                return;
+            }
 
             var json = rawData.ToString();
             if (string.IsNullOrWhiteSpace(json)) 
             {
-                _logger.LogWarning("🔔 [FAV_FLUSH_READ] Empty JSON for key {Key}", key);
+                _logger.LogWarning("🔔 [FAV_POSTREAD_WHITESPACE] Empty string data for key {Key}", key);
                 return;
             }
 
-            var data = JsonSerializer.Deserialize<AggregationData>(json);
-            if (data == null) 
+            try
             {
-                _logger.LogWarning("🔔 [FAV_FLUSH_READ] Deserialization failed for key {Key}", key);
+                var data = JsonSerializer.Deserialize<AggregationData>(json);
+                if (data == null) 
+                {
+                    _logger.LogWarning("🔔 [FAV_DESERIALIZE_NULL] Deserialization returned null for key {Key}", key);
+                    return;
+                }
+                _logger.LogInformation("🔔 [FAV_DESERIALIZE_OK] Deserialized successfully, Count={Count}", data.Count);
+            }
+            catch (JsonException jex)
+            {
+                _logger.LogError("🔔 [FAV_DESERIALIZE_ERROR] JSON parse failed for key {Key}, Error={Error}, Data={Data}", 
+                    key, jex.Message, json.Substring(0, Math.Min(200, json.Length)));
                 return;
             }
 
-            var timeDiff = GetVietnamTime() - data.FirstAt;
+            var data2 = JsonSerializer.Deserialize<AggregationData>(json);
+            var timeDiff = GetVietnamTime() - data2.FirstAt;
             _logger.LogInformation("🔔 [FAV_FLUSH_WINDOW] PostId={PostId}, Count={Count}, TimeSinceFirst={TimeDiff}ms, WindowMs={Window}ms",
-                data.PostId, data.Count, timeDiff.TotalMilliseconds, _aggregationWindow.TotalMilliseconds);
+                data2.PostId, data2.Count, timeDiff.TotalMilliseconds, _aggregationWindow.TotalMilliseconds);
 
             if (timeDiff < _aggregationWindow) 
             {
@@ -223,11 +241,11 @@ public class AggregationFlushService : BackgroundService
                 return;
             }
 
-            await CreateFavoriteAggregatedNotificationAsync(data, cancellationToken);
+            await CreateFavoriteAggregatedNotificationAsync(data2, cancellationToken);
             await db.KeyDeleteAsync(key);
 
             _logger.LogInformation("🔔 [FAV_FLUSH_SUCCESS] Flushed favorite aggregation for post {PostId}, owner {OwnerId}, count {Count}",
-                data.PostId, data.OwnerId, data.Count);
+                data2.PostId, data2.OwnerId, data2.Count);
         }
         catch (StackExchange.Redis.RedisServerException ex) when (ex.Message.Contains("WRONGTYPE"))
         {
@@ -249,28 +267,47 @@ public class AggregationFlushService : BackgroundService
      {
          try
          {
+             _logger.LogInformation("💬 [COM_PREREAD] About to read key {Key}", key.ToString());
              var rawData = await db.StringGetAsync(key);
-             _logger.LogInformation("💬 [COM_FLUSH_READ] Key={Key}, HasValue={HasValue}", key.ToString(), rawData.HasValue);
+             var dataLength = rawData.HasValue ? rawData.ToString().Length : 0;
+             _logger.LogInformation("💬 [COM_POSTREAD] Key={Key}, HasValue={HasValue}, DataLength={Length}", 
+                 key.ToString(), rawData.HasValue, dataLength);
              
-             if (!rawData.HasValue) return;
+             if (!rawData.HasValue) 
+             {
+                 _logger.LogWarning("💬 [COM_POSTREAD_EMPTY] HasValue=false for key {Key} - data was lost!", key.ToString());
+                 return;
+             }
 
              var json = rawData.ToString();
              if (string.IsNullOrWhiteSpace(json)) 
              {
-                 _logger.LogWarning("💬 [COM_FLUSH_READ] Empty JSON for key {Key}", key);
+                 _logger.LogWarning("💬 [COM_POSTREAD_WHITESPACE] Empty string data for key {Key}", key);
                  return;
              }
 
-             var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
-             if (data == null) 
+             try
              {
-                 _logger.LogWarning("💬 [COM_FLUSH_READ] Deserialization failed for key {Key}", key);
+                 var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
+                 if (data == null) 
+                 {
+                     _logger.LogWarning("💬 [COM_DESERIALIZE_NULL] Deserialization returned null for key {Key}", key);
+                     return;
+                 }
+                 _logger.LogInformation("💬 [COM_DESERIALIZE_OK] Deserialized successfully, Count={Count}, ActorName={ActorName}", 
+                     data.Count, data.FirstActorName);
+             }
+             catch (JsonException jex)
+             {
+                 _logger.LogError("💬 [COM_DESERIALIZE_ERROR] JSON parse failed for key {Key}, Error={Error}, Data={Data}", 
+                     key, jex.Message, json.Substring(0, Math.Min(200, json.Length)));
                  return;
              }
 
-             var timeDiff = GetVietnamTime() - data.FirstAt;
+             var data2 = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
+             var timeDiff = GetVietnamTime() - data2.FirstAt;
              _logger.LogInformation("💬 [COM_FLUSH_WINDOW] Count={Count}, FirstActorName={FirstActorName}, TimeSinceFirst={TimeDiff}ms",
-                 data.Count, data.FirstActorName, timeDiff.TotalMilliseconds);
+                 data2.Count, data2.FirstActorName, timeDiff.TotalMilliseconds);
 
              if (timeDiff < _aggregationWindow) 
              {
@@ -279,11 +316,11 @@ public class AggregationFlushService : BackgroundService
                  return;
              }
 
-             await CreateCommentReplyAggregatedNotificationAsync(data, cancellationToken);
+             await CreateCommentReplyAggregatedNotificationAsync(data2, cancellationToken);
              await db.KeyDeleteAsync(key);
 
              _logger.LogInformation("💬 [COM_FLUSH_SUCCESS] Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}, actorName={ActorName}",
-                 data.ObjectId, data.OwnerId, data.Count, data.EventType, data.FirstActorName);
+                 data2.ObjectId, data2.OwnerId, data2.Count, data2.EventType, data2.FirstActorName);
          }
          catch (StackExchange.Redis.RedisServerException ex) when (ex.Message.Contains("WRONGTYPE"))
          {
@@ -305,32 +342,65 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
+            _logger.LogInformation("📋 [RPT_PREREAD] About to read key {Key}", key.ToString());
             var rawData = await db.StringGetAsync(key);
-            if (!rawData.HasValue) return;
+            var dataLength = rawData.HasValue ? rawData.ToString().Length : 0;
+            _logger.LogInformation("📋 [RPT_POSTREAD] Key={Key}, HasValue={HasValue}, DataLength={Length}", 
+                key.ToString(), rawData.HasValue, dataLength);
+            
+            if (!rawData.HasValue) 
+            {
+                _logger.LogWarning("📋 [RPT_POSTREAD_EMPTY] HasValue=false for key {Key}", key.ToString());
+                return;
+            }
 
             var json = rawData.ToString();
-            if (string.IsNullOrWhiteSpace(json)) return;
-
-            var data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
-            if (data == null) return;
-
-            if (GetVietnamTime() - data.FirstAt < _postReportAggregationWindow) return;
-
-            if (data.AdditionalCount <= 0)
+            if (string.IsNullOrWhiteSpace(json)) 
             {
+                _logger.LogWarning("📋 [RPT_POSTREAD_WHITESPACE] Empty string data for key {Key}", key);
+                return;
+            }
+
+            try
+            {
+                var data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
+                if (data == null) 
+                {
+                    _logger.LogWarning("📋 [RPT_DESERIALIZE_NULL] Deserialization returned null for key {Key}", key);
+                    return;
+                }
+                _logger.LogInformation("📋 [RPT_DESERIALIZE_OK] Deserialized successfully, Count={Count}", data.AdditionalCount);
+            }
+            catch (JsonException jex)
+            {
+                _logger.LogError("📋 [RPT_DESERIALIZE_ERROR] JSON parse failed for key {Key}, Error={Error}", 
+                    key, jex.Message);
+                return;
+            }
+
+            var data2 = JsonSerializer.Deserialize<PostReportAggregationData>(json);
+            if (GetVietnamTime() - data2.FirstAt < _postReportAggregationWindow) 
+            {
+                _logger.LogInformation("📋 [RPT_WINDOW_NOT_EXPIRED] Skipping, window not expired");
+                return;
+            }
+
+            if (data2.AdditionalCount <= 0)
+            {
+                _logger.LogInformation("📋 [RPT_NO_ADDITIONAL] Skipping, no additional reports");
                 await db.KeyDeleteAsync(key);
                 return;
             }
 
-            await CreatePostReportAggregatedNotificationAsync(data, cancellationToken);
+            await CreatePostReportAggregatedNotificationAsync(data2, cancellationToken);
             await db.KeyDeleteAsync(key);
 
-            _logger.LogInformation("Flushed post report aggregation for post {PostId}, recipient {RecipientUserId}, count {Count}",
-                data.PostId, data.RecipientUserId, data.AdditionalCount);
+            _logger.LogInformation("📋 [RPT_FLUSH_SUCCESS] Flushed post report aggregation for post {PostId}, recipient {RecipientUserId}, count {Count}",
+                data2.PostId, data2.RecipientUserId, data2.AdditionalCount);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing post report aggregation key {Key}", key.ToString());
+            _logger.LogError(ex, "📋 [RPT_FLUSH_ERROR] Error processing post report aggregation key {Key}", key.ToString());
         }
     }
 

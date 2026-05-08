@@ -52,11 +52,25 @@ public class CommentReplyAggregationService
                 data.LastAt = GetVietnamTime();
                 data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
-                await _cache.SetStringAsync(
-                    key,
-                    JsonSerializer.Serialize(data),
-                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-                    cancellationToken);
+                var jsonData = JsonSerializer.Serialize(data);
+                _logger.LogInformation("💬 [COM_PRESYNC] CacheHit=true, Key={Key}, DataLength={DataLength}, TTL={TTL}", 
+                    key, jsonData.Length, _cacheTtl);
+
+                try
+                {
+                    await _cache.SetStringAsync(
+                        key,
+                        jsonData,
+                        new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
+                        cancellationToken);
+
+                    _logger.LogInformation("💬 [COM_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError("💬 [COM_SYNC_ERROR] CacheHit=true failed, Key={Key}, Error={Error}", key, ex.Message);
+                    throw;
+                }
 
                 _logger.LogInformation("💬 [COM_AGG] CacheHit=true, Count={Count}, FirstActorName={FirstActorName}", data.Count, data.FirstActorName);
                 return true;
@@ -75,11 +89,25 @@ public class CommentReplyAggregationService
             LastAt = GetVietnamTime()
         };
 
-        await _cache.SetStringAsync(
-            key,
-            JsonSerializer.Serialize(newData),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-            cancellationToken);
+        var newJsonData = JsonSerializer.Serialize(newData);
+        _logger.LogInformation("💬 [COM_PRESYNC] FirstEvent, Key={Key}, DataLength={DataLength}, TTL={TTL}, ActorName={ActorName}", 
+            key, newJsonData.Length, _cacheTtl, actorName);
+
+        try
+        {
+            await _cache.SetStringAsync(
+                key,
+                newJsonData,
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
+                cancellationToken);
+
+            _logger.LogInformation("💬 [COM_POSTSYNC] FirstEvent persisted, Key={Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("💬 [COM_SYNC_ERROR] FirstEvent failed, Key={Key}, Error={Error}", key, ex.Message);
+            throw;
+        }
 
         _logger.LogInformation("💬 [COM_AGG] CacheHit=false, FirstEvent, ActorName={ActorName}", actorName);
         return false;

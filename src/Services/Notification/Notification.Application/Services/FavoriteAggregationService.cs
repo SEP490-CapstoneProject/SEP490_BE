@@ -54,11 +54,25 @@ public class FavoriteAggregationService
                 data.LastAt = GetVietnamTime();
                 data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
-                await _cache.SetStringAsync(key, JsonSerializer.Serialize(data), 
-                    new DistributedCacheEntryOptions 
-                    { 
-                        AbsoluteExpirationRelativeToNow = _cacheTtl
-                    }, cancellationToken);
+                var jsonData = JsonSerializer.Serialize(data);
+                _logger.LogInformation("🔔 [FAV_PRESYNC] CacheHit=true, Key={Key}, DataLength={DataLength}, TTL={TTL}", 
+                    key, jsonData.Length, _cacheTtl);
+
+                try
+                {
+                    await _cache.SetStringAsync(key, jsonData, 
+                        new DistributedCacheEntryOptions 
+                        { 
+                            AbsoluteExpirationRelativeToNow = _cacheTtl
+                        }, cancellationToken);
+
+                    _logger.LogInformation("🔔 [FAV_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError("🔔 [FAV_SYNC_ERROR] CacheHit=true failed, Key={Key}, Error={Error}", key, ex.Message);
+                    throw;
+                }
 
                 _logger.LogInformation("🔔 [FAV_AGG] CacheHit=true, PostId={PostId}, Count={Count}", postId, data.Count);
                 return true; // Aggregated, don't create notification yet
@@ -77,11 +91,25 @@ public class FavoriteAggregationService
             LastAt = GetVietnamTime()
         };
 
-        await _cache.SetStringAsync(key, JsonSerializer.Serialize(newData),
-            new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = _cacheTtl
-            }, cancellationToken);
+        var newJsonData = JsonSerializer.Serialize(newData);
+        _logger.LogInformation("🔔 [FAV_PRESYNC] FirstEvent, Key={Key}, DataLength={DataLength}, TTL={TTL}, ActorName={ActorName}", 
+            key, newJsonData.Length, _cacheTtl, actorName);
+
+        try
+        {
+            await _cache.SetStringAsync(key, newJsonData,
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = _cacheTtl
+                }, cancellationToken);
+
+            _logger.LogInformation("🔔 [FAV_POSTSYNC] FirstEvent persisted, Key={Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("🔔 [FAV_SYNC_ERROR] FirstEvent failed, Key={Key}, Error={Error}", key, ex.Message);
+            throw;
+        }
 
         _logger.LogInformation("🔔 [FAV_AGG] CacheHit=false, FirstEvent, PostId={PostId}, ActorName={ActorName}", postId, actorName);
         return false; // First event, create notification immediately
