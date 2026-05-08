@@ -96,13 +96,19 @@ public class AggregationFlushService : BackgroundService
         var db = _redis.GetDatabase();
         var server = _redis.GetServer(_redis.GetEndPoints().First());
 
-        foreach (var key in server.Keys(pattern: "favorite_agg:*"))
+        var favoriteKeys = server.Keys(pattern: "favorite_agg:*").ToList();
+        _logger.LogInformation("🔔 [FAV_FLUSH_SCAN] Found {FavoriteKeyCount} favorite aggregations", favoriteKeys.Count);
+        
+        foreach (var key in favoriteKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
             await ProcessFavoriteAggregationKeyAsync(db, key, cancellationToken);
         }
 
-        foreach (var key in server.Keys(pattern: "comment_reply_agg:*"))
+        var commentKeys = server.Keys(pattern: "comment_reply_agg:*").ToList();
+        _logger.LogInformation("💬 [COM_FLUSH_SCAN] Found {CommentKeyCount} comment aggregations", commentKeys.Count);
+        
+        foreach (var key in commentKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
             await ProcessCommentReplyAggregationKeyAsync(db, key, cancellationToken);
@@ -120,25 +126,44 @@ public class AggregationFlushService : BackgroundService
         try
         {
             var rawData = await db.StringGetAsync(key);
+            _logger.LogInformation("🔔 [FAV_FLUSH_READ] Key={Key}, HasValue={HasValue}", key.ToString(), rawData.HasValue);
+            
             if (!rawData.HasValue) return;
 
             var json = rawData.ToString();
-            if (string.IsNullOrWhiteSpace(json)) return;
+            if (string.IsNullOrWhiteSpace(json)) 
+            {
+                _logger.LogWarning("🔔 [FAV_FLUSH_READ] Empty JSON for key {Key}", key);
+                return;
+            }
 
             var data = JsonSerializer.Deserialize<AggregationData>(json);
-            if (data == null) return;
+            if (data == null) 
+            {
+                _logger.LogWarning("🔔 [FAV_FLUSH_READ] Deserialization failed for key {Key}", key);
+                return;
+            }
 
-            if (GetVietnamTime() - data.FirstAt < _aggregationWindow) return;
+            var timeDiff = GetVietnamTime() - data.FirstAt;
+            _logger.LogInformation("🔔 [FAV_FLUSH_WINDOW] PostId={PostId}, Count={Count}, TimeSinceFirst={TimeDiff}ms, WindowMs={Window}ms",
+                data.PostId, data.Count, timeDiff.TotalMilliseconds, _aggregationWindow.TotalMilliseconds);
+
+            if (timeDiff < _aggregationWindow) 
+            {
+                _logger.LogInformation("🔔 [FAV_FLUSH_WINDOW_NOT_EXPIRED] Skipping, time {TimeDiff}ms < window {Window}ms", 
+                    timeDiff.TotalMilliseconds, _aggregationWindow.TotalMilliseconds);
+                return;
+            }
 
             await CreateFavoriteAggregatedNotificationAsync(data, cancellationToken);
             await db.KeyDeleteAsync(key);
 
-            _logger.LogInformation("Flushed favorite aggregation for post {PostId}, owner {OwnerId}, count {Count}",
+            _logger.LogInformation("🔔 [FAV_FLUSH_SUCCESS] Flushed favorite aggregation for post {PostId}, owner {OwnerId}, count {Count}",
                 data.PostId, data.OwnerId, data.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing favorite aggregation key {Key}", key.ToString());
+            _logger.LogError(ex, "🔔 [FAV_FLUSH_ERROR] Error processing favorite aggregation key {Key}", key.ToString());
         }
     }
 
@@ -147,25 +172,44 @@ public class AggregationFlushService : BackgroundService
         try
         {
             var rawData = await db.StringGetAsync(key);
+            _logger.LogInformation("💬 [COM_FLUSH_READ] Key={Key}, HasValue={HasValue}", key.ToString(), rawData.HasValue);
+            
             if (!rawData.HasValue) return;
 
             var json = rawData.ToString();
-            if (string.IsNullOrWhiteSpace(json)) return;
+            if (string.IsNullOrWhiteSpace(json)) 
+            {
+                _logger.LogWarning("💬 [COM_FLUSH_READ] Empty JSON for key {Key}", key);
+                return;
+            }
 
             var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
-            if (data == null) return;
+            if (data == null) 
+            {
+                _logger.LogWarning("💬 [COM_FLUSH_READ] Deserialization failed for key {Key}", key);
+                return;
+            }
 
-            if (GetVietnamTime() - data.FirstAt < _aggregationWindow) return;
+            var timeDiff = GetVietnamTime() - data.FirstAt;
+            _logger.LogInformation("💬 [COM_FLUSH_WINDOW] Count={Count}, FirstActorName={FirstActorName}, TimeSinceFirst={TimeDiff}ms",
+                data.Count, data.FirstActorName, timeDiff.TotalMilliseconds);
+
+            if (timeDiff < _aggregationWindow) 
+            {
+                _logger.LogInformation("💬 [COM_FLUSH_WINDOW_NOT_EXPIRED] Skipping, time {TimeDiff}ms < window {Window}ms", 
+                    timeDiff.TotalMilliseconds, _aggregationWindow.TotalMilliseconds);
+                return;
+            }
 
             await CreateCommentReplyAggregatedNotificationAsync(data, cancellationToken);
             await db.KeyDeleteAsync(key);
 
-            _logger.LogInformation("Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}",
-                data.ObjectId, data.OwnerId, data.Count, data.EventType);
+            _logger.LogInformation("💬 [COM_FLUSH_SUCCESS] Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}, actorName={ActorName}",
+                data.ObjectId, data.OwnerId, data.Count, data.EventType, data.FirstActorName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing comment/reply aggregation key {Key}", key.ToString());
+            _logger.LogError(ex, "💬 [COM_FLUSH_ERROR] Error processing comment/reply aggregation key {Key}", key.ToString());
         }
     }
 
@@ -226,6 +270,9 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
+        _logger.LogInformation("🔔 [FAV_CREATE] Creating notification: Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorType={ActorType}",
+            data.Count, entity.ActorId, entity.ActorName, entity.ActorType);
+
         await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
     }
 
@@ -258,6 +305,9 @@ public class AggregationFlushService : BackgroundService
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };
+
+        _logger.LogInformation("💬 [COM_CREATE] Creating notification: EventType={EventType}, Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorType={ActorType}",
+            data.EventType, data.Count, entity.ActorId, entity.ActorName, entity.ActorType);
 
         await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
     }

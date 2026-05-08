@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Notification.Application.Services;
 
@@ -9,10 +10,12 @@ public class FavoriteAggregationService
     private readonly IDistributedCache _cache;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
+    private readonly ILogger<FavoriteAggregationService> _logger;
 
-    public FavoriteAggregationService(IDistributedCache cache, IConfiguration configuration)
+    public FavoriteAggregationService(IDistributedCache cache, IConfiguration configuration, ILogger<FavoriteAggregationService> logger)
     {
         _cache = cache;
+        _logger = logger;
         
         // Sliding window: prefer seconds (new) over minutes (legacy)
         // Each event resets the TTL, so window adapts to event frequency
@@ -55,6 +58,7 @@ public class FavoriteAggregationService
                         AbsoluteExpirationRelativeToNow = _cacheTtl
                     }, cancellationToken);
 
+                _logger.LogInformation("🔔 [FAV_AGG] CacheHit=true, PostId={PostId}, Count={Count}", postId, data.Count);
                 return true; // Aggregated, don't create notification yet
             }
         }
@@ -77,6 +81,7 @@ public class FavoriteAggregationService
                 AbsoluteExpirationRelativeToNow = _cacheTtl
             }, cancellationToken);
 
+        _logger.LogInformation("🔔 [FAV_AGG] CacheHit=false, FirstEvent, PostId={PostId}, ActorName={ActorName}", postId, actorName);
         return false; // First event, create notification immediately
     }
 
