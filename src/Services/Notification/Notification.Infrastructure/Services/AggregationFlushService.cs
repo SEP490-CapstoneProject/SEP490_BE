@@ -99,28 +99,6 @@ public class AggregationFlushService : BackgroundService
         var favoriteKeys = server.Keys(pattern: "favorite_agg:*").ToList();
         _logger.LogInformation("🔔 [FAV_FLUSH_SCAN] Found {FavoriteKeyCount} favorite aggregations", favoriteKeys.Count);
         
-        // First pass: Clean up any old HASH format data before processing STRING keys
-        // This prevents WRONGTYPE errors when trying to read old HASH data as STRING
-        foreach (var key in favoriteKeys)
-        {
-            if (cancellationToken.IsCancellationRequested) break;
-            try
-            {
-                // Try to read as STRING first
-                var type = await db.KeyTypeAsync(key);
-                if (type == StackExchange.Redis.RedisType.Hash)
-                {
-                    // Old HASH format found - delete it immediately
-                    await db.KeyDeleteAsync(key);
-                    _logger.LogWarning("🔔 [FAV_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("🔔 [FAV_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
-            }
-        }
-        
         foreach (var key in favoriteKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
@@ -130,28 +108,6 @@ public class AggregationFlushService : BackgroundService
         var commentKeys = server.Keys(pattern: "comment_reply_agg:*").ToList();
         _logger.LogInformation("💬 [COM_FLUSH_SCAN] Found {CommentKeyCount} comment aggregations", commentKeys.Count);
         
-        // First pass: Clean up any old HASH format data before processing STRING keys
-        // This prevents WRONGTYPE errors when trying to read old HASH data as STRING
-        foreach (var key in commentKeys)
-        {
-            if (cancellationToken.IsCancellationRequested) break;
-            try
-            {
-                // Try to read as STRING first
-                var type = await db.KeyTypeAsync(key);
-                if (type == StackExchange.Redis.RedisType.Hash)
-                {
-                    // Old HASH format found - delete it immediately
-                    await db.KeyDeleteAsync(key);
-                    _logger.LogWarning("💬 [COM_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("💬 [COM_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
-            }
-        }
-        
         foreach (var key in commentKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
@@ -159,28 +115,6 @@ public class AggregationFlushService : BackgroundService
         }
 
         var reportKeys = server.Keys(pattern: "post_report_agg:*").ToList();
-        
-        // First pass: Clean up any old HASH format data before processing STRING keys
-        // This prevents WRONGTYPE errors when trying to read old HASH data as STRING
-        foreach (var key in reportKeys)
-        {
-            if (cancellationToken.IsCancellationRequested) break;
-            try
-            {
-                // Try to read as STRING first
-                var type = await db.KeyTypeAsync(key);
-                if (type == StackExchange.Redis.RedisType.Hash)
-                {
-                    // Old HASH format found - delete it immediately
-                    await db.KeyDeleteAsync(key);
-                    _logger.LogWarning("📋 [RPT_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("📋 [RPT_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
-            }
-        }
         
         foreach (var key in reportKeys)
         {
@@ -193,6 +127,23 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
+            // Clean up old HASH format before reading as STRING
+            // Only run this when actually processing the key, not during scan phase
+            try
+            {
+                var type = await db.KeyTypeAsync(key);
+                if (type == StackExchange.Redis.RedisType.Hash)
+                {
+                    await db.KeyDeleteAsync(key);
+                    _logger.LogWarning("🔔 [FAV_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
+                    return; // Old key cleaned, nothing to process
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("🔔 [FAV_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
+            }
+
             _logger.LogInformation("🔔 [FAV_PREREAD] About to read key {Key}", key.ToString());
             var rawData = await db.StringGetAsync(key);
             var dataLength = rawData.HasValue ? rawData.ToString().Length : 0;
@@ -267,6 +218,23 @@ public class AggregationFlushService : BackgroundService
      {
          try
          {
+             // Clean up old HASH format before reading as STRING
+             // Only run this when actually processing the key, not during scan phase
+             try
+             {
+                 var type = await db.KeyTypeAsync(key);
+                 if (type == StackExchange.Redis.RedisType.Hash)
+                 {
+                     await db.KeyDeleteAsync(key);
+                     _logger.LogWarning("💬 [COM_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
+                     return; // Old key cleaned, nothing to process
+                 }
+             }
+             catch (Exception ex)
+             {
+                 _logger.LogWarning("💬 [COM_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
+             }
+
              _logger.LogInformation("💬 [COM_PREREAD] About to read key {Key}", key.ToString());
              var rawData = await db.StringGetAsync(key);
              var dataLength = rawData.HasValue ? rawData.ToString().Length : 0;
@@ -342,6 +310,23 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
+            // Clean up old HASH format before reading as STRING
+            // Only run this when actually processing the key, not during scan phase
+            try
+            {
+                var type = await db.KeyTypeAsync(key);
+                if (type == StackExchange.Redis.RedisType.Hash)
+                {
+                    await db.KeyDeleteAsync(key);
+                    _logger.LogWarning("📋 [RPT_PRECLEAN] Deleted old HASH format key {Key}", key.ToString());
+                    return; // Old key cleaned, nothing to process
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("📋 [RPT_PRECLEAN_FAIL] Error checking key type {Key}: {Error}", key.ToString(), ex.Message);
+            }
+
             _logger.LogInformation("📋 [RPT_PREREAD] About to read key {Key}", key.ToString());
             var rawData = await db.StringGetAsync(key);
             var dataLength = rawData.HasValue ? rawData.ToString().Length : 0;
