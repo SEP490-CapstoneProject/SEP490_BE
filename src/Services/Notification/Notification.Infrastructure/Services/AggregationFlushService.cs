@@ -397,10 +397,6 @@ public class AggregationFlushService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-        var content = data.Count == 1 
-            ? $"{data.FirstActorName} đã thích bài viết của bạn"
-            : $"{data.Count} người đã thích bài viết của bạn";
-
         // Resolve actor information from UserProfile service
         string? actorName = data.FirstActorName;
         string? actorAvatar = null;
@@ -424,6 +420,10 @@ public class AggregationFlushService : BackgroundService
                     data.FirstActorId);
             }
         }
+
+        var content = data.Count == 1 
+            ? $"{actorName} đã thích bài viết của bạn"
+            : $"{data.Count} người đã thích bài viết của bạn";
 
         var entity = new NotificationEntity
         {
@@ -451,17 +451,8 @@ public class AggregationFlushService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
+        // Resolve actor information from UserProfile service first
         var isReplyEvent = string.Equals(data.EventType, "post.reply.created", StringComparison.OrdinalIgnoreCase);
-        var title = isReplyEvent ? "Trả lời mới" : "Bình luận mới";
-        var content = isReplyEvent
-            ? (data.Count == 1
-                ? NotificationContentTemplates.PostReply.NewReply(data.FirstActorName)
-                : NotificationContentTemplates.PostReply.MultipleReplies(data.Count))
-            : (data.Count == 1
-                ? NotificationContentTemplates.PostComment.NewComment(data.FirstActorName)
-                : NotificationContentTemplates.PostComment.MultipleComments(data.Count));
-
-        // Resolve actor information from UserProfile service
         string? actorName = data.FirstActorName;
         string? actorAvatar = null;
         
@@ -484,6 +475,16 @@ public class AggregationFlushService : BackgroundService
                     data.FirstActorId);
             }
         }
+
+        // Generate content using resolved actor name
+        var title = isReplyEvent ? "Trả lời mới" : "Bình luận mới";
+        var content = isReplyEvent
+            ? (data.Count == 1
+                ? NotificationContentTemplates.PostReply.NewReply(actorName)
+                : NotificationContentTemplates.PostReply.MultipleReplies(data.Count))
+            : (data.Count == 1
+                ? NotificationContentTemplates.PostComment.NewComment(actorName)
+                : NotificationContentTemplates.PostComment.MultipleComments(data.Count));
 
         var entity = new NotificationEntity
         {
