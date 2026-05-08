@@ -24,12 +24,17 @@ public class NewMessageNotificationEventConsumer : RealtimeConsumerBase<NewMessa
     protected override string RoutingKey => "message.new";
 
     /// <summary>
-    /// Thay vì push thẳng, thêm vào debouncer.
-    /// Debouncer sẽ gom các event trong 2 giây rồi push 1 lần duy nhất với số đếm tổng.
+    /// Push ngay qua SignalR với đầy đủ thông tin người gửi (name, avatar, roomId, role, sentAt, content).
+    /// Đồng thời thêm vào FCM debouncer để gom count và gửi offline push sau 2s.
     /// </summary>
     protected override Task PushAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken)
     {
+        // 1. Push ngay qua SignalR (realtime) với full info
+        _ = PushService.PushNewMessageNotificationAsync(evt, cancellationToken);
+
+        // 2. Gom vào FCM debouncer (offline push sau 2s)
         _debouncer.Add(evt);
+
         return Task.CompletedTask;
     }
 }
