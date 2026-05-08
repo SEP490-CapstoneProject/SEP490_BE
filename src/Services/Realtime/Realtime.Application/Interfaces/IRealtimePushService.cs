@@ -13,7 +13,8 @@ public interface IRealtimePushService
     Task PushConnectionRequestedAsync(ConnectionRequestedEvent evt, CancellationToken cancellationToken = default);
     Task PushConnectionAcceptedAsync(ConnectionAcceptedEvent evt, CancellationToken cancellationToken = default);
     /// <summary>
-    /// Push tổng số tin nhắn mới (gom từ tất cả các room) cho user.
+    /// Push thông báo tin nhắn mới kèm đầy đủ thông tin người gửi cho user.
+    /// FE listens: connection.on("NewMessageNotification", handler)
     /// </summary>
-    Task PushNewMessageNotificationAsync(int toUserId, int totalNewMessages, CancellationToken cancellationToken = default);
+    Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default);
 }
