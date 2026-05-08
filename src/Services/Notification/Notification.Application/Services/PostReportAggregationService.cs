@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Notification.Application.Services;
 
@@ -9,10 +10,12 @@ public class PostReportAggregationService
     private readonly IDistributedCache _cache;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
+    private readonly ILogger<PostReportAggregationService> _logger;
 
-    public PostReportAggregationService(IDistributedCache cache, IConfiguration configuration)
+    public PostReportAggregationService(IDistributedCache cache, IConfiguration configuration, ILogger<PostReportAggregationService> logger)
     {
         _cache = cache;
+        _logger = logger;
         // Sliding window: prefer seconds (new) over minutes (legacy)
         var windowSeconds = configuration.GetValue<int?>("PostReportAggregation:WindowSeconds");
         if (windowSeconds.HasValue)
@@ -41,11 +44,25 @@ public class PostReportAggregationService
                 data.LastAt = GetVietnamTime();
                 data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
-                await _cache.SetStringAsync(
-                    key,
-                    JsonSerializer.Serialize(data),
-                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-                    cancellationToken);
+                var jsonData = JsonSerializer.Serialize(data);
+                _logger.LogInformation("📋 [RPT_PRESYNC] CacheHit=true, Key={Key}, DataLength={DataLength}, TTL={TTL}", 
+                    key, jsonData.Length, _cacheTtl);
+
+                try
+                {
+                    await _cache.SetStringAsync(
+                        key,
+                        jsonData,
+                        new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
+                        cancellationToken);
+
+                    _logger.LogInformation("📋 [RPT_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError("📋 [RPT_SYNC_ERROR] CacheHit=true failed, Key={Key}, Error={Error}", key, ex.Message);
+                    throw;
+                }
 
                 return new PostReportAggregationResult
                 {
@@ -63,11 +80,25 @@ public class PostReportAggregationService
             LastAt = GetVietnamTime()
         };
 
-        await _cache.SetStringAsync(
-            key,
-            JsonSerializer.Serialize(newData),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-            cancellationToken);
+        var newJsonData = JsonSerializer.Serialize(newData);
+        _logger.LogInformation("📋 [RPT_PRESYNC] FirstEvent, Key={Key}, DataLength={DataLength}, TTL={TTL}", 
+            key, newJsonData.Length, _cacheTtl);
+
+        try
+        {
+            await _cache.SetStringAsync(
+                key,
+                newJsonData,
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
+                cancellationToken);
+
+            _logger.LogInformation("📋 [RPT_POSTSYNC] FirstEvent persisted, Key={Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("📋 [RPT_SYNC_ERROR] FirstEvent failed, Key={Key}, Error={Error}", key, ex.Message);
+            throw;
+        }
 
         return new PostReportAggregationResult
         {
