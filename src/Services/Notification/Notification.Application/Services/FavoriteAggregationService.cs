@@ -42,16 +42,6 @@ public class FavoriteAggregationService
         var key = $"favorite_agg:{postId}:{ownerId}";
         
         // Remove any old HASH data - IDistributedCache.Remove is more reliable than SetStringAsync overwrite
-        try
-        {
-            _cache.Remove(key);
-            _logger.LogInformation("🔔 [FAV_CACHE_CLEAN] Removed old key {Key}", key);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("🔔 [FAV_CACHE_CLEAN_FAIL] Failed to remove key {Key}: {Error}", key, ex.Message);
-        }
-        
         var cached = await _cache.GetStringAsync(key, cancellationToken);
 
         if (cached != null)
