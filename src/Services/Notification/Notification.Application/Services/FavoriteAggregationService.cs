@@ -1,20 +1,20 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace Notification.Application.Services;
 
 public class FavoriteAggregationService
 {
-    private readonly IDistributedCache _cache;
+    private readonly IConnectionMultiplexer _redis;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
     private readonly ILogger<FavoriteAggregationService> _logger;
 
-    public FavoriteAggregationService(IDistributedCache cache, IConfiguration configuration, ILogger<FavoriteAggregationService> logger)
+    public FavoriteAggregationService(IConnectionMultiplexer redis, IConfiguration configuration, ILogger<FavoriteAggregationService> logger)
     {
-        _cache = cache;
+        _redis = redis;
         _logger = logger;
         
         // Sliding window: prefer seconds (new) over minutes (legacy)
@@ -40,14 +40,16 @@ public class FavoriteAggregationService
     public async Task<bool> TryAggregateAsync(int postId, string ownerId, string actorId, string actorName, CancellationToken cancellationToken = default)
     {
         var key = $"favorite_agg:{postId}:{ownerId}";
+        var db = _redis.GetDatabase();
         
-        // Remove any old HASH data - IDistributedCache.Remove is more reliable than SetStringAsync overwrite
-        var cached = await _cache.GetStringAsync(key, cancellationToken);
+        // Read from Redis using raw Redis (consistent with flush service)
+        var cached = await db.StringGetAsync(key);
 
-        if (cached != null)
+        if (cached.HasValue)
         {
             // Within window - increment count
-            var data = JsonSerializer.Deserialize<AggregationData>(cached);
+            var json = cached.ToString();
+            var data = JsonSerializer.Deserialize<AggregationData>(json);
             if (data != null)
             {
                 data.Count++;
@@ -60,11 +62,7 @@ public class FavoriteAggregationService
 
                 try
                 {
-                    await _cache.SetStringAsync(key, jsonData, 
-                        new DistributedCacheEntryOptions 
-                        { 
-                            AbsoluteExpirationRelativeToNow = _cacheTtl
-                        }, cancellationToken);
+                    await db.StringSetAsync(key, jsonData, _cacheTtl);
 
                     _logger.LogInformation("🔔 [FAV_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
                 }
@@ -97,11 +95,7 @@ public class FavoriteAggregationService
 
         try
         {
-            await _cache.SetStringAsync(key, newJsonData,
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = _cacheTtl
-                }, cancellationToken);
+            await db.StringSetAsync(key, newJsonData, _cacheTtl);
 
             _logger.LogInformation("🔔 [FAV_POSTSYNC] FirstEvent persisted, Key={Key}", key);
         }
@@ -126,7 +120,8 @@ public class FavoriteAggregationService
     public async Task RemoveAggregationAsync(int postId, string ownerId, CancellationToken cancellationToken = default)
     {
         var key = $"favorite_agg:{postId}:{ownerId}";
-        await _cache.RemoveAsync(key, cancellationToken);
+        var db = _redis.GetDatabase();
+        await db.KeyDeleteAsync(key);
     }
 
     private static DateTime GetVietnamTime()

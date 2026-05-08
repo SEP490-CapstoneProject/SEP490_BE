@@ -10,6 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" Version="2.6.122" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Notification.Domain\Notification.Domain.csproj" />
   </ItemGroup>
 </Project>

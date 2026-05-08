@@ -1,20 +1,20 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace Notification.Application.Services;
 
 public class CommentReplyAggregationService
 {
-    private readonly IDistributedCache _cache;
+    private readonly IConnectionMultiplexer _redis;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
     private readonly ILogger<CommentReplyAggregationService> _logger;
 
-    public CommentReplyAggregationService(IDistributedCache cache, IConfiguration configuration, ILogger<CommentReplyAggregationService> logger)
+    public CommentReplyAggregationService(IConnectionMultiplexer redis, IConfiguration configuration, ILogger<CommentReplyAggregationService> logger)
     {
-        _cache = cache;
+        _redis = redis;
         _logger = logger;
         // Sliding window: prefer seconds (new) over minutes (legacy)
         var windowSeconds = configuration.GetValue<int?>("CommentReplyAggregation:WindowSeconds");
@@ -39,13 +39,15 @@ public class CommentReplyAggregationService
         CancellationToken cancellationToken = default)
     {
         var key = BuildAggregationKey(eventType, objectId, ownerId);
+        var db = _redis.GetDatabase();
         
-        // Remove any old HASH data - IDistributedCache.Remove is more reliable than SetStringAsync overwrite
-        var cached = await _cache.GetStringAsync(key, cancellationToken);
+        // Read from Redis using raw Redis (consistent with flush service)
+        var cached = await db.StringGetAsync(key);
 
-        if (cached != null)
+        if (cached.HasValue)
         {
-            var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(cached);
+            var json = cached.ToString();
+            var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
             if (data != null)
             {
                 data.Count++;
@@ -58,11 +60,7 @@ public class CommentReplyAggregationService
 
                 try
                 {
-                    await _cache.SetStringAsync(
-                        key,
-                        jsonData,
-                        new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-                        cancellationToken);
+                    await db.StringSetAsync(key, jsonData, _cacheTtl);
 
                     _logger.LogInformation("💬 [COM_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
                 }
@@ -95,11 +93,7 @@ public class CommentReplyAggregationService
 
         try
         {
-            await _cache.SetStringAsync(
-                key,
-                newJsonData,
-                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-                cancellationToken);
+            await db.StringSetAsync(key, newJsonData, _cacheTtl);
 
             _logger.LogInformation("💬 [COM_POSTSYNC] FirstEvent persisted, Key={Key}", key);
         }

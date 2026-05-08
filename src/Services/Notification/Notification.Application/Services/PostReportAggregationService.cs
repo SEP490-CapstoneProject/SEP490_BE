@@ -1,20 +1,20 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace Notification.Application.Services;
 
 public class PostReportAggregationService
 {
-    private readonly IDistributedCache _cache;
+    private readonly IConnectionMultiplexer _redis;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
     private readonly ILogger<PostReportAggregationService> _logger;
 
-    public PostReportAggregationService(IDistributedCache cache, IConfiguration configuration, ILogger<PostReportAggregationService> logger)
+    public PostReportAggregationService(IConnectionMultiplexer redis, IConfiguration configuration, ILogger<PostReportAggregationService> logger)
     {
-        _cache = cache;
+        _redis = redis;
         _logger = logger;
         // Sliding window: prefer seconds (new) over minutes (legacy)
         var windowSeconds = configuration.GetValue<int?>("PostReportAggregation:WindowSeconds");
@@ -33,11 +33,15 @@ public class PostReportAggregationService
     public async Task<PostReportAggregationResult> TrackReportAsync(int postId, string recipientUserId, CancellationToken cancellationToken = default)
     {
         var key = BuildAggregationKey(postId, recipientUserId);
-        var cached = await _cache.GetStringAsync(key, cancellationToken);
+        var db = _redis.GetDatabase();
+        
+        // Read from Redis using raw Redis (consistent with flush service)
+        var cached = await db.StringGetAsync(key);
 
-        if (cached != null)
+        if (cached.HasValue)
         {
-            var data = JsonSerializer.Deserialize<PostReportAggregationData>(cached);
+            var json = cached.ToString();
+            var data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
             if (data != null)
             {
                 data.AdditionalCount++;
@@ -50,11 +54,7 @@ public class PostReportAggregationService
 
                 try
                 {
-                    await _cache.SetStringAsync(
-                        key,
-                        jsonData,
-                        new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-                        cancellationToken);
+                    await db.StringSetAsync(key, jsonData, _cacheTtl);
 
                     _logger.LogInformation("📋 [RPT_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
                 }
@@ -86,11 +86,7 @@ public class PostReportAggregationService
 
         try
         {
-            await _cache.SetStringAsync(
-                key,
-                newJsonData,
-                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-                cancellationToken);
+            await db.StringSetAsync(key, newJsonData, _cacheTtl);
 
             _logger.LogInformation("📋 [RPT_POSTSYNC] FirstEvent persisted, Key={Key}", key);
         }
