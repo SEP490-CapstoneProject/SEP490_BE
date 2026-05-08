@@ -18,6 +18,7 @@ public class AggregationFlushService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConnectionMultiplexer _redis;
+    private readonly IActorResolverClient _actorResolverClient;
     private readonly ILogger<AggregationFlushService> _logger;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _aggregationWindow;
@@ -26,11 +27,13 @@ public class AggregationFlushService : BackgroundService
     public AggregationFlushService(
         IServiceScopeFactory scopeFactory,
         IConnectionMultiplexer redis,
+        IActorResolverClient actorResolverClient,
         IConfiguration configuration,
         ILogger<AggregationFlushService> logger)
     {
         _scopeFactory = scopeFactory;
         _redis = redis;
+        _actorResolverClient = actorResolverClient;
         _logger = logger;
         
         var pollSeconds = configuration.GetValue<int?>("FavoriteAggregation:PollIntervalSeconds") ?? 30;
@@ -398,6 +401,30 @@ public class AggregationFlushService : BackgroundService
             ? $"{data.FirstActorName} đã thích bài viết của bạn"
             : $"{data.Count} người đã thích bài viết của bạn";
 
+        // Resolve actor information from UserProfile service
+        string? actorName = data.FirstActorName;
+        string? actorAvatar = null;
+        
+        if (data.Count == 1 && !string.IsNullOrEmpty(data.FirstActorId))
+        {
+            try
+            {
+                var actor = await _actorResolverClient.ResolveActorAsync(data.FirstActorId, "USER");
+                if (actor != null)
+                {
+                    actorName = actor.Name ?? data.FirstActorName;
+                    actorAvatar = actor.Avatar;
+                    _logger.LogInformation("🔔 [FAV_ACTOR_RESOLVED] ActorId={ActorId}, Name={Name}, Avatar={Avatar}", 
+                        data.FirstActorId, actorName, actorAvatar);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "🔔 [FAV_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}, falling back to event data", 
+                    data.FirstActorId);
+            }
+        }
+
         var entity = new NotificationEntity
         {
             UserId = data.OwnerId,
@@ -406,15 +433,15 @@ public class AggregationFlushService : BackgroundService
             Type = "POST_FAVORITE",
             ObjectId = data.PostId.ToString(),
             ActorId = data.Count == 1 ? data.FirstActorId : null,
-            ActorName = data.Count == 1 ? data.FirstActorName : null,
-            ActorAvatar = null,
+            ActorName = data.Count == 1 ? actorName : null,
+            ActorAvatar = actorAvatar,
             ActorType = data.Count == 1 ? "USER" : "SYSTEM",
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };
 
-        _logger.LogInformation("🔔 [FAV_CREATE] Creating notification: Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorType={ActorType}",
-            data.Count, entity.ActorId, entity.ActorName, entity.ActorType);
+        _logger.LogInformation("🔔 [FAV_CREATE] Creating notification: Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorAvatar={ActorAvatar}, ActorType={ActorType}",
+            data.Count, entity.ActorId, entity.ActorName, entity.ActorAvatar, entity.ActorType);
 
         await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
     }
@@ -434,6 +461,30 @@ public class AggregationFlushService : BackgroundService
                 ? NotificationContentTemplates.PostComment.NewComment(data.FirstActorName)
                 : NotificationContentTemplates.PostComment.MultipleComments(data.Count));
 
+        // Resolve actor information from UserProfile service
+        string? actorName = data.FirstActorName;
+        string? actorAvatar = null;
+        
+        if (data.Count == 1 && !string.IsNullOrEmpty(data.FirstActorId))
+        {
+            try
+            {
+                var actor = await _actorResolverClient.ResolveActorAsync(data.FirstActorId, "USER");
+                if (actor != null)
+                {
+                    actorName = actor.Name ?? data.FirstActorName;
+                    actorAvatar = actor.Avatar;
+                    _logger.LogInformation("💬 [COM_ACTOR_RESOLVED] ActorId={ActorId}, Name={Name}, Avatar={Avatar}", 
+                        data.FirstActorId, actorName, actorAvatar);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "💬 [COM_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}, falling back to event data", 
+                    data.FirstActorId);
+            }
+        }
+
         var entity = new NotificationEntity
         {
             UserId = data.OwnerId,
@@ -442,15 +493,15 @@ public class AggregationFlushService : BackgroundService
             Type = "COMMUNITY",
             ObjectId = data.ObjectId,
             ActorId = data.Count == 1 ? data.FirstActorId : null,
-            ActorName = data.Count == 1 ? data.FirstActorName : null,
-            ActorAvatar = null,
+            ActorName = data.Count == 1 ? actorName : null,
+            ActorAvatar = actorAvatar,
             ActorType = data.Count == 1 ? "USER" : "SYSTEM",
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };
 
-        _logger.LogInformation("💬 [COM_CREATE] Creating notification: EventType={EventType}, Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorType={ActorType}",
-            data.EventType, data.Count, entity.ActorId, entity.ActorName, entity.ActorType);
+        _logger.LogInformation("💬 [COM_CREATE] Creating notification: EventType={EventType}, Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorAvatar={ActorAvatar}, ActorType={ActorType}",
+            data.EventType, data.Count, entity.ActorId, entity.ActorName, entity.ActorAvatar, entity.ActorType);
 
         await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
     }
