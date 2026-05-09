@@ -121,6 +121,9 @@ builder.Services.AddHttpClient<IRecipientResolverClient, RecipientResolverClient
     client.Timeout = TimeSpan.FromSeconds(10); // Increased from 5 to 10 seconds for more reliability
 });
 
+// Initialize Firebase Admin SDK
+builder.Services.AddFirebaseInitialization(builder.Configuration);
+
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
@@ -142,6 +145,20 @@ builder.Services.AddHostedService<AggregationFlushService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+// Verify Firebase initialization
+try
+{
+    var logger = app.Services.GetService<ILogger<Program>>();
+    if (logger != null)
+    {
+        app.VerifyFirebaseInitialization(logger);
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error during Firebase verification: {ex.Message}");
+}
 
 // Apply all pending migrations with proper error handling and logging
 try
