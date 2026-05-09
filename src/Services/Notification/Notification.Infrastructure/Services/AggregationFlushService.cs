@@ -288,7 +288,9 @@ public class AggregationFlushService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-        // Resolve actor information from UserProfile service
+        _logger.LogInformation("🔔 [FAV_NOTIFICATION_CREATE] Creating favorite notification. PostId={PostId}, Count={Count}, OwnerId={OwnerId}",
+            data.PostId, data.Count, data.OwnerId);
+
         string? actorName = data.FirstActorName;
         string? actorAvatar = null;
         
@@ -301,14 +303,11 @@ public class AggregationFlushService : BackgroundService
                 {
                     actorName = actor.Name ?? data.FirstActorName;
                     actorAvatar = actor.Avatar;
-                    _logger.LogInformation("🔔 [FAV_ACTOR_RESOLVED] ActorId={ActorId}, Name={Name}, Avatar={Avatar}", 
-                        data.FirstActorId, actorName, actorAvatar);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "🔔 [FAV_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}, falling back to event data", 
-                    data.FirstActorId);
+                _logger.LogWarning(ex, "🔔 [FAV_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}", data.FirstActorId);
             }
         }
 
@@ -331,10 +330,10 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        _logger.LogInformation("🔔 [FAV_CREATE] Creating notification: Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorAvatar={ActorAvatar}, ActorType={ActorType}",
-            data.Count, entity.ActorId, entity.ActorName, entity.ActorAvatar, entity.ActorType);
-
         await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+        
+        _logger.LogInformation("🔔 [FAV_PUBLISHED] Favorite notification published. NotificationId={NotificationId}, UserId={UserId}, PostId={PostId}, Type={Type}",
+            entity.Id, entity.UserId, data.PostId, entity.Type);
     }
 
     private async Task CreateCommentReplyAggregatedNotificationAsync(CommentReplyAggregationData data, CancellationToken cancellationToken)
@@ -342,8 +341,11 @@ public class AggregationFlushService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-        // Resolve actor information from UserProfile service first
         var isReplyEvent = string.Equals(data.EventType, "post.reply.created", StringComparison.OrdinalIgnoreCase);
+        
+        _logger.LogInformation("💬 [COM_NOTIFICATION_CREATE] Creating comment/reply notification. EventType={EventType}, Count={Count}, OwnerId={OwnerId}",
+            data.EventType, data.Count, data.OwnerId);
+
         string? actorName = data.FirstActorName;
         string? actorAvatar = null;
         
@@ -356,18 +358,14 @@ public class AggregationFlushService : BackgroundService
                 {
                     actorName = actor.Name ?? data.FirstActorName;
                     actorAvatar = actor.Avatar;
-                    _logger.LogInformation("💬 [COM_ACTOR_RESOLVED] ActorId={ActorId}, Name={Name}, Avatar={Avatar}", 
-                        data.FirstActorId, actorName, actorAvatar);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "💬 [COM_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}, falling back to event data", 
-                    data.FirstActorId);
+                _logger.LogWarning(ex, "💬 [COM_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}", data.FirstActorId);
             }
         }
 
-        // Generate content using resolved actor name
         var title = isReplyEvent ? "Trả lời mới" : "Bình luận mới";
         var content = isReplyEvent
             ? (data.Count == 1
@@ -392,10 +390,10 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        _logger.LogInformation("💬 [COM_CREATE] Creating notification: EventType={EventType}, Count={Count}, ActorId={ActorId}, ActorName={ActorName}, ActorAvatar={ActorAvatar}, ActorType={ActorType}",
-            data.EventType, data.Count, entity.ActorId, entity.ActorName, entity.ActorAvatar, entity.ActorType);
-
         await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+        
+        _logger.LogInformation("💬 [COM_PUBLISHED] Comment/reply notification published. NotificationId={NotificationId}, UserId={UserId}, EventType={EventType}, Type={Type}",
+            entity.Id, entity.UserId, data.EventType, entity.Type);
     }
 
     private async Task CreatePostReportAggregatedNotificationAsync(PostReportAggregationData data, CancellationToken cancellationToken)
