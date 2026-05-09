@@ -31,6 +31,12 @@ namespace Notification.Infrastructure.Services
 
             try
             {
+                if (FirebaseMessaging.DefaultInstance == null)
+                {
+                    _logger.LogError("📱 [FCM_FIREBASE_UNAVAILABLE] FirebaseMessaging.DefaultInstance is null - Firebase Admin SDK not initialized");
+                    return null;
+                }
+
                 var message = new Message
                 {
                     Token = deviceToken,
@@ -85,6 +91,12 @@ namespace Notification.Infrastructure.Services
 
             try
             {
+                if (FirebaseMessaging.DefaultInstance == null)
+                {
+                    _logger.LogError("📱 [FCM_FIREBASE_UNAVAILABLE] FirebaseMessaging.DefaultInstance is null - Firebase Admin SDK not initialized");
+                    return false;
+                }
+
                 var message = new MulticastMessage
                 {
                     Tokens = deviceTokens,
