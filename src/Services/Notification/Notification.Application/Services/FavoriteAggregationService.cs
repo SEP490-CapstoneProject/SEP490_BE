@@ -42,42 +42,34 @@ public class FavoriteAggregationService
         var key = $"favorite_agg:{postId}:{ownerId}";
         var db = _redis.GetDatabase();
         
-        // Read from Redis using raw Redis (consistent with flush service)
         var cached = await db.StringGetAsync(key);
 
         if (cached.HasValue)
         {
-            // Within window - increment count
             var json = cached.ToString();
             var data = JsonSerializer.Deserialize<AggregationData>(json);
             if (data != null)
             {
                 data.Count++;
                 data.LastAt = GetVietnamTime();
-                data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
+                data.FirstAt = GetVietnamTime();
 
                 var jsonData = JsonSerializer.Serialize(data);
-                _logger.LogInformation("🔔 [FAV_PRESYNC] CacheHit=true, Key={Key}, DataLength={DataLength}, TTL={TTL}", 
-                    key, jsonData.Length, _cacheTtl);
 
                 try
                 {
                     await db.StringSetAsync(key, jsonData, _cacheTtl);
-
-                    _logger.LogInformation("🔔 [FAV_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("🔔 [FAV_SYNC_ERROR] CacheHit=true failed, Key={Key}, Error={Error}", key, ex.Message);
+                    _logger.LogError(ex, "🔔 [FAV_SYNC_ERROR] CacheHit=true failed, Key={Key}", key);
                     throw;
                 }
 
-                _logger.LogInformation("🔔 [FAV_AGG] CacheHit=true, PostId={PostId}, Count={Count}", postId, data.Count);
-                return true; // Aggregated, don't create notification yet
+                return true;
             }
         }
 
-        // New window or expired - store first event
         var newData = new AggregationData
         {
             Count = 1,
@@ -90,31 +82,18 @@ public class FavoriteAggregationService
         };
 
         var newJsonData = JsonSerializer.Serialize(newData);
-        _logger.LogInformation("🔔 [FAV_PRESYNC] FirstEvent, Key={Key}, DataLength={DataLength}, TTL={TTL}, ActorName={ActorName}", 
-            key, newJsonData.Length, _cacheTtl, actorName);
 
         try
         {
             await db.StringSetAsync(key, newJsonData, _cacheTtl);
-
-            _logger.LogInformation("🔔 [FAV_POSTSYNC] FirstEvent persisted, Key={Key}", key);
         }
         catch (Exception ex)
         {
-            _logger.LogError("🔔 [FAV_SYNC_ERROR] FirstEvent failed, Key={Key}, Error={Error}", key, ex.Message);
+            _logger.LogError(ex, "🔔 [FAV_SYNC_ERROR] FirstEvent failed, Key={Key}", key);
             throw;
         }
 
-        _logger.LogInformation("🔔 [FAV_AGG] CacheHit=false, FirstEvent, PostId={PostId}, ActorName={ActorName}", postId, actorName);
-        return false; // First event, create notification immediately
-    }
-
-    public async Task<List<AggregationData>> GetExpiredAggregationsAsync(CancellationToken cancellationToken = default)
-    {
-        // This method would need Redis SCAN functionality
-        // For now, we'll use a simplified approach where the background service
-        // checks known keys or uses a separate tracking mechanism
-        return new List<AggregationData>();
+        return false;
     }
 
     public async Task RemoveAggregationAsync(int postId, string ownerId, CancellationToken cancellationToken = default)
