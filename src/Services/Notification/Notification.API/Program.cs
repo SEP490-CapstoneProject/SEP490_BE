@@ -134,7 +134,7 @@ builder.Services.AddScoped<IFcmService, FcmService>();
 builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
 builder.Services.AddScoped<FcmRetryService>();
 builder.Services.AddScoped<FcmAnalyticsService>();
-builder.Services.AddScoped<NotificationPublishingService>();
+builder.Services.AddScoped<INotificationPublishingService, NotificationPublishingService>();
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
 builder.Services.AddHostedService<AggregationFlushService>();
