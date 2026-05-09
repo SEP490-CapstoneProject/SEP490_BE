@@ -108,6 +108,13 @@ namespace Notification.Infrastructure.Services
                 };
 
                 var response = await FirebaseMessaging.DefaultInstance.SendMulticastAsync(message);
+                
+                if (response == null)
+                {
+                    _logger.LogWarning("📱 [FCM_MULTICAST_NULL_RESPONSE] SendMulticastAsync returned null for {Count} devices", deviceTokens.Count);
+                    return false;
+                }
+                
                 _logger.LogInformation("📱 [FCM_MULTICAST_RESPONSE] Success={SuccessCount}, Failed={FailureCount}, Total={Total}",
                     response.SuccessCount, response.FailureCount, deviceTokens.Count);
 
