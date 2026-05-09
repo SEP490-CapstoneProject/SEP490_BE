@@ -19,6 +19,7 @@ public class AggregationFlushService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConnectionMultiplexer _redis;
     private readonly IActorResolverClient _actorResolverClient;
+    private readonly INotificationPublishingService _publishingService;
     private readonly ILogger<AggregationFlushService> _logger;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _aggregationWindow;
@@ -28,12 +29,14 @@ public class AggregationFlushService : BackgroundService
         IServiceScopeFactory scopeFactory,
         IConnectionMultiplexer redis,
         IActorResolverClient actorResolverClient,
+        INotificationPublishingService publishingService,
         IConfiguration configuration,
         ILogger<AggregationFlushService> logger)
     {
         _scopeFactory = scopeFactory;
         _redis = redis;
         _actorResolverClient = actorResolverClient;
+        _publishingService = publishingService;
         _logger = logger;
         
         var pollSeconds = configuration.GetValue<int?>("FavoriteAggregation:PollIntervalSeconds") ?? 30;
@@ -330,10 +333,7 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
-        
-        _logger.LogInformation("🔔 [FAV_PUBLISHED] Favorite notification published. NotificationId={NotificationId}, UserId={UserId}, PostId={PostId}, Type={Type}",
-            entity.Id, entity.UserId, data.PostId, entity.Type);
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
     }
 
     private async Task CreateCommentReplyAggregatedNotificationAsync(CommentReplyAggregationData data, CancellationToken cancellationToken)
@@ -390,7 +390,7 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
         
         _logger.LogInformation("💬 [COM_PUBLISHED] Comment/reply notification published. NotificationId={NotificationId}, UserId={UserId}, EventType={EventType}, Type={Type}",
             entity.Id, entity.UserId, data.EventType, entity.Type);
@@ -416,13 +416,14 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
     }
 
     private static async Task PublishNotificationAsync(
         IServiceProvider services,
         INotificationService notificationService,
-        NotificationEntity entity)
+        NotificationEntity entity,
+        INotificationPublishingService publishingService)
     {
         await notificationService.CreateNotificationAsync(entity);
 
@@ -435,6 +436,15 @@ public class AggregationFlushService : BackgroundService
         {
             await cache.RemoveAsync($"unread:{entity.UserId}");
         }
+
+        // Trigger FCM (fire-and-forget pattern - non-blocking)
+        _ = publishingService.SendFcmOnlyAsync(entity).ContinueWith(task =>
+        {
+            if (task.IsFaulted)
+            {
+                // Exceptions are already logged in SendFcmOnlyAsync
+            }
+        });
     }
 
     private static DateTime GetVietnamTime()
