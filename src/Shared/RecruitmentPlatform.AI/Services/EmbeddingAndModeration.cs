@@ -113,11 +113,6 @@ public sealed class ModerationService
             return new ModerationResult { Status = "Rejected", Reason = "Description is too short." };
         }
 
-        if (!hasProject)
-        {
-            return new ModerationResult { Status = "Rejected", Reason = "Portfolio has no project content." };
-        }
-
         var lowered = normalized.ToLowerInvariant();
         var detectedKeyword = SpamKeywords.FirstOrDefault(keyword => lowered.Contains(keyword));
         if (detectedKeyword != null)

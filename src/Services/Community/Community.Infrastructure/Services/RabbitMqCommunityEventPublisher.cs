@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Community.Application.Interfaces;
+using Community.Application.Models.Events;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
@@ -26,6 +27,9 @@ public class RabbitMqCommunityEventPublisher : ICommunityEventPublisher
 
     public Task PublishReplyCreatedAsync(ReplyCreatedEvent evt, CancellationToken cancellationToken = default)
         => PublishAsync("post.reply.created", evt, cancellationToken);
+
+    public Task PublishPostFavoriteNotificationAsync(PostFavoriteNotificationEvent evt, CancellationToken cancellationToken = default)
+        => PublishAsync("post.favorite", evt, cancellationToken);
 
     public Task PublishPostFavoriteChangedAsync(PostFavoriteChangedEvent evt, CancellationToken cancellationToken = default)
         => PublishAsync("post.favorite.changed", evt, cancellationToken);

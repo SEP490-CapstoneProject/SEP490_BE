@@ -2,8 +2,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS base
 WORKDIR /app
 EXPOSE 8080
 
-# Install required libraries for Alpine (fixes globalization issue)
-RUN apk add --no-cache icu-libs
+# Install required libraries for Alpine (fixes globalization and timezone issues)
+RUN apk add --no-cache icu-libs tzdata
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appuser && \
