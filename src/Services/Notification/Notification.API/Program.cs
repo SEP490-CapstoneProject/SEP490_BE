@@ -109,17 +109,20 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client =>
 {
-    var url = builder.Configuration["ServiceUrls:UserProfile"] ?? "http://userprofile-service:8080";
+    var url = builder.Configuration["ServiceUrls:UserProfile"] ?? "https://userprofile-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(10); // Increased from 5 to 10 seconds for more reliability
 });
 
 builder.Services.AddHttpClient<IRecipientResolverClient, RecipientResolverClient>(client =>
 {
-    var url = builder.Configuration["ServiceUrls:AuthService"] ?? "http://auth-service:8080";
+    var url = builder.Configuration["ServiceUrls:AuthService"] ?? "https://auth-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(10); // Increased from 5 to 10 seconds for more reliability
 });
+
+// Initialize Firebase Admin SDK
+builder.Services.AddFirebaseInitialization(builder.Configuration);
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
@@ -134,7 +137,7 @@ builder.Services.AddScoped<IFcmService, FcmService>();
 builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
 builder.Services.AddScoped<FcmRetryService>();
 builder.Services.AddScoped<FcmAnalyticsService>();
-builder.Services.AddScoped<NotificationPublishingService>();
+builder.Services.AddScoped<INotificationPublishingService, NotificationPublishingService>();
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
 builder.Services.AddHostedService<AggregationFlushService>();
@@ -142,6 +145,20 @@ builder.Services.AddHostedService<AggregationFlushService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+// Verify Firebase initialization
+try
+{
+    var logger = app.Services.GetService<ILogger<Program>>();
+    if (logger != null)
+    {
+        app.VerifyFirebaseInitialization(logger);
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error during Firebase verification: {ex.Message}");
+}
 
 // Apply all pending migrations with proper error handling and logging
 try

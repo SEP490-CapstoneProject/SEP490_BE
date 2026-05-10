@@ -1,41 +1,68 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace Notification.Application.Services;
 
 public class PostReportAggregationService
 {
-    private readonly IDistributedCache _cache;
+    private readonly IConnectionMultiplexer _redis;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
+    private readonly ILogger<PostReportAggregationService> _logger;
 
-    public PostReportAggregationService(IDistributedCache cache, IConfiguration configuration)
+    public PostReportAggregationService(IConnectionMultiplexer redis, IConfiguration configuration, ILogger<PostReportAggregationService> logger)
     {
-        _cache = cache;
-        var windowMinutes = configuration.GetValue<int?>("PostReportAggregation:WindowMinutes") ?? 10;
-        _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        _redis = redis;
+        _logger = logger;
+        // Sliding window: prefer seconds (new) over minutes (legacy)
+        var windowSeconds = configuration.GetValue<int?>("PostReportAggregation:WindowSeconds");
+        if (windowSeconds.HasValue)
+        {
+            _aggregationWindow = TimeSpan.FromSeconds(windowSeconds.Value);
+        }
+        else
+        {
+            var windowMinutes = configuration.GetValue<int?>("PostReportAggregation:WindowMinutes") ?? 10;
+            _aggregationWindow = TimeSpan.FromMinutes(windowMinutes);
+        }
         _cacheTtl = _aggregationWindow + TimeSpan.FromSeconds(90);
     }
 
     public async Task<PostReportAggregationResult> TrackReportAsync(int postId, string recipientUserId, CancellationToken cancellationToken = default)
     {
         var key = BuildAggregationKey(postId, recipientUserId);
-        var cached = await _cache.GetStringAsync(key, cancellationToken);
+        var db = _redis.GetDatabase();
+        
+        // Read from Redis using raw Redis (consistent with flush service)
+        var cached = await db.StringGetAsync(key);
 
-        if (cached != null)
+        if (cached.HasValue)
         {
-            var data = JsonSerializer.Deserialize<PostReportAggregationData>(cached);
+            var json = cached.ToString();
+            var data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
             if (data != null)
             {
                 data.AdditionalCount++;
                 data.LastAt = GetVietnamTime();
+                data.FirstAt = GetVietnamTime();  // Sliding window: reset on each event
 
-                await _cache.SetStringAsync(
-                    key,
-                    JsonSerializer.Serialize(data),
-                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-                    cancellationToken);
+                var jsonData = JsonSerializer.Serialize(data);
+                _logger.LogInformation("📋 [RPT_PRESYNC] CacheHit=true, Key={Key}, DataLength={DataLength}, TTL={TTL}", 
+                    key, jsonData.Length, _cacheTtl);
+
+                try
+                {
+                    await db.StringSetAsync(key, jsonData, _cacheTtl);
+
+                    _logger.LogInformation("📋 [RPT_POSTSYNC] CacheHit=true persisted, Key={Key}", key);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError("📋 [RPT_SYNC_ERROR] CacheHit=true failed, Key={Key}, Error={Error}", key, ex.Message);
+                    throw;
+                }
 
                 return new PostReportAggregationResult
                 {
@@ -53,11 +80,21 @@ public class PostReportAggregationService
             LastAt = GetVietnamTime()
         };
 
-        await _cache.SetStringAsync(
-            key,
-            JsonSerializer.Serialize(newData),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = _cacheTtl },
-            cancellationToken);
+        var newJsonData = JsonSerializer.Serialize(newData);
+        _logger.LogInformation("📋 [RPT_PRESYNC] FirstEvent, Key={Key}, DataLength={DataLength}, TTL={TTL}", 
+            key, newJsonData.Length, _cacheTtl);
+
+        try
+        {
+            await db.StringSetAsync(key, newJsonData, _cacheTtl);
+
+            _logger.LogInformation("📋 [RPT_POSTSYNC] FirstEvent persisted, Key={Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("📋 [RPT_SYNC_ERROR] FirstEvent failed, Key={Key}, Error={Error}", key, ex.Message);
+            throw;
+        }
 
         return new PostReportAggregationResult
         {

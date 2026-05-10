@@ -1,18 +1,21 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace Notification.Application.Services;
 
 public class FavoriteAggregationService
 {
-    private readonly IDistributedCache _cache;
+    private readonly IConnectionMultiplexer _redis;
     private readonly TimeSpan _aggregationWindow;
     private readonly TimeSpan _cacheTtl;
+    private readonly ILogger<FavoriteAggregationService> _logger;
 
-    public FavoriteAggregationService(IDistributedCache cache, IConfiguration configuration)
+    public FavoriteAggregationService(IConnectionMultiplexer redis, IConfiguration configuration, ILogger<FavoriteAggregationService> logger)
     {
-        _cache = cache;
+        _redis = redis;
+        _logger = logger;
         
         // Sliding window: prefer seconds (new) over minutes (legacy)
         // Each event resets the TTL, so window adapts to event frequency
@@ -37,28 +40,36 @@ public class FavoriteAggregationService
     public async Task<bool> TryAggregateAsync(int postId, string ownerId, string actorId, string actorName, CancellationToken cancellationToken = default)
     {
         var key = $"favorite_agg:{postId}:{ownerId}";
-        var cached = await _cache.GetStringAsync(key, cancellationToken);
+        var db = _redis.GetDatabase();
+        
+        var cached = await db.StringGetAsync(key);
 
-        if (cached != null)
+        if (cached.HasValue)
         {
-            // Within window - increment count
-            var data = JsonSerializer.Deserialize<AggregationData>(cached);
+            var json = cached.ToString();
+            var data = JsonSerializer.Deserialize<AggregationData>(json);
             if (data != null)
             {
                 data.Count++;
                 data.LastAt = GetVietnamTime();
+                data.FirstAt = GetVietnamTime();
 
-                await _cache.SetStringAsync(key, JsonSerializer.Serialize(data), 
-                    new DistributedCacheEntryOptions 
-                    { 
-                        AbsoluteExpirationRelativeToNow = _cacheTtl
-                    }, cancellationToken);
+                var jsonData = JsonSerializer.Serialize(data);
 
-                return true; // Aggregated, don't create notification yet
+                try
+                {
+                    await db.StringSetAsync(key, jsonData, _cacheTtl);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "🔔 [FAV_SYNC_ERROR] CacheHit=true failed, Key={Key}", key);
+                    throw;
+                }
+
+                return true;
             }
         }
 
-        // New window or expired - store first event
         var newData = new AggregationData
         {
             Count = 1,
@@ -70,27 +81,26 @@ public class FavoriteAggregationService
             LastAt = GetVietnamTime()
         };
 
-        await _cache.SetStringAsync(key, JsonSerializer.Serialize(newData),
-            new DistributedCacheEntryOptions 
-            { 
-                AbsoluteExpirationRelativeToNow = _cacheTtl
-            }, cancellationToken);
+        var newJsonData = JsonSerializer.Serialize(newData);
 
-        return false; // First event, create notification immediately
-    }
+        try
+        {
+            await db.StringSetAsync(key, newJsonData, _cacheTtl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "🔔 [FAV_SYNC_ERROR] FirstEvent failed, Key={Key}", key);
+            throw;
+        }
 
-    public async Task<List<AggregationData>> GetExpiredAggregationsAsync(CancellationToken cancellationToken = default)
-    {
-        // This method would need Redis SCAN functionality
-        // For now, we'll use a simplified approach where the background service
-        // checks known keys or uses a separate tracking mechanism
-        return new List<AggregationData>();
+        return false;
     }
 
     public async Task RemoveAggregationAsync(int postId, string ownerId, CancellationToken cancellationToken = default)
     {
         var key = $"favorite_agg:{postId}:{ownerId}";
-        await _cache.RemoveAsync(key, cancellationToken);
+        var db = _redis.GetDatabase();
+        await db.KeyDeleteAsync(key);
     }
 
     private static DateTime GetVietnamTime()

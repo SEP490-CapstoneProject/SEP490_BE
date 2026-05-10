@@ -100,6 +100,7 @@ builder.Services.AddScoped<IBlockRepository, BlockRepository>();
 builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
 builder.Services.AddScoped<IComplimentRepository, ComplimentRepository>();
 builder.Services.AddScoped<ICriterionRepository, CriterionRepository>();
+builder.Services.AddScoped<IPortfolioPreviewRepository, PortfolioPreviewRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
@@ -109,6 +110,8 @@ builder.Services.AddScoped<IBlockTypeService, BlockTypeService>();
 builder.Services.AddScoped<IComplimentService, ComplimentService>();
 builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCategoryService>();
+builder.Services.AddScoped<IPortfolioPreviewService, PortfolioPreviewService>();
+builder.Services.AddScoped<GoogleAiPreviewGenerator>();
 builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
 builder.Services.AddScoped<IPortfolioNotificationEventPublisher, PortfolioNotificationEventPublisher>();
 builder.Services.AddScoped<IPortfolioModerationEventPublisher, PortfolioModerationEventPublisher>();
@@ -160,6 +163,12 @@ builder.Services.AddHttpClient<ICompanyMatchingClient, CompanyMatchingClient>(cl
 {
     client.BaseAddress = new Uri(serviceUrls["CompanyService"] ?? "http://company-service:8080");
     client.Timeout = TimeSpan.FromSeconds(2);
+});
+
+builder.Services.AddHttpClient<GoogleAiPreviewGenerator>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 // CORS

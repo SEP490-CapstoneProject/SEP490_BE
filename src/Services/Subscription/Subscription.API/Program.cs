@@ -112,7 +112,7 @@ builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
 builder.Services.AddHttpClient<ISubscriptionUserProfileClient, SubscriptionUserProfileClient>(client =>
 {
     var userProfileServiceUrl = builder.Configuration["ServiceUrls:UserProfileService"]
-        ?? "https://userprofile-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
+        ?? "https://userprofile-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(userProfileServiceUrl);
 });
 

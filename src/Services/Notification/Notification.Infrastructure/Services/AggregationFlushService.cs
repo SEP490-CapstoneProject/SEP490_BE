@@ -18,6 +18,8 @@ public class AggregationFlushService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConnectionMultiplexer _redis;
+    private readonly IActorResolverClient _actorResolverClient;
+    private readonly INotificationPublishingService _publishingService;
     private readonly ILogger<AggregationFlushService> _logger;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _aggregationWindow;
@@ -26,11 +28,15 @@ public class AggregationFlushService : BackgroundService
     public AggregationFlushService(
         IServiceScopeFactory scopeFactory,
         IConnectionMultiplexer redis,
+        IActorResolverClient actorResolverClient,
+        INotificationPublishingService publishingService,
         IConfiguration configuration,
         ILogger<AggregationFlushService> logger)
     {
         _scopeFactory = scopeFactory;
         _redis = redis;
+        _actorResolverClient = actorResolverClient;
+        _publishingService = publishingService;
         _logger = logger;
         
         var pollSeconds = configuration.GetValue<int?>("FavoriteAggregation:PollIntervalSeconds") ?? 30;
@@ -96,50 +102,92 @@ public class AggregationFlushService : BackgroundService
         var db = _redis.GetDatabase();
         var server = _redis.GetServer(_redis.GetEndPoints().First());
 
-        foreach (var key in server.Keys(pattern: "favorite_agg:*"))
+        var favoriteKeys = server.Keys(pattern: "favorite_agg:*").ToList();
+        
+        foreach (var key in favoriteKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
             await ProcessFavoriteAggregationKeyAsync(db, key, cancellationToken);
         }
 
-        foreach (var key in server.Keys(pattern: "comment_reply_agg:*"))
+        var commentKeys = server.Keys(pattern: "comment_reply_agg:*").ToList();
+        
+        foreach (var key in commentKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
             await ProcessCommentReplyAggregationKeyAsync(db, key, cancellationToken);
         }
 
-        foreach (var key in server.Keys(pattern: "post_report_agg:*"))
+        var reportKeys = server.Keys(pattern: "post_report_agg:*").ToList();
+        
+        foreach (var key in reportKeys)
         {
             if (cancellationToken.IsCancellationRequested) break;
             await ProcessPostReportAggregationKeyAsync(db, key, cancellationToken);
         }
     }
 
+    private async Task<bool> TryCleanupOldHashFormatAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, string prefix)
+    {
+        try
+        {
+            var type = await db.KeyTypeAsync(key);
+            if (type == StackExchange.Redis.RedisType.Hash)
+            {
+                await db.KeyDeleteAsync(key);
+                _logger.LogWarning("{Prefix} Cleaned old HASH format key: {Key}", prefix, key.ToString());
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Prefix} Error during HASH cleanup for key {Key}", prefix, key.ToString());
+        }
+        return false;
+    }
+
     private async Task ProcessFavoriteAggregationKeyAsync(StackExchange.Redis.IDatabase db, StackExchange.Redis.RedisKey key, CancellationToken cancellationToken)
     {
         try
         {
-            var rawData = await db.HashGetAsync(key, "data");
-            if (!rawData.HasValue) return;
+            if (await TryCleanupOldHashFormatAsync(db, key, "🔔 [FAV]"))
+                return;
 
-            var bytes = (byte[]?)rawData;
-            if (bytes == null || bytes.Length == 0) return;
+            var rawData = await db.StringGetAsync(key);
+            
+            if (!rawData.HasValue) 
+                return;
 
-            var json = Encoding.UTF8.GetString(bytes);
-            var data = JsonSerializer.Deserialize<AggregationData>(json);
-            if (data == null) return;
+            var json = rawData.ToString();
+            if (string.IsNullOrWhiteSpace(json)) 
+                return;
 
-            if (GetVietnamTime() - data.FirstAt < _aggregationWindow) return;
+            AggregationData? data;
+            try
+            {
+                data = JsonSerializer.Deserialize<AggregationData>(json);
+                if (data == null) 
+                    return;
+            }
+            catch (JsonException jex)
+            {
+                _logger.LogError(jex, "🔔 [FAV_DESERIALIZE_ERROR] JSON parse failed for key {Key}", key);
+                return;
+            }
+
+            var timeDiff = GetVietnamTime() - data.FirstAt;
+            if (timeDiff < _aggregationWindow) 
+                return;
 
             await CreateFavoriteAggregatedNotificationAsync(data, cancellationToken);
             await db.KeyDeleteAsync(key);
 
-            _logger.LogInformation("Flushed favorite aggregation for post {PostId}, owner {OwnerId}, count {Count}",
+            _logger.LogInformation("🔔 [FAV_FLUSH_SUCCESS] Flushed favorite aggregation for post {PostId}, owner {OwnerId}, count {Count}",
                 data.PostId, data.OwnerId, data.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing favorite aggregation key {Key}", key.ToString());
+            _logger.LogError(ex, "🔔 [FAV_FLUSH_ERROR] Error processing favorite aggregation key {Key}", key.ToString());
         }
     }
 
@@ -147,27 +195,44 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
-            var rawData = await db.HashGetAsync(key, "data");
-            if (!rawData.HasValue) return;
+            if (await TryCleanupOldHashFormatAsync(db, key, "💬 [COM]"))
+                return;
 
-            var bytes = (byte[]?)rawData;
-            if (bytes == null || bytes.Length == 0) return;
+            var rawData = await db.StringGetAsync(key);
+            
+            if (!rawData.HasValue) 
+                return;
 
-            var json = Encoding.UTF8.GetString(bytes);
-            var data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
-            if (data == null) return;
+            var json = rawData.ToString();
+            if (string.IsNullOrWhiteSpace(json)) 
+                return;
 
-            if (GetVietnamTime() - data.FirstAt < _aggregationWindow) return;
+            CommentReplyAggregationData? data;
+            try
+            {
+                data = JsonSerializer.Deserialize<CommentReplyAggregationData>(json);
+                if (data == null) 
+                    return;
+            }
+            catch (JsonException jex)
+            {
+                _logger.LogError(jex, "💬 [COM_DESERIALIZE_ERROR] JSON parse failed for key {Key}", key);
+                return;
+            }
+
+            var timeDiff = GetVietnamTime() - data.FirstAt;
+            if (timeDiff < _aggregationWindow) 
+                return;
 
             await CreateCommentReplyAggregatedNotificationAsync(data, cancellationToken);
             await db.KeyDeleteAsync(key);
 
-            _logger.LogInformation("Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}",
+            _logger.LogInformation("💬 [COM_FLUSH_SUCCESS] Flushed comment/reply aggregation for object {ObjectId}, owner {OwnerId}, count {Count}, type {EventType}",
                 data.ObjectId, data.OwnerId, data.Count, data.EventType);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing comment/reply aggregation key {Key}", key.ToString());
+            _logger.LogError(ex, "💬 [COM_FLUSH_ERROR] Error processing comment/reply aggregation key {Key}", key.ToString());
         }
     }
 
@@ -175,17 +240,33 @@ public class AggregationFlushService : BackgroundService
     {
         try
         {
-            var rawData = await db.HashGetAsync(key, "data");
-            if (!rawData.HasValue) return;
+            if (await TryCleanupOldHashFormatAsync(db, key, "📋 [RPT]"))
+                return;
 
-            var bytes = (byte[]?)rawData;
-            if (bytes == null || bytes.Length == 0) return;
+            var rawData = await db.StringGetAsync(key);
+            
+            if (!rawData.HasValue) 
+                return;
 
-            var json = Encoding.UTF8.GetString(bytes);
-            var data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
-            if (data == null) return;
+            var json = rawData.ToString();
+            if (string.IsNullOrWhiteSpace(json)) 
+                return;
 
-            if (GetVietnamTime() - data.FirstAt < _postReportAggregationWindow) return;
+            PostReportAggregationData? data;
+            try
+            {
+                data = JsonSerializer.Deserialize<PostReportAggregationData>(json);
+                if (data == null) 
+                    return;
+            }
+            catch (JsonException jex)
+            {
+                _logger.LogError(jex, "📋 [RPT_DESERIALIZE_ERROR] JSON parse failed for key {Key}", key);
+                return;
+            }
+
+            if (GetVietnamTime() - data.FirstAt < _postReportAggregationWindow) 
+                return;
 
             if (data.AdditionalCount <= 0)
             {
@@ -196,12 +277,12 @@ public class AggregationFlushService : BackgroundService
             await CreatePostReportAggregatedNotificationAsync(data, cancellationToken);
             await db.KeyDeleteAsync(key);
 
-            _logger.LogInformation("Flushed post report aggregation for post {PostId}, recipient {RecipientUserId}, count {Count}",
+            _logger.LogInformation("📋 [RPT_FLUSH_SUCCESS] Flushed post report aggregation for post {PostId}, recipient {RecipientUserId}, count {Count}",
                 data.PostId, data.RecipientUserId, data.AdditionalCount);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing post report aggregation key {Key}", key.ToString());
+            _logger.LogError(ex, "📋 [RPT_FLUSH_ERROR] Error processing post report aggregation key {Key}", key.ToString());
         }
     }
 
@@ -210,8 +291,31 @@ public class AggregationFlushService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
+        _logger.LogInformation("🔔 [FAV_NOTIFICATION_CREATE] Creating favorite notification. PostId={PostId}, Count={Count}, OwnerId={OwnerId}",
+            data.PostId, data.Count, data.OwnerId);
+
+        string? actorName = data.FirstActorName;
+        string? actorAvatar = null;
+        
+        if (data.Count == 1 && !string.IsNullOrEmpty(data.FirstActorId))
+        {
+            try
+            {
+                var actor = await _actorResolverClient.ResolveActorAsync(data.FirstActorId, "USER");
+                if (actor != null)
+                {
+                    actorName = actor.Name ?? data.FirstActorName;
+                    actorAvatar = actor.Avatar;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "🔔 [FAV_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}", data.FirstActorId);
+            }
+        }
+
         var content = data.Count == 1 
-            ? $"{data.FirstActorName} đã thích bài viết của bạn"
+            ? $"{actorName} đã thích bài viết của bạn"
             : $"{data.Count} người đã thích bài viết của bạn";
 
         var entity = new NotificationEntity
@@ -222,12 +326,14 @@ public class AggregationFlushService : BackgroundService
             Type = "POST_FAVORITE",
             ObjectId = data.PostId.ToString(),
             ActorId = data.Count == 1 ? data.FirstActorId : null,
-            ActorType = data.Count == 1 ? "USER" : "SYSTEM",
+            ActorName = data.Count == 1 ? actorName : null,
+            ActorAvatar = data.Count == 1 ? actorAvatar : null,
+            ActorType = "USER",
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
     }
 
     private async Task CreateCommentReplyAggregatedNotificationAsync(CommentReplyAggregationData data, CancellationToken cancellationToken)
@@ -236,13 +342,37 @@ public class AggregationFlushService : BackgroundService
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
         var isReplyEvent = string.Equals(data.EventType, "post.reply.created", StringComparison.OrdinalIgnoreCase);
+        
+        _logger.LogInformation("💬 [COM_NOTIFICATION_CREATE] Creating comment/reply notification. EventType={EventType}, Count={Count}, OwnerId={OwnerId}",
+            data.EventType, data.Count, data.OwnerId);
+
+        string? actorName = data.FirstActorName;
+        string? actorAvatar = null;
+        
+        if (data.Count == 1 && !string.IsNullOrEmpty(data.FirstActorId))
+        {
+            try
+            {
+                var actor = await _actorResolverClient.ResolveActorAsync(data.FirstActorId, "USER");
+                if (actor != null)
+                {
+                    actorName = actor.Name ?? data.FirstActorName;
+                    actorAvatar = actor.Avatar;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "💬 [COM_ACTOR_RESOLVE_FAILED] Failed to resolve actor {ActorId}", data.FirstActorId);
+            }
+        }
+
         var title = isReplyEvent ? "Trả lời mới" : "Bình luận mới";
         var content = isReplyEvent
             ? (data.Count == 1
-                ? NotificationContentTemplates.PostReply.NewReply(data.FirstActorName)
+                ? NotificationContentTemplates.PostReply.NewReply(actorName)
                 : NotificationContentTemplates.PostReply.MultipleReplies(data.Count))
             : (data.Count == 1
-                ? NotificationContentTemplates.PostComment.NewComment(data.FirstActorName)
+                ? NotificationContentTemplates.PostComment.NewComment(actorName)
                 : NotificationContentTemplates.PostComment.MultipleComments(data.Count));
 
         var entity = new NotificationEntity
@@ -253,12 +383,17 @@ public class AggregationFlushService : BackgroundService
             Type = "COMMUNITY",
             ObjectId = data.ObjectId,
             ActorId = data.Count == 1 ? data.FirstActorId : null,
-            ActorType = data.Count == 1 ? "USER" : "SYSTEM",
+            ActorName = data.Count == 1 ? actorName : null,
+            ActorAvatar = data.Count == 1 ? actorAvatar : null,
+            ActorType = "USER",
             CreatedAt = GetVietnamTime(),
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
+        
+        _logger.LogInformation("💬 [COM_PUBLISHED] Comment/reply notification published. NotificationId={NotificationId}, UserId={UserId}, EventType={EventType}, Type={Type}",
+            entity.Id, entity.UserId, data.EventType, entity.Type);
     }
 
     private async Task CreatePostReportAggregatedNotificationAsync(PostReportAggregationData data, CancellationToken cancellationToken)
@@ -281,13 +416,14 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity);
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
     }
 
     private static async Task PublishNotificationAsync(
         IServiceProvider services,
         INotificationService notificationService,
-        NotificationEntity entity)
+        NotificationEntity entity,
+        INotificationPublishingService publishingService)
     {
         await notificationService.CreateNotificationAsync(entity);
 
@@ -300,6 +436,15 @@ public class AggregationFlushService : BackgroundService
         {
             await cache.RemoveAsync($"unread:{entity.UserId}");
         }
+
+        // Trigger FCM (fire-and-forget pattern - non-blocking)
+        _ = publishingService.SendFcmOnlyAsync(entity).ContinueWith(task =>
+        {
+            if (task.IsFaulted)
+            {
+                // Exceptions are already logged in SendFcmOnlyAsync
+            }
+        });
     }
 
     private static DateTime GetVietnamTime()

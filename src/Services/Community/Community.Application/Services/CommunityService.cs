@@ -722,45 +722,47 @@ public class CommunityService : ICommunityService
         if (result)
         {
             // AGGREGATION STRATEGY: Post favorite notifications are aggregated by AggregationFlushService
-            // This means:
-            // - First like in 3-minute window: stored in Redis aggregation, no immediate DB notification
-            // - Subsequent likes: added to aggregation bucket
-            // - After 3-minute window expires: one aggregated notification created ("N people liked...")
-            // This prevents duplicate notifications (immediate + aggregated)
+            // Flow:
+            // 1. Publish "post.favorite" event with EventId (idempotency) and Author info (name + avatar)
+            // 2. Notification Service receives event, checks idempotency
+            // 3. If first event in window: aggregation service stores in Redis, doesn't create notification
+            // 4. If subsequent events: added to aggregation bucket
+            // 5. After window expires: AggregationFlushService creates ONE aggregated notification
             
-            // NOTE: The PostFavoriteNotificationEvent is NO LONGER published here.
-            // Previously (line 747): await _notificationPublisher.PublishPostFavoriteNotificationAsync(notificationEvt);
-            // This was causing duplicate notifications (immediate + later aggregated).
-            // Now: Only realtime events are published, aggregated notifications handled by AggregationFlushService.
+            // Get post owner ID for notification
+            var post = await _repository.GetPostByIdAsync(postId);
+            if (post == null)
+            {
+                return result;
+            }
 
-            // Get new favorite count for realtime update
-            var favoriteCount = await _repository.GetPostFavoriteCountAsync(postId);
-            
-            // Get actor info for realtime event (who did the favorite)
+            // Get actor info for notification event
             var actorData = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
             var favoriterInfo = actorData.FirstOrDefault().Value;
 
-            // Publish realtime event for live count updates (no aggregation, continuous)
-            var realtimeEvt = new PostFavoriteChangedEvent
+            // Publish notification event for aggregation (with idempotency and actor info)
+            var notificationEvt = new PostFavoriteNotificationEvent
             {
                 EventId = Guid.NewGuid().ToString("N"),
-                EventType = "post.favorite.changed",
+                EventType = "post.favorite",
                 Version = 1,
-                PostId = postId,
-                UserId = userId,
-                Action = "FAVORITE",
-                NewFavoriteCount = favoriteCount,
-                Actor = favoriterInfo != null ? new NotificationActorDto
+                UserId = post.UserId.ToString(), // Post owner (notification recipient)
+                ActorId = userId.ToString(), // Person who favorited
+                ObjectId = postId.ToString(), // PostId
+                Title = "Post Liked",
+                Content = $"{favoriterInfo?.Name ?? "Someone"} liked your post",
+                Type = "POST_FAVORITE",
+                CreatedAt = DateTimeHelper.GetVietnamTime(),
+                Author = favoriterInfo != null ? new NotificationActorDto
                 {
                     Id = userId,
                     Name = favoriterInfo.Name ?? "Unknown",
                     Avatar = favoriterInfo.Avatar ?? string.Empty,
                     Role = "USER"
-                } : null,
-                CreatedAt = DateTimeHelper.GetVietnamTime()
+                } : null
             };
 
-            await _eventPublisher.PublishPostFavoriteChangedAsync(realtimeEvt);
+            await _notificationPublisher.PublishPostFavoriteNotificationAsync(notificationEvt);
         }
         return result;
     }
