@@ -21,6 +21,7 @@ public class PortfolioDbContext : DbContext
     public DbSet<PortfolioFollow> PortfolioFollows { get; set; }
     public DbSet<PortfolioFollowCategory> PortfolioFollowCategories { get; set; }
     public DbSet<Criterion> Criteria { get; set; }
+    public DbSet<PortfolioPreview> PortfolioPreview { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -191,6 +192,32 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.IsActive).HasDefaultValue(true);
 
             e.HasIndex(x => x.Kind).HasDatabaseName("IX_Criterion_Kind");
+        });
+
+        // PortfolioPreview
+        modelBuilder.Entity<PortfolioPreview>(e =>
+        {
+            e.ToTable("PortfolioPreview");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.PortfolioId).IsRequired();
+            e.Property(x => x.PreviewJson).HasColumnType("nvarchar(max)").HasDefaultValue("{}");
+            e.Property(x => x.HighlightsDescription).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.Version).HasDefaultValue(1);
+            e.Property(x => x.RegeneratedCount).HasDefaultValue(0);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("GETDATE()");
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.GenerationModel).HasMaxLength(50).HasDefaultValue("gemini-1.5-pro");
+            e.Property(x => x.TokensUsed).IsRequired(false);
+
+            e.HasIndex(x => x.PortfolioId)
+                .IsUnique()
+                .HasDatabaseName("UX_PortfolioPreview_PortfolioId");
+
+            e.HasOne(x => x.Portfolio)
+                .WithMany()
+                .HasForeignKey(x => x.PortfolioId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
