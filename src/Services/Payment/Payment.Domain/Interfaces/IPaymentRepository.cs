@@ -15,7 +15,7 @@ public interface IPaymentRepository
     Task<PaymentEntity> CreateAsync(PaymentEntity payment);
     
     // Concurrency control methods
-    Task<bool> UpdateStatusConditionalAsync(Guid paymentId, PaymentStatus newStatus, byte[] expectedRowVersion);
+    Task<bool> UpdateStatusConditionalAsync(Guid paymentId, PaymentStatus newStatus, int expectedRowVersion);
     Task UpdateAsync(PaymentEntity payment);
     Task UpdateStatusAsync(Guid paymentId, PaymentStatus newStatus);
     

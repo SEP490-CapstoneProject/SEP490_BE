@@ -18,21 +18,6 @@ using Subscription.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-<<<<<<< HEAD
-// Add services to the container.
-// Configure OpenAPI/Swagger
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-=======
 // Add Azure Key Vault configuration
 builder.Configuration.AddAzureKeyVault();
 
@@ -77,34 +62,41 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 // Add RabbitMQ
 builder.Services.AddSingleton<IConnection>(sp =>
 {
-    var host = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost";
-    var port = builder.Configuration.GetValue<int?>("RabbitMQ:Port") ?? 5672;
-    var username = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest";
-    var password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest";
-    var virtualHost = builder.Configuration.GetValue<string>("RabbitMQ:VirtualHost") ?? "/";
-    var useSsl = builder.Configuration.GetValue<bool>("RabbitMQ:UseSsl");
+    var uri = builder.Configuration.GetValue<string>("RabbitMQ:Uri");
+    var factory = new ConnectionFactory();
 
-    if (!useSsl && port == 5671)
+    if (!string.IsNullOrEmpty(uri))
     {
-        useSsl = true;
+        factory.Uri = new Uri(uri);
     }
-
-    var factory = new ConnectionFactory
+    else
     {
-        HostName = host,
-        Port = port,
-        UserName = username,
-        Password = password,
-        VirtualHost = virtualHost
-    };
+        var host = builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost";
+        var port = builder.Configuration.GetValue<int?>("RabbitMQ:Port") ?? 5672;
+        var username = builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest";
+        var password = builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest";
+        var virtualHost = builder.Configuration.GetValue<string>("RabbitMQ:VirtualHost") ?? "/";
+        var useSsl = builder.Configuration.GetValue<bool>("RabbitMQ:UseSsl");
 
-    if (useSsl)
-    {
-        factory.Ssl = new SslOption
+        if (!useSsl && port == 5671)
         {
-            Enabled = true,
-            ServerName = host
-        };
+            useSsl = true;
+        }
+
+        factory.HostName = host;
+        factory.Port = port;
+        factory.UserName = username;
+        factory.Password = password;
+        factory.VirtualHost = virtualHost;
+
+        if (useSsl)
+        {
+            factory.Ssl = new SslOption
+            {
+                Enabled = true,
+                ServerName = host
+            };
+        }
     }
 
     return factory.CreateConnection();
@@ -115,6 +107,14 @@ builder.Services.AddScoped<IPlanRepository, PlanRepository>();
 builder.Services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
 builder.Services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
 builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
+
+// Add external clients
+builder.Services.AddHttpClient<ISubscriptionUserProfileClient, SubscriptionUserProfileClient>(client =>
+{
+    var userProfileServiceUrl = builder.Configuration["ServiceUrls:UserProfileService"]
+        ?? "https://userprofile-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
+    client.BaseAddress = new Uri(userProfileServiceUrl);
+});
 
 // Add Services
 builder.Services.AddScoped<IRedisService, RedisService>();
@@ -171,7 +171,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
@@ -185,7 +185,6 @@ var app = builder.Build();
 // Configure pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
->>>>>>> 52bc06426d6e7755e66ecdaab8d748db4b31d45e
 
 app.UseCors("AllowAll");
 app.UseAuthentication();

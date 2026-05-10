@@ -4,6 +4,7 @@ using Application.Infrastructure.Azure;
 using Application.Infrastructure.Clients;
 using Application.Infrastructure.Configuration;
 using Application.Infrastructure.Data;
+using Application.Infrastructure.Messaging;
 using Application.Infrastructure.Repositories;
 using Application.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -63,6 +64,7 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IEntitlementChecker, EntitlementChecker>();
+builder.Services.AddScoped<IApplicationNotificationEventPublisher, RabbitMqApplicationNotificationEventPublisher>();
 
 // HTTP Client with Polly
 var retryPolicy = HttpPolicyExtensions
@@ -75,7 +77,7 @@ var timeoutPolicy = Policy.TimeoutAsync<HttpResponseMessage>(10);
 builder.Services.AddHttpClient("UserProfileService", client =>
 {
     var baseUrl = builder.Configuration["ServiceUrls:UserProfileService"] 
-        ?? "https://userprofile-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
+        ?? "https://userprofile-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(baseUrl);
 })
 .AddPolicyHandler(retryPolicy)
@@ -84,7 +86,7 @@ builder.Services.AddHttpClient("UserProfileService", client =>
 builder.Services.AddHttpClient("CompanyService", client =>
 {
     var baseUrl = builder.Configuration["ServiceUrls:CompanyService"]
-        ?? "https://company-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
+        ?? "https://company-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(baseUrl);
 })
 .AddPolicyHandler(retryPolicy)
@@ -93,7 +95,7 @@ builder.Services.AddHttpClient("CompanyService", client =>
 builder.Services.AddHttpClient("PortfolioService", client =>
 {
     var baseUrl = builder.Configuration["ServiceUrls:PortfolioService"]
-        ?? "https://portfolio-service.grayforest-11aba44e.southeastasia.azurecontainerapps.io";
+        ?? "https://portfolio-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(baseUrl);
 })
 .AddPolicyHandler(retryPolicy)
@@ -126,7 +128,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

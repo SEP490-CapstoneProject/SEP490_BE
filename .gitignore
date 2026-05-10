@@ -126,6 +126,9 @@ ServiceFabricBackup/
 *.VisualState.xml
 TestResult.xml
 *.odx.cs
+*.ps1
+*.txt
+*.sql
 *.xsd.cs
 
 ## Docker

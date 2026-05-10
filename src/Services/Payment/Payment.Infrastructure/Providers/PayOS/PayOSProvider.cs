@@ -4,6 +4,9 @@ using Payment.Application.DTOs;
 using Payment.Application.Interfaces;
 using Payment.Domain.Entities;
 using Payment.Infrastructure.Providers.PayOS.Models;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace Payment.Infrastructure.Providers.PayOS;
@@ -36,13 +39,24 @@ public class PayOSProvider : IPaymentProvider
         _logger.LogInformation("Creating PayOS payment for userId: {UserId}, planId: {PlanId}, amount: {Amount}",
             payment.UserId, payment.PlanId, payment.Amount);
 
+        var amountInVnd = NormalizeAmountToVnd(payment.Amount);
+        var paymentDescription = BuildDescription(payment.SubscriptionId, payment.PlanId);
+        var returnUrl = BuildCallbackUrl(_settings.ReturnUrl, payment);
+        var cancelUrl = BuildCallbackUrl(_settings.CancelUrl, payment);
+
         var request = new CreatePaymentLinkRequest
         {
             OrderCode = long.Parse(payment.OrderCode),
-            Amount = (int)payment.Amount,  // VND has no decimals
-            Description = $"Payment for subscription {payment.SubscriptionId}",
-            ReturnUrl = _settings.ReturnUrl,
-            CancelUrl = _settings.CancelUrl
+            Amount = amountInVnd,
+            Description = paymentDescription,
+            ReturnUrl = returnUrl,
+            CancelUrl = cancelUrl,
+            Signature = BuildCreatePaymentSignature(
+                amountInVnd,
+                cancelUrl,
+                paymentDescription,
+                payment.OrderCode,
+                returnUrl)
         };
 
         var response = await _httpClient.CreatePaymentLinkAsync(request);
@@ -63,22 +77,35 @@ public class PayOSProvider : IPaymentProvider
     /// </summary>
     public bool ValidateSignature(string rawBody, string signature, string? clientId = null)
     {
-        _logger.LogDebug("Validating PayOS webhook signature. Signature: {Signature}",
-            signature?.Substring(0, 10) + "...");
-
-        var isValid = PayOSSignatureValidator.Validate(rawBody, signature, _settings.ChecksumKey);
-
-        if (!isValid)
+        if (string.IsNullOrWhiteSpace(signature))
         {
-            _logger.LogWarning("PayOS webhook signature validation FAILED. Signature: {Signature}",
-                signature?.Substring(0, 10) + "...");
+            _logger.LogWarning("PayOS webhook signature is empty");
+            return false;
+        }
+
+        _logger.LogDebug("Validating PayOS webhook signature. Signature: {Signature}",
+            signature.Length > 10 ? signature[..10] + "..." : signature);
+
+        var validator = new PayOSSignatureValidator(_settings.ChecksumKey);
+        var validation = validator.ValidateSignatureWithDetails(rawBody, signature);
+        var candidateHashes = validator.ComputeCanonicalCandidateHashesForDebug(rawBody);
+
+        if (!validation.IsValid)
+        {
+            _logger.LogWarning(
+                "PayOS webhook signature validation FAILED. Signature: {Signature}, RawHash: {RawHash}, CanonicalHash: {CanonicalHash}, Tried: {TriedStrategies}, Candidates: {Candidates}",
+                signature.Length > 10 ? signature[..10] + "..." : signature,
+                validator.ComputeRawBodyHashForDebug(rawBody),
+                validator.ComputeCanonicalHashForDebug(rawBody),
+                string.Join(",", validation.TriedStrategies),
+                string.Join(",", candidateHashes.Select(kv => $"{kv.Key}:{kv.Value}")));
         }
         else
         {
-            _logger.LogDebug("PayOS webhook signature validation PASSED");
+            _logger.LogInformation("PayOS webhook signature validation PASSED. Strategy: {Strategy}", validation.MatchedStrategy);
         }
 
-        return isValid;
+        return validation.IsValid;
     }
 
     /// <summary>
@@ -164,5 +191,55 @@ public class PayOSProvider : IPaymentProvider
             orderCode, paymentInfo.Status, paymentInfo.Amount);
 
         return paymentInfo;
+    }
+
+    private static int NormalizeAmountToVnd(decimal amount)
+    {
+        var rounded = decimal.Round(amount, 0, MidpointRounding.AwayFromZero);
+        if (rounded > 0 && rounded < 1000)
+        {
+            rounded = decimal.Round(amount * 1000, 0, MidpointRounding.AwayFromZero);
+        }
+
+        return (int)rounded;
+    }
+
+    private static string BuildDescription(int subscriptionId, int planId)
+    {
+        var description = $"Sub{subscriptionId}-Plan{planId}";
+        if (description.Length > 9)
+        {
+            description = $"S{subscriptionId}P{planId}";
+        }
+
+        return description.Length > 25 ? description[..25] : description;
+    }
+
+    private string BuildCreatePaymentSignature(
+        int amount,
+        string? cancelUrl,
+        string description,
+        string orderCode,
+        string? returnUrl)
+    {
+        var signaturePayload =
+            $"amount={amount}&cancelUrl={cancelUrl}&description={description}&orderCode={orderCode}&returnUrl={returnUrl}";
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_settings.ChecksumKey));
+        var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(signaturePayload));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    private static string BuildCallbackUrl(string? baseUrl, PaymentEntity payment)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return string.Empty;
+        }
+
+        var separator = baseUrl.Contains('?') ? "&" : "?";
+        var orderCode = Uri.EscapeDataString(payment.OrderCode);
+
+        return $"{baseUrl}{separator}paymentId={payment.Id}&subscriptionId={payment.SubscriptionId}&orderCode={orderCode}";
     }
 }

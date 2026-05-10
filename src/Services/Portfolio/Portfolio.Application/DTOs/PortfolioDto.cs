@@ -11,8 +11,13 @@ public class PortfolioDto
     public int EmployeeId { get; set; }
     public string PortfolioName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public bool IsMain { get; set; }
+    public bool IsPublic { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public bool IsFollowed { get; set; }
+    public RankingDto Ranking { get; set; } = new();
+    public List<PortfolioReviewerDto> Reviewers { get; set; } = new();
     public List<BlockDto> Blocks { get; set; } = new();
 }
 
@@ -29,6 +34,8 @@ public class UpdatePortfolioRequest
 {
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
+    public bool? IsMain { get; set; }
+    public bool? IsPublic { get; set; }
 }
 
 // ─── Block Response ───────────────────────────────────────────────────────────

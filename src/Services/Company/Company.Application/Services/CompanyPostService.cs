@@ -2,9 +2,16 @@ using Company.Application.Clients;
 using Company.Application.DTOs;
 using Company.Application.Helpers;
 using Company.Application.Interfaces;
+using Company.Application.Models.Events;
 using Company.Domain.Entities;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using RecruitmentPlatform.AI.Abstractions;
+using RecruitmentPlatform.AI.Models;
+using RecruitmentPlatform.AI.Services;
+using RecruitmentPlatform.Contracts.Realtime;
+using System.Text.Json;
 
 namespace Company.Application.Services;
 
@@ -14,6 +21,14 @@ public class CompanyPostService : ICompanyPostService
     private readonly ICompanyCacheRepository _companyCacheRepository;
     private readonly ICompanyProfileClient _companyProfileClient;
     private readonly IMediaUploadClient _mediaUploadClient;
+    private readonly IPortfolioMatchingClient _portfolioMatchingClient;
+    private readonly ICompanyEmbeddingEventPublisher _embeddingEventPublisher;
+    private readonly ICompanyNotificationEventPublisher _notificationPublisher;
+    private readonly IMatchingEngine _matchingEngine;
+    private readonly ITextNormalizer _textNormalizer;
+    private readonly IEmbeddingService _embeddingService;
+    private readonly IMemoryCache _cache;
+    private readonly ModerationService _moderationService;
     private readonly ILogger<CompanyPostService> _logger;
 
     public CompanyPostService(
@@ -21,12 +36,28 @@ public class CompanyPostService : ICompanyPostService
         ICompanyCacheRepository companyCacheRepository,
         ICompanyProfileClient companyProfileClient,
         IMediaUploadClient mediaUploadClient,
+        IPortfolioMatchingClient portfolioMatchingClient,
+        ICompanyEmbeddingEventPublisher embeddingEventPublisher,
+        ICompanyNotificationEventPublisher notificationPublisher,
+        IMatchingEngine matchingEngine,
+        ITextNormalizer textNormalizer,
+        IEmbeddingService embeddingService,
+        IMemoryCache cache,
+        ModerationService moderationService,
         ILogger<CompanyPostService> logger)
     {
         _repository = repository;
         _companyCacheRepository = companyCacheRepository;
         _companyProfileClient = companyProfileClient;
         _mediaUploadClient = mediaUploadClient;
+        _portfolioMatchingClient = portfolioMatchingClient;
+        _embeddingEventPublisher = embeddingEventPublisher;
+        _notificationPublisher = notificationPublisher;
+        _matchingEngine = matchingEngine;
+        _textNormalizer = textNormalizer;
+        _embeddingService = embeddingService;
+        _cache = cache;
+        _moderationService = moderationService;
         _logger = logger;
     }
 
@@ -51,6 +82,11 @@ public class CompanyPostService : ICompanyPostService
         return result;
     }
 
+    public async Task<List<CompanyPostDetailDto>> GetPostsByIdsAsync(List<int> postIds, int? userId)
+    {
+        return await _repository.GetPostsByIdsAsync(postIds, userId);
+    }
+
     public async Task<CompanyPostDetailDto?> GetPostDetailAsync(int postId, int? userId)
     {
         var detail = await _repository.GetPostDetailAsync(postId, userId);
@@ -67,6 +103,19 @@ public class CompanyPostService : ICompanyPostService
         {
             throw new InvalidOperationException("Company profile not found.");
         }
+
+        // Combine job description content for moderation check
+        var contentToCheck = string.Join(" ", new[] 
+        { 
+            request.Position ?? "",
+            request.JobDescription ?? "",
+            request.RequirementsMandatory ?? "",
+            request.RequirementsPreferred ?? "",
+            request.Benefits ?? ""
+        }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        // Run moderation check before creating post
+        var moderationResult = _moderationService.CheckPost(contentToCheck);
 
         await _companyCacheRepository.UpsertAsync(new CompanyEntity
         {
@@ -92,47 +141,94 @@ public class CompanyPostService : ICompanyPostService
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
 
+        // Set moderation fields based on check result
+        if (moderationResult.Status == "Rejected")
+        {
+            post.Status = CompanyPost.StatusInactive;
+            post.ReviewStatus = CompanyPost.StatusRejected;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+        else if (moderationResult.Status == "PendingReview")
+        {
+            post.ReviewStatus = CompanyPost.StatusPendingReview;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+
+        await UpdateEmbeddingStateAsync(post);
+
         var created = await _repository.CreatePostAsync(post);
 
-        // Upload cover image first
-        if (!string.IsNullOrEmpty(request.CoverImageKey) &&
-            fileMap.TryGetValue(request.CoverImageKey, out var coverFile))
+        // Publish notifications based on moderation result
+        if (created.ReviewStatus == CompanyPost.StatusRejected)
         {
-            var coverResult = await _mediaUploadClient.UploadAsync(coverFile, "company/posts/cover");
-            if (coverResult != null)
+            // Auto-rejected - notify company
+            var evt = new PostRejectedNotificationEvent
             {
-                created.CoverImageVideo = coverResult.Url;
-                await _repository.UpdatePostAsync(created);
-            }
-            else
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.rejected",
+                Version = 1,
+                UserId = created.CompanyId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "bài đăng của bạn đã bị từ chối",
+                Content = $"Bài đăng công việc của bạn đã bị từ chối. Lý do: {moderationResult.Reason}",
+                Type = "POST_REJECTED",
+                PostType = "Company",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+        }
+        else if (created.ReviewStatus == CompanyPost.StatusPendingReview)
+        {
+            // Needs manual review - notify company
+            var evt = new PostPendingReviewNotificationEvent
             {
-                _logger.LogWarning("Cover image upload failed for post {PostId}", created.PostId);
-            }
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = created.CompanyId.ToString(),
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "bài đăng của bạn đang được xem xét",
+                Content = $"Bài đăng công việc của bạn đang chờ xem xét thủ công. Lý do: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Company",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
+        }
+        else
+        {
+            // Auto-approved - notify company
+            var evt = new PostApprovedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.approved",
+                Version = 1,
+                UserId = created.CompanyId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "bài đăng của bạn đã được duyệt",
+                Content = "Bài đăng công việc của bạn đã được duyệt và hiện đang hiển thị.",
+                Type = "POST_APPROVED",
+                PostType = "Company",
+                ApproverNotes = "Auto-approved by content moderation system",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
         }
 
-        // Upload remaining media files
-        foreach (var (filename, file) in fileMap)
-        {
-            if (!string.IsNullOrEmpty(request.CoverImageKey) &&
-                string.Equals(filename, request.CoverImageKey, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var result = await _mediaUploadClient.UploadAsync(file, "company/posts");
-            if (result == null)
-            {
-                _logger.LogWarning("Media upload failed for file {Filename} on post {PostId}", filename, created.PostId);
-                continue;
-            }
-
-            var mediaType = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? "video" : "image";
-            await _repository.AddPostMediaAsync(new CompanyPostMedia
-            {
-                CompanyPostId = created.PostId,
-                Type = mediaType,
-                Name = result.PublicId ?? filename,
-                Address = result.Url
-            });
-        }
+        await UploadPostMediaAsync(created, request.CoverImageKey, fileMap, replaceAllMedia: false);
+        await _repository.UpdatePostAsync(created);
+        await TryPublishEmbeddingEventAsync(created.PostId);
 
         var detail = await _repository.GetPostDetailAsync(created.PostId, companyId);
         if (detail != null)
@@ -147,6 +243,7 @@ public class CompanyPostService : ICompanyPostService
     {
         var detail = await _repository.GetPostDetailAsync(postId, null);
         if (detail == null || detail.CompanyId != requesterId) return null;
+        var existingPost = await _repository.GetPostEntityByIdAsync(postId);
 
         var post = new CompanyPost
         {
@@ -164,10 +261,55 @@ public class CompanyPostService : ICompanyPostService
             Benefits = request.Benefits ?? detail.Benefits,
             Status = request.Status ?? detail.Status,
             CoverImageVideo = detail.CoverImageUrl,
-            CreatedAt = detail.CreatedAt
+            CreatedAt = detail.CreatedAt,
+            Embedding = null,
+            EmbeddingVersion = existingPost?.EmbeddingVersion ?? 0,
+            EmbeddingStatus = EmbeddingReadinessPolicy.Pending
         };
+        await UpdateEmbeddingStateAsync(post);
 
         await _repository.UpdatePostAsync(post);
+        await TryPublishEmbeddingEventAsync(postId);
+        return await _repository.GetPostDetailAsync(postId, requesterId);
+    }
+
+    public async Task<CompanyPostDetailDto?> UpdatePostFullAsync(int postId, UpdatePostFullRequest request, int requesterId, Dictionary<string, IFormFile> fileMap)
+    {
+        var detail = await _repository.GetPostDetailAsync(postId, null);
+        if (detail == null || detail.CompanyId != requesterId) return null;
+        var existingPost = await _repository.GetPostEntityByIdAsync(postId);
+
+        if (string.IsNullOrWhiteSpace(request.Position))
+        {
+            throw new InvalidOperationException("Position is required.");
+        }
+
+        var post = new CompanyPost
+        {
+            PostId = postId,
+            CompanyId = detail.CompanyId,
+            Position = request.Position,
+            Address = request.Address,
+            Salary = request.Salary,
+            EmploymentType = request.EmploymentType,
+            ExperienceYear = request.ExperienceYear,
+            Quantity = request.Quantity,
+            JobDescription = request.JobDescription,
+            RequirementsMandatory = request.RequirementsMandatory,
+            RequirementsPreferred = request.RequirementsPreferred,
+            Benefits = request.Benefits,
+            Status = request.Status,
+            CoverImageVideo = detail.CoverImageUrl,
+            CreatedAt = detail.CreatedAt,
+            Embedding = null,
+            EmbeddingVersion = existingPost?.EmbeddingVersion ?? 0,
+            EmbeddingStatus = EmbeddingReadinessPolicy.Pending
+        };
+        await UpdateEmbeddingStateAsync(post);
+
+        await UploadPostMediaAsync(post, request.CoverImageKey, fileMap, replaceAllMedia: true);
+        await _repository.UpdatePostAsync(post);
+        await TryPublishEmbeddingEventAsync(postId);
         return await _repository.GetPostDetailAsync(postId, requesterId);
     }
 
@@ -185,6 +327,89 @@ public class CompanyPostService : ICompanyPostService
 
     public Task UnsavePostAsync(int postId, int userId)
         => _repository.UnsavePostAsync(userId, postId);
+
+    public async Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
+        var post = await _repository.GetPostEntityByIdAsync(postId);
+        if (post == null)
+        {
+            return new PortfolioMatchPagedResult { Page = safePage, PageSize = safePageSize };
+        }
+
+        var sourceEmbedding = ParseEmbedding(post.Embedding);
+        if (!EmbeddingReadinessPolicy.IsReady(post.EmbeddingStatus, sourceEmbedding))
+        {
+            return new PortfolioMatchPagedResult { Page = safePage, PageSize = safePageSize };
+        }
+
+        var cacheKey = $"job:{post.PostId}:{post.EmbeddingVersion}:matched-portfolios:{safePage}:{safePageSize}";
+        if (_cache.TryGetValue(cacheKey, out PortfolioMatchPagedResult? cached) && cached != null)
+        {
+            return cached;
+        }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        var candidates = await _portfolioMatchingClient.GetPortfolioCandidatesAsync(cts.Token);
+
+        var request = new MatchingRequest
+        {
+            SourceId = post.PostId,
+            SourceTitle = post.Position,
+            SourceDescription = post.JobDescription ?? string.Empty,
+            SourceSkills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
+            SourceCategories = ExtractCategories(post.EmploymentType, post.Address),
+            SourceEmbedding = sourceEmbedding,
+            SourceEmbeddingVersion = post.EmbeddingVersion
+        };
+
+        var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
+        var result = new PortfolioMatchPagedResult
+        {
+            Total = matches.Total,
+            Page = matches.Page,
+            PageSize = matches.PageSize,
+            Items = matches.Items.Select(x => new PortfolioMatchResultDto
+            {
+                PortfolioId = x.Id,
+                Title = x.Title,
+                Cosine = x.Cosine,
+                SkillScore = x.SkillScore,
+                CategoryScore = x.CategoryScore,
+                FinalScore = x.FinalScore
+            }).ToList()
+        };
+
+        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(10));
+        return result;
+    }
+
+    public async Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        var posts = await _repository.GetActivePostsForMatchingAsync(limit);
+        var items = posts
+            .Select(post =>
+            {
+                var embedding = ParseEmbedding(post.Embedding);
+                return new MatchingCandidate
+                {
+                    Id = post.PostId,
+                    Title = post.Position,
+                    Description = post.JobDescription ?? string.Empty,
+                    Skills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
+                    Categories = ExtractCategories(post.EmploymentType, post.Address),
+                    Embedding = embedding,
+                    EmbeddingVersion = post.EmbeddingVersion,
+                    EmbeddingStatus = post.EmbeddingStatus,
+                    UpdatedAt = post.EmbeddingUpdatedAt ?? post.CreatedAt
+                };
+            })
+            .Where(candidate => candidate.Embedding.Length > 0)
+            .ToList();
+
+        return new MatchingCandidateFeed { Items = items };
+    }
 
     private async Task EnrichCompanyCacheAsync(List<CompanyPostFeedDto> items)
     {
@@ -234,6 +459,251 @@ public class CompanyPostService : ICompanyPostService
 
         detail.CompanyName = profile.CompanyName;
         detail.CompanyAvatar = profile.Avatar;
+    }
+
+    private async Task UploadPostMediaAsync(CompanyPost post, string? coverImageKey, Dictionary<string, IFormFile> fileMap, bool replaceAllMedia)
+    {
+        if (!string.IsNullOrWhiteSpace(coverImageKey) &&
+            fileMap.TryGetValue(coverImageKey, out var coverFile))
+        {
+            var coverResult = await _mediaUploadClient.UploadAsync(coverFile, "company/posts/cover");
+            if (coverResult != null)
+            {
+                post.CoverImageVideo = coverResult.Url;
+            }
+            else
+            {
+                _logger.LogWarning("Cover image upload failed for post {PostId}", post.PostId);
+            }
+        }
+
+        if (replaceAllMedia)
+        {
+            await _repository.RemovePostMediaAsync(post.PostId);
+        }
+
+        foreach (var (filename, file) in fileMap)
+        {
+            if (!string.IsNullOrWhiteSpace(coverImageKey) &&
+                string.Equals(filename, coverImageKey, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var result = await _mediaUploadClient.UploadAsync(file, "company/posts");
+            if (result == null)
+            {
+                _logger.LogWarning("Media upload failed for file {Filename} on post {PostId}", filename, post.PostId);
+                continue;
+            }
+
+            var mediaType = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? "video" : "image";
+            await _repository.AddPostMediaAsync(new CompanyPostMedia
+            {
+                CompanyPostId = post.PostId,
+                Type = mediaType,
+                Name = result.PublicId ?? filename,
+                Address = result.Url
+            });
+        }
+    }
+
+    private async Task UpdateEmbeddingStateAsync(CompanyPost post)
+    {
+        post.EmbeddingStatus = EmbeddingReadinessPolicy.Pending;
+        var text = _textNormalizer.BuildJobText(new EmbeddingTextInput
+        {
+            Title = post.Position,
+            Description = post.JobDescription,
+            Skills = ExtractSkills(post.RequirementsMandatory, post.RequirementsPreferred),
+            Categories = ExtractCategories(post.EmploymentType, post.Address),
+            CustomFields = new[] { post.Benefits ?? "N/A", post.Salary ?? "N/A" }
+        });
+
+        try
+        {
+            var embedding = await _embeddingService.CreateEmbeddingAsync(text);
+            post.Embedding = JsonSerializer.Serialize(embedding);
+            post.EmbeddingVersion = Math.Max(1, post.EmbeddingVersion + 1);
+            post.EmbeddingUpdatedAt = DateTimeHelper.GetVietnamTime();
+            post.EmbeddingStatus = EmbeddingReadinessPolicy.ResolveStatus(embedding);
+        }
+        catch (Exception ex)
+        {
+            post.EmbeddingStatus = EmbeddingReadinessPolicy.Failed;
+            _logger.LogWarning(ex, "Failed to generate embedding for company post {PostId}", post.PostId);
+        }
+    }
+
+    private static float[] ParseEmbedding(string? embeddingJson)
+    {
+        if (string.IsNullOrWhiteSpace(embeddingJson))
+        {
+            return Array.Empty<float>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<float[]>(embeddingJson) ?? Array.Empty<float>();
+        }
+        catch
+        {
+            return Array.Empty<float>();
+        }
+    }
+
+    private static (int Page, int PageSize) NormalizeMatchPaging(int page, int pageSize)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 50);
+        return (safePage, safePageSize);
+    }
+
+    private static List<string> ExtractSkills(params string?[] textParts)
+    {
+        return textParts
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .SelectMany(x => x!.Split([',', ';', '\n', '\r', '|', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(x => x.Length > 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<string> ExtractCategories(params string?[] textParts)
+    {
+        return textParts
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .SelectMany(x => x!.Split([',', ';', '\n', '\r', '|', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(x => x.Length > 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private async Task TryPublishEmbeddingEventAsync(int postId)
+    {
+        try
+        {
+            await _embeddingEventPublisher.PublishCompanyPostChangedAsync(postId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish embedding event for company post {PostId}", postId);
+        }
+    }
+
+    // ─── Admin moderation ─────────────────────────────────────────────────────
+
+    public async Task<List<CompanyPostDetailDto>> GetPendingPostsAsync(int skip, int take)
+    {
+        if (take < 1) take = 20;
+        if (take > 100) take = 100;
+
+        // Get pending posts - need to filter by ReviewStatus = 3
+        var pageNumber = (skip / take) + 1;
+        var posts = await _repository.GetPendingPostsAsync(pageNumber, take + 1);
+        
+        var items = new List<CompanyPostDetailDto>();
+        foreach (var post in posts)
+        {
+            var detail = await _repository.GetPostDetailAsync(post.PostId, null);
+            if (detail != null)
+            {
+                items.Add(detail);
+            }
+        }
+
+        return items;
+    }
+
+    public async Task<CompanyPost> ApprovePostAsync(int postId, string? notes)
+    {
+        var post = await _repository.GetByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CompanyPost.StatusActive;
+        post.ReviewStatus = CompanyPost.StatusActive;
+        post.ReviewReason = notes;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish approval notification
+        var evt = new PostApprovedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.approved",
+            Version = 1,
+            UserId = post.CompanyId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.PostId.ToString(),
+            Title = "Your job post has been approved",
+            Content = "Your company job post has been approved and is now live.",
+            Type = "POST_APPROVED",
+            PostType = "Company",
+            ApproverNotes = notes,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
+
+        // Publish realtime event
+        var realtimeEvt = new PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.moderation",
+            Version = 1,
+            PostId = post.PostId,
+            UserId = post.CompanyId.ToString(),
+            Status = "APPROVED",
+            Reason = notes ?? "Post approved",
+            PostType = "Company",
+            Title = "Your job post has been approved",
+            Content = "Your company job post has been approved and is now live.",
+            ActorId = "SYSTEM",
+            ActorType = "SYSTEM",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _embeddingEventPublisher.PublishCompanyPostChangedAsync(post.PostId);
+
+        return post;
+    }
+
+    public async Task<CompanyPost> RejectPostAsync(int postId, string reason)
+    {
+        var post = await _repository.GetByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CompanyPost.StatusInactive;
+        post.ReviewStatus = CompanyPost.StatusRejected;
+        post.ReviewReason = reason;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish rejection notification
+        var evt = new PostRejectedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.rejected",
+            Version = 1,
+            UserId = post.CompanyId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.PostId.ToString(),
+            Title = "Your job post was rejected",
+            Content = $"Your company job post was rejected. Reason: {reason}",
+            Type = "POST_REJECTED",
+            PostType = "Company",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+
+        return post;
     }
 }
 

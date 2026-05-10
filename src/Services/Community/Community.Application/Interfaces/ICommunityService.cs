@@ -7,7 +7,7 @@ namespace Community.Application.Interfaces;
 public interface ICommunityService
 {
     // Feed (with DTOs)
-    Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId);
+    Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId, string? searchQuery);
     Task<CommunityPostDto?> GetPostDtoAsync(int postId, int? currentUserId);
     Task<PostCommentsResponseDto> GetCommentsResponseAsync(int postId);
     Task<List<CommunityPostDto>> GetPostsByUserIdDtoAsync(int userId, int? currentUserId);
@@ -15,10 +15,19 @@ public interface ICommunityService
     // Post operations
     Task<CommunityPost?> GetPostByIdAsync(int id);
     Task<IEnumerable<CommunityPost>> GetAllPostsAsync();
+    Task<OffsetPagedResult<AdminCommunityPostDto>> GetAdminPostsAsync(AdminPostFilter filter, int? currentUserId);
     Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId);
     Task<CommunityPostDto> CreatePostAsync(CreatePostRequest request, int userId, Dictionary<string, IFormFile> fileMap);
     Task UpdatePostAsync(CommunityPost post);
-    Task DeletePostAsync(int id);
+    Task DeletePostAsync(int id, int actorUserId, string? actorRole);
+    Task<CommunityPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request);
+    Task<List<CommunityPostReportDto>> GetPostReportsAsync(AdminPostReportFilter filter);
+    Task<CommunityPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request);
+
+    // Admin moderation operations
+    Task<OffsetPagedResult<AdminCommunityPostDto>> GetPendingPostsAsync(int skip, int take);
+    Task<CommunityPost> ApprovePostAsync(int postId, string? notes);
+    Task<CommunityPost> RejectPostAsync(int postId, string reason);
 
     // Ownership checks
     Task<int?> GetCommentOwnerAsync(int commentId);

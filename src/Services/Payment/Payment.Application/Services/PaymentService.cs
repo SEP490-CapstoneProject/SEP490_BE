@@ -158,14 +158,14 @@ public class PaymentService : IPaymentService
 
     /// <summary>
     /// Generates collision-safe order code using timestamp + random.
-    /// Format: Unix timestamp milliseconds + random 4 digits
-    /// Result: 15-16 digit unique number for PayOS.
+    /// Format: Unix timestamp seconds + random 5 digits.
+    /// Result: 15-digit order code within PayOS safe range.
     /// </summary>
     private static long GenerateOrderCode()
     {
-        var timestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var random = Random.Shared.Next(1000, 9999);
-        
-        return timestampMs * 10000 + random;
+        var timestampSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var random = Random.Shared.Next(10000, 99999);
+
+        return timestampSeconds * 100000 + random;
     }
 }

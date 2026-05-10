@@ -53,8 +53,17 @@ public class NotificationCreatedEventDto
     public string Title { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Type { get; set; } = default!;
+    public string Category { get; set; } = "system";
     public string? ObjectId { get; set; }
     public ActorDto? Actor { get; set; }
     public DateTime CreatedAt { get; set; }
     public bool IsRead { get; set; }
+}
+
+public class InternalUserInfoDto
+{
+    public int Id { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
 }

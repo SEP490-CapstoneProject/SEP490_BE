@@ -97,17 +97,23 @@ public class ConnectionService : IConnectionService
         return await _repo.GetRoomSummariesByUserIdAsync(userId);
     }
 
+    public async Task<Connection.Application.DTOs.RoomSummaryRaw?> GetRoomSummaryByConnectionIdAsync(int connectionId, int userId)
+    {
+        return await _repo.GetRoomSummaryByConnectionIdAsync(connectionId, userId);
+    }
+
     public async Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId)
     {
         return await _repo.MarkRoomMessagesAsReadAsync(roomId, userId);
     }
 
-    public async Task<Connection.Domain.Entities.Connection?> UpdateConnectionStatusAsync(int connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus status)
+    public async Task<Connection.Domain.Entities.Connection?> UpdateConnectionStatusAsync(int connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus status, int currentUserId)
     {
         var conn = await _repo.GetByIdAsync(connectionId);
         if (conn == null) return null;
 
         conn.Status = status.ToString();
+
         if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED)
         {
             conn.ConnectionAt = VietnamTime.Now();
@@ -124,6 +130,20 @@ public class ConnectionService : IConnectionService
                 await _repo.CreateRoomAsync(room);
             }
         }
+        else if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.BLOCK)
+        {
+            // The user who triggers BLOCK is recorded in BlockId
+            conn.BlockId = currentUserId;
+        }
+        else if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED)
+        {
+            // Reset unread count by marking all messages in this connection's rooms as read
+            var rooms = await _repo.GetRoomsByConnectionAsync(conn.Id);
+            foreach (var room in rooms)
+            {
+                await _repo.MarkRoomMessagesAsReadAsync(room.Id, currentUserId);
+            }
+        }
 
         await _repo.UpdateAsync(conn);
         return conn;
@@ -137,5 +157,27 @@ public class ConnectionService : IConnectionService
     public async Task<int> GetUnreadMessageCountAsync(int roomId, int userId)
     {
         return await _repo.GetUnreadMessageCountAsync(roomId, userId);
+    }
+
+    public async Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2)
+    {
+        return await _repo.GetConnectionStatusByUsersAsync(userId1, userId2);
+    }
+
+    /// <summary>
+    /// Lấy status của connection theo connectionId.
+    /// STORED trả về "0", các status khác trả về tên string (PENDING/MATCHED/BLOCK).
+    /// Trả về null nếu không tìm thấy connection.
+    /// </summary>
+    public async Task<string?> GetConnectionStatusByIdAsync(int connectionId)
+    {
+        var status = await _repo.GetConnectionStatusByIdAsync(connectionId);
+        if (status == null) return null;
+
+        if (status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString(),
+                System.StringComparison.OrdinalIgnoreCase))
+            return "0";
+
+        return status;
     }
 }

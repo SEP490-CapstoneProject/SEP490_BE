@@ -4,6 +4,8 @@ public class AdminSubscriptionDto
 {
     public int Id { get; set; }
     public int UserId { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public string UserAvatar { get; set; } = string.Empty;
     public int PlanId { get; set; }
     public string PlanName { get; set; } = string.Empty;
     public DateTime StartDate { get; set; }

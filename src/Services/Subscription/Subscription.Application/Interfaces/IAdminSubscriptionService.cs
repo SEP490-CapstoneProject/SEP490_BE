@@ -12,6 +12,7 @@ public interface IAdminSubscriptionService
     Task<PlanDto> TogglePlanActiveAsync(int planId);
     
     // Plan Features
+    Task<IEnumerable<DTOs.Admin.PlanFeatureDto>> GetPlanFeaturesAsync(int planId);
     Task<DTOs.Admin.PlanFeatureDto> AddPlanFeatureAsync(int planId, CreatePlanFeatureRequest request);
     Task<DTOs.Admin.PlanFeatureDto> UpdatePlanFeatureAsync(int planId, int featureId, UpdatePlanFeatureRequest request);
     Task DeletePlanFeatureAsync(int planId, int featureId);

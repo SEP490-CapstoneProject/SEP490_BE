@@ -59,7 +59,7 @@ builder.Services.AddDbContext<UserProfileDbContext>(options =>
 
 // Add JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
+var secretKey = jwtSettings["Secret"] ?? throw new InvalidOperationException("JWT Secret is not configured");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -74,8 +74,8 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = jwtSettings["Issuer"] ?? "RecruitmentPlatform",
+        ValidAudience = jwtSettings["Audience"] ?? "RecruitmentPlatformUsers",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
 });
@@ -101,9 +101,11 @@ builder.Services.AddHttpClient("AuthService", client =>
 // Add DI
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
+builder.Services.AddScoped<IExpertRepository, ExpertRepository>();
 builder.Services.AddScoped<IAuthUserClient, AuthUserClient>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<ICompanyService, CompanyService>();
+builder.Services.AddScoped<IExpertService, ExpertService>();
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -113,7 +115,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

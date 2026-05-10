@@ -106,6 +106,7 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionRepository, Connection.Infrastructure.Repositories.ConnectionRepository>();
 builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionService, Connection.Application.Services.ConnectionService>();
+builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionEventPublisher, Connection.Infrastructure.Messaging.RabbitMqConnectionEventPublisher>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -114,7 +115,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

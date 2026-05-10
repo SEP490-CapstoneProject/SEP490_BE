@@ -86,12 +86,60 @@ public class CompanyPostController : ControllerBase
     }
 
     /// <summary>Get job post detail with all media</summary>
+    [HttpGet("batch")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetByIds([FromQuery] string ids)
+    {
+        if (string.IsNullOrWhiteSpace(ids))
+        {
+            return BadRequest(new { message = "ids is required" });
+        }
+
+        var postIds = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(id => int.TryParse(id, out var parsed) ? parsed : (int?)null)
+            .Where(id => id.HasValue && id.Value > 0)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        if (postIds.Count == 0)
+        {
+            return Ok(new List<CompanyPostDetailDto>());
+        }
+
+        var result = await _service.GetPostsByIdsAsync(postIds, GetUserId());
+        return Ok(result);
+    }
+
+    /// <summary>Get job post detail with all media</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetDetail(int id)
     {
         var userId = GetUserId();
         var result = await _service.GetPostDetailAsync(id, userId);
         if (result == null) return NotFound(new { message = "Post not found" });
+        return Ok(result);
+    }
+
+    [HttpGet("{id:int}/match-portfolios")]
+    [Authorize]
+    public async Task<IActionResult> MatchPortfolios(
+        int id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _service.MatchPortfoliosForJobAsync(id, page, pageSize, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("internal/matching-candidates")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetMatchingCandidates(
+        [FromQuery] int limit = 150,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetMatchingCandidatesAsync(limit, cancellationToken);
         return Ok(result);
     }
 
@@ -131,7 +179,25 @@ public class CompanyPostController : ControllerBase
         try
         {
             var result = await _service.CreatePostAsync(request, companyId, fileMap);
+            
+            if (result != null && result.ReviewStatus == 4)
+            {
+                // Rejected by auto-moderation
+                return StatusCode(400, new { message = "Post was rejected by content moderation", reason = result.ReviewReason, data = result });
+            }
+            
+            if (result != null && result.ReviewStatus == 3)
+            {
+                // Pending manual review
+                return StatusCode(202, new { message = "Post awaiting manual review", reason = result.ReviewReason, data = result });
+            }
+            
+            // Approved
             return CreatedAtAction(nameof(GetDetail), new { id = result.PostId }, result);
+        }
+        catch (BadHttpRequestException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
@@ -151,6 +217,52 @@ public class CompanyPostController : ControllerBase
         var result = await _service.UpdatePostAsync(id, request, userId);
         if (result == null) return NotFound(new { message = "Post not found or unauthorized" });
         return Ok(result);
+    }
+
+    /// <summary>Full update job post with optional media files (owner only)</summary>
+    [HttpPut("{id:int}/full")]
+    [Authorize]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UpdatePostFull(
+        int id,
+        [FromForm] string postJson,
+        [FromForm] List<IFormFile>? files)
+    {
+        int companyId;
+        try { companyId = GetRequiredCompanyId(); }
+        catch { return Unauthorized(new { message = "Authentication required" }); }
+
+        if (string.IsNullOrWhiteSpace(postJson))
+            return BadRequest(new { message = "postJson is required" });
+
+        UpdatePostFullRequest? request;
+        try
+        {
+            request = System.Text.Json.JsonSerializer.Deserialize<UpdatePostFullRequest>(postJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = "Invalid postJson", detail = ex.Message });
+        }
+
+        if (request == null) return BadRequest(new { message = "Invalid postJson" });
+
+        var fileMap = files != null && files.Count > 0
+            ? files.GroupBy(f => Path.GetFileName(f.FileName))
+                   .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, IFormFile>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var result = await _service.UpdatePostFullAsync(id, request, companyId, fileMap);
+            if (result == null) return NotFound(new { message = "Post not found or unauthorized" });
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>Soft-delete a job post (owner only)</summary>

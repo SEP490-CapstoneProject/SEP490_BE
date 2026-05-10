@@ -11,7 +11,9 @@ public interface IAuthService
     Task RevokeTokenAsync(string refreshToken);
     Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
     Task LockUserAsync(int userId);
+    Task UnlockUserAsync(int userId);
     Task<IEnumerable<UserDto>> GetAllUsersAsync();
     Task<InternalUserInfoDto?> GetInternalUserInfoByIdAsync(int userId);
     Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByIdsAsync(IEnumerable<int> userIds);
+    Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByRolesAsync(IEnumerable<string> roles);
 }

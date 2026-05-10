@@ -26,18 +26,50 @@ public class RabbitMqNotificationEventPublisher : INotificationEventPublisher
         await PublishAsync("post.favorite", evt, cancellationToken);
     }
 
+    public async Task PublishPostRemovedByModerationNotificationAsync(PostRemovedByModerationNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.report.removed", evt, cancellationToken);
+    }
+
+    public async Task PublishPostReportCreatedNotificationAsync(PostReportCreatedNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.report.created", evt, cancellationToken);
+    }
+
+    public async Task PublishPostApprovedNotificationAsync(PostApprovedNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.approved", evt, cancellationToken);
+    }
+
+    public async Task PublishPostRejectedNotificationAsync(PostRejectedNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.rejected", evt, cancellationToken);
+    }
+
+    public async Task PublishPostPendingReviewNotificationAsync(PostPendingReviewNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.pending.review", evt, cancellationToken);
+    }
+
     private async Task PublishAsync<T>(string routingKey, T evt, CancellationToken cancellationToken)
     {
         try
         {
-            var factory = new ConnectionFactory
+            var uri = _configuration["RabbitMQ:Uri"];
+            var factory = new ConnectionFactory();
+
+            if (!string.IsNullOrEmpty(uri))
             {
-                HostName = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost",
-                UserName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest",
-                Password = _configuration["RabbitMQ:Password"] ?? "guest",
-                VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/",
-                Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
-            };
+                factory.Uri = new Uri(uri);
+            }
+            else
+            {
+                factory.HostName = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
+                factory.UserName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
+                factory.Password = _configuration["RabbitMQ:Password"] ?? "guest";
+                factory.VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/";
+                factory.Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672;
+            }
 
             using var connection = await factory.CreateConnectionAsync(cancellationToken);
             using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
@@ -63,3 +95,4 @@ public class RabbitMqNotificationEventPublisher : INotificationEventPublisher
         }
     }
 }
+

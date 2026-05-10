@@ -5,7 +5,8 @@ public enum UserRole
     USER = 1,
     RECRUITER = 2,
     ADMIN = 3,
-    MODERATOR = 4
+    MODERATOR = 4,
+    EXPERT = 5
 }
 
 public enum UserStatus
@@ -40,7 +41,8 @@ public enum ConnectionStatus
 {
     PENDING,
     MATCHED,
-    REJECTED
+    STORED,
+    BLOCK
 }
 
 public enum CommunityPostStatus

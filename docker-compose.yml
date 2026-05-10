@@ -344,26 +344,15 @@ services:
       - "5014:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__PaymentDb=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=${SQLSERVER_PASSWORD};TrustServerCertificate=True;
-      - Jwt__Secret=${JWT_SECRET}
-      - Jwt__Issuer=${JWT_ISSUER}
-      - Jwt__Audience=${JWT_AUDIENCE}
-      - VNPay__TmnCode=${VNPAY_TMN_CODE}
-      - VNPay__HashSecret=${VNPAY_HASH_SECRET}
-      - VNPay__BaseUrl=${VNPAY_BASE_URL}
-      - VNPay__ReturnUrl=${VNPAY_RETURN_URL}
-      - VNPay__IpnUrl=${VNPAY_IPN_URL}
-      - MoMo__PartnerCode=${MOMO_PARTNER_CODE}
-      - MoMo__AccessKey=${MOMO_ACCESS_KEY}
-      - MoMo__SecretKey=${MOMO_SECRET_KEY}
-      - MoMo__Endpoint=${MOMO_ENDPOINT}
-      - MoMo__ReturnUrl=${MOMO_RETURN_URL}
-      - MoMo__IpnUrl=${MOMO_IPN_URL}
-      - RabbitMQ__Host=${RABBITMQ_HOST}
-      - RabbitMQ__Port=${RABBITMQ_PORT}
-      - RabbitMQ__Username=${RABBITMQ_USERNAME}
-      - RabbitMQ__Password=${RABBITMQ_PASSWORD}
-      - Services__SubscriptionService=${SERVICE_SUBSCRIPTION}
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=${SQLSERVER_PASSWORD:-YourStrong@Passw0rd};TrustServerCertificate=True;
+      - JwtSettings__Secret=${JWT_SECRET:-YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456}
+      - JwtSettings__Issuer=${JWT_ISSUER:-RecruitmentPlatform}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-RecruitmentPlatformUsers}
+      - RabbitMQ__Host=${RABBITMQ_HOST:-rabbitmq}
+      - RabbitMQ__Port=${RABBITMQ_PORT:-5672}
+      - RabbitMQ__Username=${RABBITMQ_USERNAME:-guest}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
+      - Services__SubscriptionService=${SERVICE_SUBSCRIPTION:-http://subscription-service:8080}
     depends_on:
       sqlserver:
         condition: service_healthy

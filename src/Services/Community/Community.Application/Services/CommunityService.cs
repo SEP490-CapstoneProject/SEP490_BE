@@ -4,20 +4,27 @@ using Community.Application.Helpers;
 using Community.Application.Interfaces;
 using Community.Application.Models.Events;
 using Community.Domain.Entities;
+using Community.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using RecruitmentPlatform.Contracts.Realtime;
+using RecruitmentPlatform.AI.Services;
 
 namespace Community.Application.Services;
 
 public class CommunityService : ICommunityService
 {
+    private const int DeletedPostStatus = 0;
+    private const int ActivePostStatus = 1;
+    private const int RemovedByModerationStatus = 2;
+
     private readonly ICommunityRepository _repository;
     private readonly IUserInfoClient _userInfoClient;
     private readonly IPortfolioPreviewClient _portfolioPreviewClient;
     private readonly IMediaUploadClient _mediaUploadClient;
     private readonly ICommunityEventPublisher _eventPublisher;
     private readonly INotificationEventPublisher _notificationPublisher;
+    private readonly ModerationService _moderationService;
     private readonly ILogger<CommunityService> _logger;
 
     public CommunityService(
@@ -27,6 +34,7 @@ public class CommunityService : ICommunityService
         IMediaUploadClient mediaUploadClient,
         ICommunityEventPublisher eventPublisher,
         INotificationEventPublisher notificationPublisher,
+        ModerationService moderationService,
         ILogger<CommunityService> logger)
     {
         _repository = repository;
@@ -35,18 +43,19 @@ public class CommunityService : ICommunityService
         _mediaUploadClient = mediaUploadClient;
         _eventPublisher = eventPublisher;
         _notificationPublisher = notificationPublisher;
+        _moderationService = moderationService;
         _logger = logger;
     }
 
     // ─── Feed ─────────────────────────────────────────────────────────────────
 
-    public async Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId)
+    public async Task<CursorPagedResult<CommunityPostDto>> GetFeedAsync(int? cursor, int pageSize, int? currentUserId, string? searchQuery)
     {
         if (pageSize < 1) pageSize = 50;
         if (pageSize > 100) pageSize = 100;
 
         // Fetch one extra to determine hasMore
-        var posts = await _repository.GetFeedAsync(cursor, pageSize + 1);
+        var posts = await _repository.GetFeedAsync(cursor, pageSize + 1, searchQuery);
         var hasMore = posts.Count > pageSize;
         if (hasMore) posts = posts.Take(pageSize).ToList();
 
@@ -207,15 +216,124 @@ public class CommunityService : ICommunityService
 
     public async Task<CommunityPost?> GetPostByIdAsync(int id) => await _repository.GetPostByIdAsync(id);
     public async Task<IEnumerable<CommunityPost>> GetAllPostsAsync() => await _repository.GetAllPostsAsync();
+    public async Task<OffsetPagedResult<AdminCommunityPostDto>> GetAdminPostsAsync(AdminPostFilter filter, int? currentUserId)
+    {
+        var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
+        var pageSize = filter.PageSize < 1 ? 20 : filter.PageSize;
+        if (pageSize > 100)
+        {
+            pageSize = 100;
+        }
+
+        int? status = null;
+        if (!string.IsNullOrWhiteSpace(filter.Status))
+        {
+            if (!int.TryParse(filter.Status, out var parsedStatus))
+            {
+                throw new ArgumentException("Status must be a valid integer.");
+            }
+
+            status = parsedStatus;
+        }
+
+        var posts = await _repository.GetAdminPostsAsync(status, pageNumber, pageSize + 1);
+        var hasMore = posts.Count > pageSize;
+        if (hasMore)
+        {
+            posts = posts.Take(pageSize).ToList();
+        }
+
+        if (posts.Count == 0)
+        {
+            return new OffsetPagedResult<AdminCommunityPostDto>
+            {
+                Items = new(),
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                HasMore = false
+            };
+        }
+
+        var postIds = posts.Select(p => p.Id).ToList();
+        var uniqueUserIds = posts.Select(p => p.UserId).Distinct().ToList();
+
+        var countsTask = _repository.GetFeedCountsAsync(postIds, currentUserId);
+        var authorsTask = _userInfoClient.GetAuthorsBatchAsync(uniqueUserIds);
+
+        await Task.WhenAll(countsTask, authorsTask);
+        var counts = countsTask.Result;
+        var authors = authorsTask.Result;
+
+        var portfolioIds = posts.Where(p => p.PortfolioId.HasValue)
+            .Select(p => p.PortfolioId!.Value)
+            .Distinct()
+            .ToList();
+
+        var previews = new Dictionary<int, PortfolioPreviewDto?>();
+        if (portfolioIds.Count > 0)
+        {
+            var previewTasks = portfolioIds.Select(async pid =>
+                (pid, preview: await _portfolioPreviewClient.GetPreviewAsync(pid)));
+            var previewResults = await Task.WhenAll(previewTasks);
+            foreach (var (pid, preview) in previewResults)
+            {
+                previews[pid] = preview;
+            }
+        }
+
+        return new OffsetPagedResult<AdminCommunityPostDto>
+        {
+            Items = posts.Select(p => MapToAdminDto(p, authors, counts, previews)).ToList(),
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            HasMore = hasMore
+        };
+    }
     public async Task<IEnumerable<CommunityPost>> GetPostsByUserIdAsync(int userId) => await _repository.GetPostsByUserIdAsync(userId);
     public async Task UpdatePostAsync(CommunityPost post) => await _repository.UpdatePostAsync(post);
-    public async Task DeletePostAsync(int id) => await _repository.DeletePostAsync(id);
+    public async Task DeletePostAsync(int id, int actorUserId, string? actorRole)
+    {
+        var post = await _repository.GetPostByIdAsync(id)
+            ?? throw new KeyNotFoundException($"Post {id} not found");
+
+        var wasDeleted = post.Status == DeletedPostStatus;
+        var now = DateTimeHelper.GetVietnamTime();
+        post.Status = DeletedPostStatus;
+        post.UpdatedAt = now;
+
+        await _repository.DeletePostAsync(post);
+
+        if (wasDeleted || post.UserId == actorUserId)
+        {
+            return;
+        }
+
+        var notificationEvt = new PostRemovedByModerationNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.report.removed",
+            Version = 1,
+            UserId = post.UserId.ToString(),
+            ActorId = actorUserId.ToString(),
+            ActorType = ResolveActorType(actorRole),
+            ObjectId = post.Id.ToString(),
+            Title = "Bài đăng đã bị xóa",
+            Content = "Bài đăng cộng đồng của bạn đã bị quản trị viên xóa.",
+            Type = "COMMUNITY_MODERATION",
+            CreatedAt = now
+        };
+
+        await _notificationPublisher.PublishPostRemovedByModerationNotificationAsync(notificationEvt);
+    }
 
     public async Task<CommunityPostDto> CreatePostAsync(
         CreatePostRequest request,
         int userId,
         Dictionary<string, IFormFile> fileMap)
     {
+        // Run moderation check before creating post
+        var moderationResult = _moderationService.CheckPost(request.Description);
+
         var post = new CommunityPost
         {
             UserId = userId,
@@ -226,7 +344,149 @@ public class CommunityService : ICommunityService
             CreatedAt = DateTimeHelper.GetVietnamTime()
         };
 
+        // Set moderation fields based on check result
+        if (moderationResult.Status == "Rejected")
+        {
+            post.Status = CommunityPost.StatusInactive;
+            post.ReviewStatus = CommunityPost.StatusRejected;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+        else if (moderationResult.Status == "PendingReview")
+        {
+            post.ReviewStatus = CommunityPost.StatusPendingReview;
+            post.ReviewReason = moderationResult.Reason;
+            post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+        }
+        // else: Approved stays as StatusActive (default)
+
         var created = await _repository.CreatePostAsync(post);
+
+        // Publish notifications based on moderation result
+        if (created.ReviewStatus == CommunityPost.StatusRejected)
+        {
+            // Auto-rejected - notify user
+            var evt = new PostRejectedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.rejected",
+                Version = 1,
+                UserId = created.UserId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.Id.ToString(),
+                Title = "Your post was rejected",
+                Content = $"Your community post was automatically rejected. Reason: {moderationResult.Reason}",
+                Type = "POST_REJECTED",
+                PostType = "Community",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+
+            // Also publish realtime event for instant feedback
+            var realtimeEvt = new PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.moderation",
+                Version = 1,
+                PostId = created.Id,
+                UserId = created.UserId.ToString(),
+                Status = "REJECTED",
+                Reason = moderationResult.Reason,
+                PostType = "Community",
+                Title = "Bài đăng của bạn đã bị từ chối",
+                Content = $"Bài đăng cộng đồng của bạn đã bị từ chối. Lý do: {moderationResult.Reason}",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+        }
+        else if (created.ReviewStatus == CommunityPost.StatusPendingReview)
+        {
+            // Needs manual review - notify user
+            var evt = new PostPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = created.UserId.ToString(),
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.Id.ToString(),
+                Title = "Bài đăng của bạn đang được xem xét",
+                Content = $"Bài đăng cộng đồng của bạn đang chờ xem xét thủ công. Lý do: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Community",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
+
+            // Also publish realtime event
+            var realtimeEvt = new PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.moderation",
+                Version = 1,
+                PostId = created.Id,
+                UserId = created.UserId.ToString(),
+                Status = "PENDING_REVIEW",
+                Reason = moderationResult.Reason,
+                PostType = "Community",
+                Title = "Bài đăng của bạn đang được xem xét",
+                Content = $"Bài đăng cộng đồng của bạn đang chờ xem xét thủ công. Lý do: {moderationResult.Reason}",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+        }
+        else
+        {
+            // Auto-approved - notify user
+            var evt = new PostApprovedNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.approved",
+                Version = 1,
+                UserId = created.UserId.ToString(),
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                ObjectId = created.Id.ToString(),
+                Title = "Bài đăng của bạn đã được duyệt",
+                Content = "Bài đăng cộng đồng của bạn đã được tự động duyệt và hiện đang hiển thị.",
+                Type = "POST_APPROVED",
+                PostType = "Community",
+                ApproverNotes = "Auto-approved by content moderation system",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
+
+            // Also publish realtime event
+            var realtimeEvt = new PostModerationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.moderation",
+                Version = 1,
+                PostId = created.Id,
+                UserId = created.UserId.ToString(),
+                Status = "APPROVED",
+                Reason = "Auto-approved by content moderation system",
+                PostType = "Community",
+                Title = "Bài đăng của bạn đã được duyệt",
+                Content = "Bài đăng cộng đồng của bạn đã được tự động duyệt và hiện đang hiển thị.",
+                ActorId = "SYSTEM",
+                ActorType = "SYSTEM",
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+        }
 
         if (fileMap.Count == 0)
         {
@@ -282,6 +542,170 @@ public class CommunityService : ICommunityService
         return postDto!;
     }
 
+    public async Task<CommunityPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request)
+    {
+        var post = await _repository.GetPostByIdAsync(postId)
+            ?? throw new KeyNotFoundException($"Post {postId} not found");
+
+        if (post.UserId == reporterUserId)
+        {
+            throw new InvalidOperationException("You cannot report your own post.");
+        }
+
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("Reason is required.");
+        }
+
+        if (reason.Length > 100)
+        {
+            throw new ArgumentException("Reason must not exceed 100 characters.");
+        }
+
+        var description = request.Description?.Trim();
+        if (description?.Length > 1000)
+        {
+            throw new ArgumentException("Description must not exceed 1000 characters.");
+        }
+
+        var existing = await _repository.GetPostReportByPostAndReporterAsync(postId, reporterUserId);
+        if (existing != null)
+        {
+            throw new InvalidOperationException("You have already reported this post.");
+        }
+
+        var report = new CommunityPostReport
+        {
+            CommunityPostId = postId,
+            ReporterUserId = reporterUserId,
+            Reason = reason,
+            Description = description,
+            Status = PostReportStatus.Pending,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        var created = await _repository.CreatePostReportAsync(report);
+        created.CommunityPost = post;
+
+        var reportCreatedEvent = new PostReportCreatedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.report.created",
+            Version = 1,
+            ActorId = reporterUserId.ToString(),
+            ActorType = "USER",
+            ObjectId = postId.ToString(),
+            Title = "Báo cáo bài đăng mới",
+            Content = $"Bài đăng #{postId} có báo cáo mới cần được kiểm duyệt.",
+            Type = "COMMUNITY_REPORT_REVIEW",
+            CreatedAt = DateTimeHelper.GetVietnamTime(),
+            PostId = postId,
+            ReportId = created.Id,
+            ReporterUserId = reporterUserId,
+            Reason = reason,
+            TargetRoles = ["ADMIN", "MODERATOR"]
+        };
+
+        await _notificationPublisher.PublishPostReportCreatedNotificationAsync(reportCreatedEvent);
+
+        return MapToReportDto(created);
+    }
+
+    public async Task<List<CommunityPostReportDto>> GetPostReportsAsync(AdminPostReportFilter filter)
+    {
+        var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
+        var pageSize = filter.PageSize < 1 ? 20 : filter.PageSize;
+        if (pageSize > 100)
+        {
+            pageSize = 100;
+        }
+
+        int? status = null;
+        if (!string.IsNullOrWhiteSpace(filter.Status))
+        {
+            if (!Enum.TryParse<PostReportStatus>(filter.Status, true, out var parsedStatus))
+            {
+                throw new ArgumentException("Status must be one of: Pending, Approved, Rejected.");
+            }
+
+            status = (int)parsedStatus;
+        }
+
+        var reports = await _repository.GetPostReportsAsync(
+            filter.PostId,
+            filter.ReporterUserId,
+            status,
+            pageNumber,
+            pageSize);
+
+        return reports.Select(MapToReportDto).ToList();
+    }
+
+    public async Task<CommunityPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request)
+    {
+        var report = await _repository.GetPostReportByIdAsync(reportId)
+            ?? throw new KeyNotFoundException($"Report {reportId} not found");
+
+        if (report.Status != PostReportStatus.Pending)
+        {
+            throw new InvalidOperationException("This report has already been reviewed.");
+        }
+
+        var action = request.Action?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            throw new ArgumentException("Action is required.");
+        }
+
+        var now = DateTimeHelper.GetVietnamTime();
+        report.ReviewedByUserId = reviewerUserId;
+        report.ReviewedAt = now;
+        report.ReviewNote = request.ReviewNote?.Trim();
+        report.UpdatedAt = now;
+
+        if (action == "approve_violation")
+        {
+            report.Status = PostReportStatus.Approved;
+
+            if (report.CommunityPost.Status == ActivePostStatus)
+            {
+                report.CommunityPost.Status = RemovedByModerationStatus;
+                report.CommunityPost.UpdatedAt = now;
+                await _repository.UpdatePostAsync(report.CommunityPost);
+            }
+
+            var notificationEvt = new PostRemovedByModerationNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.report.removed",
+                Version = 1,
+                UserId = report.CommunityPost.UserId.ToString(),
+                ActorId = reviewerUserId.ToString(),
+                ActorType = "ADMIN",
+                ObjectId = report.CommunityPostId.ToString(),
+                Title = "Bài đăng bị gỡ do vi phạm",
+                Content = "Bài đăng cộng đồng của bạn đã bị gỡ vì vi phạm tiêu chuẩn cộng đồng.",
+                Type = "COMMUNITY_MODERATION",
+                CreatedAt = now
+            };
+
+            await _notificationPublisher.PublishPostRemovedByModerationNotificationAsync(notificationEvt);
+        }
+        else if (action == "reject")
+        {
+            report.Status = PostReportStatus.Rejected;
+        }
+        else
+        {
+            throw new ArgumentException("Action must be one of: approve_violation, reject.");
+        }
+
+        await _repository.UpdatePostReportAsync(report);
+
+        return MapToReportDto(report);
+    }
+
     // ─── Ownership checks ─────────────────────────────────────────────────────
 
     public async Task<int?> GetCommentOwnerAsync(int commentId) => await _repository.GetCommentOwnerAsync(commentId);
@@ -297,48 +721,48 @@ public class CommunityService : ICommunityService
         var result = await _repository.FavoritePostAsync(postId, userId);
         if (result)
         {
-            // Get post details to check owner
+            // AGGREGATION STRATEGY: Post favorite notifications are aggregated by AggregationFlushService
+            // Flow:
+            // 1. Publish "post.favorite" event with EventId (idempotency) and Author info (name + avatar)
+            // 2. Notification Service receives event, checks idempotency
+            // 3. If first event in window: aggregation service stores in Redis, doesn't create notification
+            // 4. If subsequent events: added to aggregation bucket
+            // 5. After window expires: AggregationFlushService creates ONE aggregated notification
+            
+            // Get post owner ID for notification
             var post = await _repository.GetPostByIdAsync(postId);
-            if (post != null && post.UserId != userId) // Don't notify self-favorite
+            if (post == null)
             {
-                // Get actor (favoriter) info for notification
-                var actors = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
-                var actorInfo = actors.FirstOrDefault().Value; // Get AuthorDto from KeyValuePair
-                
-                var notificationEvt = new PostFavoriteNotificationEvent
-                {
-                    EventId = Guid.NewGuid().ToString("N"),
-                    EventType = "post.favorite",
-                    Version = 1,
-                    UserId = post.UserId.ToString(), // Post owner receives notification
-                    ActorId = userId.ToString(),     // Person who favorited
-                    ActorType = "USER",
-                    ObjectId = postId.ToString(),
-                    Title = "Lượt thích mới",
-                    Content = $"{actorInfo?.Name ?? "Ai đó"} đã thích bài viết của bạn",
-                    Type = "POST_FAVORITE",
-                    CreatedAt = DateTimeHelper.GetVietnamTime()
-                };
-
-                await _notificationPublisher.PublishPostFavoriteNotificationAsync(notificationEvt);
+                return result;
             }
 
-            // Get new favorite count for realtime update
-            var favoriteCount = await _repository.GetPostFavoriteCountAsync(postId);
+            // Get actor info for notification event
+            var actorData = await _userInfoClient.GetAuthorsBatchAsync(new[] { userId });
+            var favoriterInfo = actorData.FirstOrDefault().Value;
 
-            var realtimeEvt = new PostFavoriteChangedEvent
+            // Publish notification event for aggregation (with idempotency and actor info)
+            var notificationEvt = new PostFavoriteNotificationEvent
             {
                 EventId = Guid.NewGuid().ToString("N"),
-                EventType = "post.favorite.changed",
+                EventType = "post.favorite",
                 Version = 1,
-                PostId = postId,
-                UserId = userId,
-                Action = "FAVORITE",
-                NewFavoriteCount = favoriteCount,
-                CreatedAt = DateTimeHelper.GetVietnamTime()
+                UserId = post.UserId.ToString(), // Post owner (notification recipient)
+                ActorId = userId.ToString(), // Person who favorited
+                ObjectId = postId.ToString(), // PostId
+                Title = "Post Liked",
+                Content = $"{favoriterInfo?.Name ?? "Someone"} liked your post",
+                Type = "POST_FAVORITE",
+                CreatedAt = DateTimeHelper.GetVietnamTime(),
+                Author = favoriterInfo != null ? new NotificationActorDto
+                {
+                    Id = userId,
+                    Name = favoriterInfo.Name ?? "Unknown",
+                    Avatar = favoriterInfo.Avatar ?? string.Empty,
+                    Role = "USER"
+                } : null
             };
 
-            await _eventPublisher.PublishPostFavoriteChangedAsync(realtimeEvt);
+            await _notificationPublisher.PublishPostFavoriteNotificationAsync(notificationEvt);
         }
         return result;
     }
@@ -462,6 +886,19 @@ public class CommunityService : ICommunityService
         var post = await _repository.GetPostByIdAsync(postId);
         if (post is not null)
         {
+            var recipientUserId = post.UserId;
+            if (recipientUserId == userId)
+            {
+                return new PostCommentDto
+                {
+                    Id = created.Id,
+                    Author = new CommentUserDto { Id = authorDto.Id, Name = authorDto.Name, Avatar = authorDto.Avatar, Role = authorDto.Role },
+                    Content = created.Content,
+                    CreatedAt = created.CreatedAt.ToString("o"),
+                    Replies = new List<ReplyCommentDto>()
+                };
+            }
+
             var evt = new CommentCreatedEvent
             {
                 EventId = Guid.NewGuid().ToString("N"),
@@ -469,7 +906,7 @@ public class CommunityService : ICommunityService
                 Version = 1,
                 PostId = postId,
                 CommentId = created.Id,
-                UserId = post.UserId.ToString(),
+                UserId = recipientUserId.ToString(),
                 ActorId = userId.ToString(),
                 ActorType = "USER",
                 ObjectId = postId.ToString(),
@@ -540,34 +977,38 @@ public class CommunityService : ICommunityService
         var comment = await _repository.GetCommentByIdAsync(commentId);
         if (comment is not null)
         {
-            var evt = new ReplyCreatedEvent
+            var recipientUserId = replyToUserId ?? comment.UserId;
+            if (recipientUserId != userId)
             {
-                EventId = Guid.NewGuid().ToString("N"),
-                EventType = "post.reply.created",
-                Version = 1,
-                PostId = comment.CommunityPostId,
-                CommentId = commentId,
-                ParentCommentId = commentId,
-                UserId = comment.UserId.ToString(),
-                ActorId = userId.ToString(),
-                ActorType = "USER",
-                ObjectId = comment.CommunityPostId.ToString(),
-                Title = "Trả lời bình luận",
-                Type = "COMMUNITY",
-                ReplyToUserId = replyToUserId,
-                Content = created.Content,
-                CreatedAt = created.CreatedAt,
-                Author = new RealtimeUserDto
+                var evt = new ReplyCreatedEvent
                 {
-                    Id = authorDto.Id.ToString(),
-                    Name = authorDto.Name,
-                    Avatar = authorDto.Avatar,
-                    Role = authorDto.Role
-                },
-                ReplyToUser = replyToUserEventDto
-            };
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "post.reply.created",
+                    Version = 1,
+                    PostId = comment.CommunityPostId,
+                    CommentId = commentId,
+                    ParentCommentId = commentId,
+                    UserId = recipientUserId.ToString(),
+                    ActorId = userId.ToString(),
+                    ActorType = "USER",
+                    ObjectId = comment.CommunityPostId.ToString(),
+                    Title = "Trả lời bình luận",
+                    Type = "COMMUNITY",
+                    ReplyToUserId = replyToUserId,
+                    Content = created.Content,
+                    CreatedAt = created.CreatedAt,
+                    Author = new RealtimeUserDto
+                    {
+                        Id = authorDto.Id.ToString(),
+                        Name = authorDto.Name,
+                        Avatar = authorDto.Avatar,
+                        Role = authorDto.Role
+                    },
+                    ReplyToUser = replyToUserEventDto
+                };
 
-            await _eventPublisher.PublishReplyCreatedAsync(evt);
+                await _eventPublisher.PublishReplyCreatedAsync(evt);
+            }
         }
 
         return new ReplyCommentDto
@@ -605,10 +1046,241 @@ public class CommunityService : ICommunityService
             CommentCount = counts.CommentCounts.TryGetValue(p.Id, out var cc) ? cc : 0,
             IsFavorited = counts.FavoritedPostIds.Contains(p.Id),
             IsSaved = counts.SavedPostIds.Contains(p.Id),
-            CreatedAt = p.CreatedAt.ToString("o")
+            CreatedAt = p.CreatedAt.ToString("o"),
+            ReviewStatus = p.ReviewStatus,
+            ReviewReason = p.ReviewReason
+        };
+    }
+
+    private static AdminCommunityPostDto MapToAdminDto(
+        CommunityPost p,
+        Dictionary<int, AuthorDto> authors,
+        FeedCountsResult counts,
+        Dictionary<int, PortfolioPreviewDto?> previews)
+    {
+        var dto = MapToDto(p, authors, counts, previews);
+        return new AdminCommunityPostDto
+        {
+            Id = dto.Id,
+            Author = dto.Author,
+            Description = dto.Description,
+            CoverImageUrl = dto.CoverImageUrl,
+            Media = dto.Media,
+            PortfolioId = dto.PortfolioId,
+            PortfolioPreview = dto.PortfolioPreview,
+            FavoriteCount = dto.FavoriteCount,
+            CommentCount = dto.CommentCount,
+            IsFavorited = dto.IsFavorited,
+            IsSaved = dto.IsSaved,
+            CreatedAt = dto.CreatedAt,
+            ReviewStatus = dto.ReviewStatus,
+            ReviewReason = dto.ReviewReason,
+            Status = p.Status
+        };
+    }
+
+    private static CommunityPostReportDto MapToReportDto(CommunityPostReport report)
+    {
+        return new CommunityPostReportDto
+        {
+            Id = report.Id,
+            CommunityPostId = report.CommunityPostId,
+            PostOwnerUserId = report.CommunityPost.UserId,
+            ReporterUserId = report.ReporterUserId,
+            Reason = report.Reason,
+            Description = report.Description,
+            Status = report.Status.ToString(),
+            ReviewedByUserId = report.ReviewedByUserId,
+            ReviewedAt = report.ReviewedAt,
+            ReviewNote = report.ReviewNote,
+            CreatedAt = report.CreatedAt,
+            UpdatedAt = report.UpdatedAt
         };
     }
 
     private static AuthorDto Fallback(int userId) => new() { Id = userId, Name = "Unknown", Avatar = string.Empty, Role = "USER" };
+
+    private static string ResolveActorType(string? role)
+    {
+        if (string.Equals(role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ADMIN";
+        }
+
+        if (string.Equals(role, "MODERATOR", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MODERATOR";
+        }
+
+        if (string.Equals(role, "COMPANY", StringComparison.OrdinalIgnoreCase))
+        {
+            return "COMPANY";
+        }
+
+        return "USER";
+    }
+
+    // ─── Admin moderation ─────────────────────────────────────────────────────
+
+    public async Task<OffsetPagedResult<AdminCommunityPostDto>> GetPendingPostsAsync(int skip, int take)
+    {
+        if (take < 1) take = 20;
+        if (take > 100) take = 100;
+
+        var posts = await _repository.GetAdminPostsAsync(CommunityPost.StatusPendingReview, skip / take + 1, take + 1);
+        var hasMore = posts.Count > take;
+        if (hasMore) posts = posts.Take(take).ToList();
+
+        if (posts.Count == 0)
+        {
+            return new OffsetPagedResult<AdminCommunityPostDto>
+            {
+                Items = new(),
+                PageNumber = skip / take + 1,
+                PageSize = take,
+                HasMore = false
+            };
+        }
+
+        var postIds = posts.Select(p => p.Id).ToList();
+        var uniqueUserIds = posts.Select(p => p.UserId).Distinct().ToList();
+
+        var countsTask = _repository.GetFeedCountsAsync(postIds, null);
+        var authorsTask = _userInfoClient.GetAuthorsBatchAsync(uniqueUserIds);
+
+        await Task.WhenAll(countsTask, authorsTask);
+        var counts = countsTask.Result;
+        var authors = authorsTask.Result;
+
+        var portfolioIds = posts.Where(p => p.PortfolioId.HasValue)
+            .Select(p => p.PortfolioId!.Value)
+            .Distinct()
+            .ToList();
+
+        var previews = new Dictionary<int, PortfolioPreviewDto?>();
+        if (portfolioIds.Count > 0)
+        {
+            var previewTasks = portfolioIds.Select(async pid =>
+                (pid, preview: await _portfolioPreviewClient.GetPreviewAsync(pid)));
+            var previewResults = await Task.WhenAll(previewTasks);
+            foreach (var (pid, preview) in previewResults)
+                previews[pid] = preview;
+        }
+
+        return new OffsetPagedResult<AdminCommunityPostDto>
+        {
+            Items = posts.Select(p => MapToAdminDto(p, authors, counts, previews)).ToList(),
+            PageNumber = skip / take + 1,
+            PageSize = take,
+            HasMore = hasMore
+        };
+    }
+
+    public async Task<CommunityPost> ApprovePostAsync(int postId, string? notes)
+    {
+        var post = await _repository.GetPostByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CommunityPost.StatusActive;
+        post.ReviewStatus = CommunityPost.StatusActive;
+        post.ReviewReason = notes;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish approval notification
+        var evt = new PostApprovedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.approved",
+            Version = 1,
+            UserId = post.UserId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.Id.ToString(),
+            Title = "Your post has been approved",
+            Content = "Your community post has been approved and is now live.",
+            Type = "POST_APPROVED",
+            PostType = "Community",
+            ApproverNotes = notes,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostApprovedNotificationAsync(evt);
+
+        // Publish realtime event
+        var realtimeEvt = new PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.moderation",
+            Version = 1,
+            PostId = post.Id,
+            UserId = post.UserId.ToString(),
+            Status = "APPROVED",
+            Reason = notes ?? "Post approved",
+            PostType = "Community",
+            Title = "Your post has been approved",
+            Content = "Your community post has been approved and is now live.",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+
+        return post;
+    }
+
+    public async Task<CommunityPost> RejectPostAsync(int postId, string reason)
+    {
+        var post = await _repository.GetPostByIdAsync(postId);
+        if (post == null)
+            throw new KeyNotFoundException($"Post not found");
+
+        post.Status = CommunityPost.StatusInactive;
+        post.ReviewStatus = CommunityPost.StatusRejected;
+        post.ReviewReason = reason;
+        post.ReviewedAt = DateTimeHelper.GetVietnamTime();
+
+        await _repository.UpdatePostAsync(post);
+
+        // Publish rejection notification
+        var evt = new PostRejectedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.rejected",
+            Version = 1,
+            UserId = post.UserId.ToString(),
+            ActorId = "ADMIN",
+            ActorType = "ADMIN",
+            ObjectId = post.Id.ToString(),
+            Title = "Your post was rejected",
+            Content = $"Your community post was rejected. Reason: {reason}",
+            Type = "POST_REJECTED",
+            PostType = "Community",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+
+        // Publish realtime event
+        var realtimeEvt = new PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.moderation",
+            Version = 1,
+            PostId = post.Id,
+            UserId = post.UserId.ToString(),
+            Status = "REJECTED",
+            Reason = reason,
+            PostType = "Community",
+            Title = "Your post was rejected",
+            Content = $"Your community post was rejected. Reason: {reason}",
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        await _eventPublisher.PublishPostModerationEventAsync(realtimeEvt);
+
+        return post;
+    }
 }
 

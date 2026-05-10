@@ -79,9 +79,11 @@ public class ConnectionRepository : IConnectionRepository
     public async Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId)
     {
         // Single-query projection to get last message and unread count per room
+        // Exclude connections with STORED status (hidden/archived by user)
         var query = from r in _context.Rooms
                     join c in _context.Connections on r.ConnectionId equals c.Id
-                    where c.UserIdFrom == userId || c.UserIdTo == userId
+                    where (c.UserIdFrom == userId || c.UserIdTo == userId)
+                          && c.Status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString()
                     select new
                     {
                         Room = r,
@@ -100,10 +102,29 @@ public class ConnectionRepository : IConnectionRepository
                 LastAt = x.Room.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.CreatedAt).FirstOrDefault(),
                 UnreadCount = x.Room.Messages.Count(m => m.Status == 0 && m.UserId != userId)
             })
-            .OrderByDescending(r => r.LastAt)  // ✅ Sort by LastAt descending (newest first)
+            .OrderByDescending(r => r.LastAt)  // Sort by LastAt descending (newest first)
             .ToListAsync();
 
         return list;
+    }
+
+    public async Task<Connection.Application.DTOs.RoomSummaryRaw?> GetRoomSummaryByConnectionIdAsync(int connectionId, int userId)
+    {
+        return await (from r in _context.Rooms
+                      join c in _context.Connections on r.ConnectionId equals c.Id
+                      where c.Id == connectionId
+                      select new Connection.Application.DTOs.RoomSummaryRaw
+                      {
+                          RoomId = r.Id,
+                          ProfileId = c.ProfileId,
+                          ConnectionId = c.Id,
+                          UserIdFrom = c.UserIdFrom,
+                          UserIdTo = c.UserIdTo,
+                          LastContent = r.Messages.OrderByDescending(m => m.CreatedAt).Select(m => m.Content).FirstOrDefault(),
+                          LastAt = r.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.CreatedAt).FirstOrDefault(),
+                          UnreadCount = r.Messages.Count(m => m.Status == 0 && m.UserId != userId)
+                      })
+                     .FirstOrDefaultAsync();
     }
 
     public async Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId)
@@ -152,5 +173,29 @@ public class ConnectionRepository : IConnectionRepository
         return await _context.Messages
             .Where(m => m.MessageRoomId == roomId && m.UserId != userId && m.Status == 0)
             .CountAsync();
+    }
+
+    public async Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2)
+    {
+        // Find active (non-STORED) connection between the two users
+        var conn = await _context.Connections
+            .Where(c =>
+                ((c.UserIdFrom == userId1 && c.UserIdTo == userId2) ||
+                 (c.UserIdFrom == userId2 && c.UserIdTo == userId1)) &&
+                c.Status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString())
+            .OrderByDescending(c => c.CreateAt)
+            .FirstOrDefaultAsync();
+
+        return conn == null ? (0, null) : (conn.Id, conn.Status);
+    }
+
+    public async Task<string?> GetConnectionStatusByIdAsync(int connectionId)
+    {
+        var status = await _context.Connections
+            .Where(c => c.Id == connectionId)
+            .Select(c => c.Status)
+            .FirstOrDefaultAsync();
+
+        return status;
     }
 }

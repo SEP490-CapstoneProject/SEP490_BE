@@ -11,6 +11,8 @@ using Community.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using RecruitmentPlatform.AI.Services;
+using RecruitmentPlatform.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +67,7 @@ builder.Services.AddScoped<ICommunityRepository, CommunityRepository>();
 builder.Services.AddScoped<ICommunityService, CommunityService>();
 builder.Services.AddScoped<ICommunityEventPublisher, RabbitMqCommunityEventPublisher>();
 builder.Services.AddScoped<INotificationEventPublisher, RabbitMqNotificationEventPublisher>();
+builder.Services.AddScoped<ModerationService>();
 
 // Add typed HttpClient for Media Service
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
@@ -84,27 +87,29 @@ var portfolioUrl = builder.Configuration["ServiceUrls:PortfolioService"] ?? "htt
 builder.Services.AddHttpClient<IPortfolioPreviewClient, PortfolioPreviewClient>(c =>
     c.BaseAddress = new Uri(portfolioUrl));
 
-// JWT Authentication (optional, for extracting userId from token)
-var jwtSecret = builder.Configuration["JwtSettings:Secret"];
-if (!string.IsNullOrEmpty(jwtSecret))
+// JWT Authentication - Use consistent JwtSettings configuration
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings
 {
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
+    Secret = "default-secret-key-32-characters!",
+    Issuer = "RecruitmentPlatform",
+    Audience = "RecruitmentPlatformUsers"
+};
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
-            };
-        });
-}
-else
-{
-    builder.Services.AddAuthentication();
-}
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audience,
+            ValidateLifetime = true
+        };
+    });
 builder.Services.AddAuthorization();
 
 // Add CORS
@@ -115,7 +120,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()

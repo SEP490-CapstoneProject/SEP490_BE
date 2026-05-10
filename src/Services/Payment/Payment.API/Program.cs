@@ -31,7 +31,7 @@ builder.Configuration.AddAzureKeyVault();
 
 // Database
 builder.Services.AddDbContext<PaymentDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("PaymentDb")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Repositories
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
@@ -63,26 +63,57 @@ builder.Services.AddHttpClient<PayOSHttpClient>(client =>
 // Plan Price Provider (HTTP client to Subscription Service)
 builder.Services.AddHttpClient<IPlanPriceProvider, HttpPlanPriceProvider>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "http://subscription-service:5008");
+    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "https://api-gateway.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io");
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
 // RabbitMQ
 builder.Services.AddSingleton<IConnection>(sp =>
 {
-    var factory = new ConnectionFactory
+    var uri = builder.Configuration["RabbitMQ:Uri"];
+    var factory = new ConnectionFactory();
+
+    if (!string.IsNullOrEmpty(uri))
     {
-        HostName = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq",
-        Port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672"),
-        UserName = builder.Configuration["RabbitMQ:Username"] ?? "guest",
-        Password = builder.Configuration["RabbitMQ:Password"] ?? "guest",
-        AutomaticRecoveryEnabled = true,
-        NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
-    };
+        factory.Uri = new Uri(uri);
+    }
+    else
+    {
+        var host = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq";
+        var port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
+        var username = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+        var password = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+        var virtualHost = builder.Configuration["RabbitMQ:VirtualHost"] ?? "/";
+        var useSsl = bool.TryParse(builder.Configuration["RabbitMQ:UseSsl"], out var ssl) && ssl;
+
+        if (!useSsl && port == 5671)
+        {
+            useSsl = true;
+        }
+
+        factory.HostName = host;
+        factory.Port = port;
+        factory.UserName = username;
+        factory.Password = password;
+        factory.VirtualHost = virtualHost;
+        factory.AutomaticRecoveryEnabled = true;
+        factory.NetworkRecoveryInterval = TimeSpan.FromSeconds(10);
+
+        if (useSsl)
+        {
+            factory.Ssl = new SslOption
+            {
+                Enabled = true,
+                ServerName = host
+            };
+        }
+    }
+
     return factory.CreateConnection();
 });
 
 builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublisher>();
+
 
 // Metrics & Alerting
 builder.Services.AddSingleton<IPaymentMetricsService, PaymentMetricsService>();
@@ -92,13 +123,13 @@ builder.Services.AddSingleton<IAlertingService, AlertingService>();
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<PaymentExpirationService>();
 builder.Services.AddHostedService<ReconciliationService>();
-builder.Services.AddHostedService<DLQMonitoringService>();
+// builder.Services.AddHostedService<DLQMonitoringService>();
 
 // Validate required secrets in Production
 if (!builder.Environment.IsDevelopment())
 {
     builder.Configuration.ValidateRequiredSecrets(
-        "Jwt:Secret",
+        "JwtSettings:Secret",
         "PayOS:ClientId",
         "PayOS:ApiKey",
         "PayOS:ChecksumKey"
@@ -106,7 +137,7 @@ if (!builder.Environment.IsDevelopment())
 }
 
 // JWT Authentication
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
+var jwtSecret = builder.Configuration["JwtSettings:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -116,8 +147,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+            ValidAudience = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
     });
@@ -167,6 +198,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
@@ -182,6 +214,25 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
     dbContext.Database.Migrate();
+    dbContext.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('Payments','Metadata') IS NULL
+    ALTER TABLE [Payments] ADD [Metadata] NVARCHAR(2000) NULL;
+
+IF COL_LENGTH('OutboxEvents','NextRetryAt') IS NULL
+    ALTER TABLE [OutboxEvents] ADD [NextRetryAt] DATETIME2 NULL;
+
+IF COL_LENGTH('OutboxEvents','LastError') IS NULL
+    ALTER TABLE [OutboxEvents] ADD [LastError] NVARCHAR(2000) NULL;
+
+IF COL_LENGTH('ProcessedEvents','EventHash') IS NULL
+    ALTER TABLE [ProcessedEvents] ADD [EventHash] NVARCHAR(64) NULL;
+
+IF COL_LENGTH('ProcessedEvents','OrderCode') IS NULL
+    ALTER TABLE [ProcessedEvents] ADD [OrderCode] NVARCHAR(50) NULL;
+
+IF COL_LENGTH('ProcessedEvents','CorrelationId') IS NULL
+    ALTER TABLE [ProcessedEvents] ADD [CorrelationId] NVARCHAR(100) NULL;
+");
 }
 
 // Configure HTTP pipeline - Enable Swagger in all environments

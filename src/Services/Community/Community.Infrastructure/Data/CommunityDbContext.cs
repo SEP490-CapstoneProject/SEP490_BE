@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Community.Domain.Entities;
+using Community.Domain.Enums;
 
 namespace Community.Infrastructure.Data;
 
@@ -13,6 +14,7 @@ public class CommunityDbContext : DbContext
     public DbSet<CommunityPostMedia> CommunityPostMedia { get; set; }
     public DbSet<Comment> Comments { get; set; }
     public DbSet<ReplyComment> ReplyComments { get; set; }
+    public DbSet<CommunityPostReport> CommunityPostReports { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +33,9 @@ public class CommunityDbContext : DbContext
             entity.Property(e => e.FavoriteCount).HasColumnName("favoriteCount").HasDefaultValue(0);
             entity.Property(e => e.CreatedAt).HasColumnName("createAt");
             entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.ReviewStatus).HasColumnName("reviewStatus");
+            entity.Property(e => e.ReviewReason).HasColumnName("reviewReason").HasMaxLength(500);
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewedAt");
 
             entity.HasIndex(e => e.UserId).HasDatabaseName("IX_CommunityPost_UserId");
         });
@@ -134,6 +139,39 @@ public class CommunityDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(e => e.CommentId).HasDatabaseName("IX_ReplyComment_CommentId");
+        });
+
+        // CommunityPostReport configuration
+        modelBuilder.Entity<CommunityPostReport>(entity =>
+        {
+            entity.ToTable("communityPostReport");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CommunityPostId).HasColumnName("communityPostId").IsRequired();
+            entity.Property(e => e.ReporterUserId).HasColumnName("reporterUserId").IsRequired();
+            entity.Property(e => e.Reason).HasColumnName("reason").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.Status)
+                .HasColumnName("status")
+                .HasConversion<int>()
+                .HasDefaultValue(PostReportStatus.Pending);
+            entity.Property(e => e.ReviewedByUserId).HasColumnName("reviewedByUserId");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewedAt");
+            entity.Property(e => e.ReviewNote).HasColumnName("reviewNote").HasMaxLength(1000);
+            entity.Property(e => e.CreatedAt).HasColumnName("createAt");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updateAt");
+
+            entity.HasOne(e => e.CommunityPost)
+                .WithMany()
+                .HasForeignKey(e => e.CommunityPostId)
+                .HasConstraintName("FK_PostReport_Post")
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.CommunityPostId, e.ReporterUserId })
+                .IsUnique()
+                .HasDatabaseName("UQ_PostReport_Post_Reporter");
+            entity.HasIndex(e => e.Status).HasDatabaseName("IX_PostReport_Status");
+            entity.HasIndex(e => e.CommunityPostId).HasDatabaseName("IX_PostReport_PostId");
         });
     }
 }

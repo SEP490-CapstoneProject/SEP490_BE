@@ -17,10 +17,10 @@ public class PaymentEntity
     public string OrderCode { get; set; } = null!;
     
     /// <summary>
-    /// Optimistic concurrency control token. Updated automatically by EF Core on each save.
-    /// Used to prevent race conditions when multiple webhooks arrive simultaneously.
+    /// Optimistic concurrency control token.
+    /// Increased manually during status transitions to protect webhook race conditions.
     /// </summary>
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public int RowVersion { get; set; }
     
     /// <summary>
     /// Additional metadata (e.g., PayOS PaymentLinkId, provider-specific data)

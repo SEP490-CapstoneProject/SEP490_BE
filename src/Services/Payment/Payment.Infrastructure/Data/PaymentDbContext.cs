@@ -48,9 +48,10 @@ public class PaymentDbContext : DbContext
                 .HasMaxLength(50)
                 .IsRequired();
 
-            // ✅ RowVersion for optimistic concurrency (EF Core manages this)
+            // Optimistic concurrency token (manual increment strategy)
             entity.Property(e => e.RowVersion)
-                .IsRowVersion();
+                .IsConcurrencyToken()
+                .HasDefaultValue(0);
 
             entity.Property(e => e.Metadata)
                 .HasMaxLength(2000);
@@ -120,7 +121,7 @@ public class PaymentDbContext : DbContext
         modelBuilder.Entity<ProcessedEvent>(entity =>
         {
             entity.ToTable("ProcessedEvents");
-            entity.HasKey(e => e.Id);
+            entity.HasKey(e => e.EventId);
 
             entity.Property(e => e.EventId)
                 .HasMaxLength(100)

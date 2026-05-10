@@ -111,6 +111,18 @@ public class AuthService : IAuthService
         await _repository.UpdateAsync(user);
     }
 
+    public async Task UnlockUserAsync(int userId)
+    {
+        var user = await _repository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new Exception("User not found");
+        }
+
+        user.Status = UserStatus.Active;
+        await _repository.UpdateAsync(user);
+    }
+
     public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
     {
         var users = await _repository.GetAllUsersAsync();
@@ -134,6 +146,27 @@ public class AuthService : IAuthService
     {
         var users = await _repository.GetByIdsAsync(userIds);
         return users.Select(MapToInternalUserInfoDto);
+    }
+
+    public async Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByRolesAsync(IEnumerable<string> roles)
+    {
+        var parsedRoles = roles
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => Enum.TryParse<UserRole>(r.Trim(), true, out var role) ? role : (UserRole?)null)
+            .Where(r => r.HasValue)
+            .Select(r => r!.Value)
+            .Distinct()
+            .ToList();
+
+        if (parsedRoles.Count == 0)
+        {
+            return Enumerable.Empty<InternalUserInfoDto>();
+        }
+
+        var users = await _repository.GetByRolesAsync(parsedRoles);
+        return users
+            .Where(u => u.Status == UserStatus.Active)
+            .Select(MapToInternalUserInfoDto);
     }
 
     private async Task<LoginResponse> GenerateTokenResponse(User user)
@@ -225,6 +258,7 @@ public class AuthService : IAuthService
         {
             Id = user.Id,
             Email = user.Email,
+            Role = user.Role.ToString(),
             Status = user.Status.ToString(),
             CreateAt = user.CreatedAt
         };

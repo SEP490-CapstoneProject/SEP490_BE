@@ -92,15 +92,21 @@ public class UserProfileClient : IUserProfileClient
 
     public async Task<Dictionary<int, EmployeeDto>> GetEmployeesByIdsAsync(List<int> employeeIds)
     {
-        if (!employeeIds.Any()) return new Dictionary<int, EmployeeDto>();
+        var ids = employeeIds.Where(id => id > 0).Distinct().ToList();
+        if (!ids.Any()) return new Dictionary<int, EmployeeDto>();
 
         try
         {
-            var ids = string.Join(",", employeeIds);
-            var response = await _userProfileClient.GetAsync($"/api/employee?ids={ids}");
-            response.EnsureSuccessStatusCode();
-            var employees = await response.Content.ReadFromJsonAsync<List<EmployeeDto>>() ?? new List<EmployeeDto>();
-            return employees.ToDictionary(e => e.EmployeeId);
+            var tasks = ids.Select(async id =>
+            {
+                var employee = await GetEmployeeByIdAsync(id);
+                return (id, employee);
+            });
+
+            var results = await Task.WhenAll(tasks);
+            return results
+                .Where(x => x.employee != null)
+                .ToDictionary(x => x.id, x => x.employee!);
         }
         catch (Exception ex)
         {
@@ -111,15 +117,19 @@ public class UserProfileClient : IUserProfileClient
 
     public async Task<Dictionary<int, CompanyExternalDto>> GetCompaniesByIdsAsync(List<int> companyIds)
     {
-        if (!companyIds.Any()) return new Dictionary<int, CompanyExternalDto>();
+        var ids = companyIds.Where(id => id > 0).Distinct().ToList();
+        if (!ids.Any()) return new Dictionary<int, CompanyExternalDto>();
 
         try
         {
-            var ids = string.Join(",", companyIds);
-            var response = await _userProfileClient.GetAsync($"/api/company?ids={ids}");
+            var idsQuery = string.Join(",", ids);
+            var response = await _userProfileClient.GetAsync($"/api/company/batch?ids={idsQuery}");
             response.EnsureSuccessStatusCode();
             var companies = await response.Content.ReadFromJsonAsync<List<CompanyExternalDto>>() ?? new List<CompanyExternalDto>();
-            return companies.ToDictionary(c => c.CompanyId);
+            return companies
+                .Where(c => c.CompanyId > 0)
+                .GroupBy(c => c.CompanyId)
+                .ToDictionary(g => g.Key, g => g.First());
         }
         catch (Exception ex)
         {
@@ -130,15 +140,19 @@ public class UserProfileClient : IUserProfileClient
 
     public async Task<Dictionary<int, CompanyPostDto>> GetPostsByIdsAsync(List<int> postIds)
     {
-        if (!postIds.Any()) return new Dictionary<int, CompanyPostDto>();
+        var ids = postIds.Where(id => id > 0).Distinct().ToList();
+        if (!ids.Any()) return new Dictionary<int, CompanyPostDto>();
 
         try
         {
-            var ids = string.Join(",", postIds);
-            var response = await _companyClient.GetAsync($"/api/company-posts?ids={ids}");
+            var idsQuery = string.Join(",", ids);
+            var response = await _companyClient.GetAsync($"/api/company-posts/batch?ids={idsQuery}");
             response.EnsureSuccessStatusCode();
             var posts = await response.Content.ReadFromJsonAsync<List<CompanyPostDto>>() ?? new List<CompanyPostDto>();
-            return posts.ToDictionary(p => p.PostId);
+            return posts
+                .Where(p => p.PostId > 0)
+                .GroupBy(p => p.PostId)
+                .ToDictionary(g => g.Key, g => g.First());
         }
         catch (Exception ex)
         {

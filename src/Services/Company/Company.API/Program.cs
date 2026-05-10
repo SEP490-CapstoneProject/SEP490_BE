@@ -6,10 +6,14 @@ using Company.Infrastructure.Clients;
 using Company.Infrastructure.Configuration;
 using Company.Infrastructure.Data;
 using Company.Infrastructure.Repositories;
+using Company.Infrastructure.Messaging;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using RecruitmentPlatform.AI.DependencyInjection;
+using RecruitmentPlatform.AI.Services;
 using System.Text;
+using RecruitmentPlatform.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,6 +62,12 @@ builder.Services.AddDbContext<CompanyDbContext>(options =>
 builder.Services.AddScoped<ICompanyPostRepository, CompanyPostRepository>();
 builder.Services.AddScoped<ICompanyPostService, CompanyPostService>();
 builder.Services.AddScoped<ICompanyCacheRepository, CompanyCacheRepository>();
+builder.Services.AddScoped<ICompanyEmbeddingEventPublisher, CompanyEmbeddingEventPublisher>();
+builder.Services.AddScoped<ICompanyNotificationEventPublisher, RabbitMqCompanyNotificationEventPublisher>();
+builder.Services.AddScoped<ModerationService>();
+builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
+builder.Services.AddHostedService<CompanyEmbeddingConsumer>();
+builder.Services.AddHostedService<CompanyEmbeddingBackfillWorker>();
 
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
 builder.Services.AddHttpClient<IMediaUploadClient, MediaUploadClient>(client =>
@@ -73,26 +83,35 @@ builder.Services.AddHttpClient<ICompanyProfileClient, UserProfileCompanyClient>(
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-var jwtSecret = builder.Configuration["JwtSettings:Secret"];
-if (!string.IsNullOrEmpty(jwtSecret))
+var portfolioServiceUrl = builder.Configuration["ServiceUrls:PortfolioService"] ?? "http://portfolio-service:8080";
+builder.Services.AddHttpClient<IPortfolioMatchingClient, PortfolioMatchingClient>(client =>
 {
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
+    client.BaseAddress = new Uri(portfolioServiceUrl);
+    client.Timeout = TimeSpan.FromSeconds(2);
+});
+
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings
+{
+    Secret = "default-secret-key-32-characters!",
+    Issuer = "RecruitmentPlatform",
+    Audience = "RecruitmentPlatformUsers"
+};
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
-            };
-        });
-}
-else
-{
-    builder.Services.AddAuthentication();
-}
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audience,
+            ValidateLifetime = true
+        };
+    });
 builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
@@ -102,7 +121,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
               "https://sep-490-web-fork.vercel.app",
               "http://localhost:3000",
-              "https://sep-490-dashboard-fork.vercel.app/",
+              "https://sep-490-dashboard-fork.vercel.app",
               "http://localhost:5173"
           )
           .AllowAnyMethod()
@@ -117,6 +136,15 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CompanyDbContext>();
     db.Database.Migrate();
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embedding') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embedding] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingVersion') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingVersion] INT NOT NULL CONSTRAINT DF_CompanyPost_EmbeddingVersion DEFAULT 0;
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingUpdatedAt') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingUpdatedAt] DATETIME2 NULL;
+IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingStatus') IS NULL
+    ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingStatus] NVARCHAR(20) NOT NULL CONSTRAINT DF_CompanyPost_EmbeddingStatus DEFAULT 'Pending';");
 }
 
 // Enable Swagger in all environments

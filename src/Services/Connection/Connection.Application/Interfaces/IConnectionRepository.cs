@@ -16,8 +16,11 @@ public interface IConnectionRepository
     Task<IEnumerable<Connection.Domain.Entities.Room>> GetRoomsByUserIdAsync(int userId);
     Task UpdateRoomAsync(Connection.Domain.Entities.Room room);
     Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId);
+    Task<Connection.Application.DTOs.RoomSummaryRaw?> GetRoomSummaryByConnectionIdAsync(int connectionId, int userId);
     // Bulk mark-by-ids removed (auto mark on join used). Keep mark-room for auto behavior.
     Task<List<int>> MarkRoomMessagesAsReadAsync(int roomId, int userId);
     Task<IEnumerable<(int Id, int UserIdFrom, int UserIdTo)>> GetRoomUsersAsync(int roomId);
     Task<int> GetUnreadMessageCountAsync(int roomId, int userId);
+    Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2);
+    Task<string?> GetConnectionStatusByIdAsync(int connectionId);
 }

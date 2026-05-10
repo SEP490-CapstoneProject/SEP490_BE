@@ -6,6 +6,8 @@ public class CreatePortfolioRequest
 {
     public int EmployeeId { get; set; }
     public string Name { get; set; } = string.Empty;
+    public bool IsMain { get; set; } = false;
+    public bool IsPublic { get; set; } = false;
     public List<PortfolioBlockRequest> Blocks { get; set; } = new();
 }
 
@@ -13,6 +15,8 @@ public class UpdateFullPortfolioRequest
 {
     public string Name { get; set; } = string.Empty;
     public string? Status { get; set; }
+    public bool? IsMain { get; set; }
+    public bool? IsPublic { get; set; }
     public List<PortfolioBlockRequest> Blocks { get; set; } = new();
 }
 
@@ -28,5 +32,7 @@ public class CreatePortfolioResponse
 {
     public int PortfolioId { get; set; }
     public string? Message { get; set; }
+    public string? ModerationStatus { get; set; }
+    public string? ModerationReason { get; set; }
 }
 

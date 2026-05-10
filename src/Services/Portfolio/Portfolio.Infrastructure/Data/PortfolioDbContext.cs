@@ -19,6 +19,9 @@ public class PortfolioDbContext : DbContext
     public DbSet<PortfolioBlock> PortfolioBlocks { get; set; }
     public DbSet<Compliment> Compliments { get; set; }
     public DbSet<PortfolioFollow> PortfolioFollows { get; set; }
+    public DbSet<PortfolioFollowCategory> PortfolioFollowCategories { get; set; }
+    public DbSet<Criterion> Criteria { get; set; }
+    public DbSet<PortfolioPreview> PortfolioPreview { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,12 +35,25 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.EmployeeId).IsRequired();
             e.Property(x => x.Name).HasMaxLength(255).IsRequired();
             e.Property(x => x.Status).HasMaxLength(50).HasDefaultValue("active");
+            e.Property(x => x.IsMain).HasDefaultValue(false);
+            e.Property(x => x.IsPublic).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
             e.Property(x => x.UpdatedAt).IsRequired(false);
             e.Property(x => x.ComplimentCount).HasDefaultValue(0);
             e.Property(x => x.ApprovedComplimentCount).HasDefaultValue(0);
             e.Property(x => x.AverageScore).HasColumnType("decimal(3,2)").IsRequired(false);
+            e.Property(x => x.Embedding).HasColumnType("nvarchar(max)").IsRequired(false);
+            e.Property(x => x.EmbeddingVersion).HasDefaultValue(0);
+            e.Property(x => x.EmbeddingUpdatedAt).IsRequired(false);
+            e.Property(x => x.EmbeddingStatus).HasMaxLength(20).HasDefaultValue("Pending");
+            e.Property(x => x.ModerationStatus).HasMaxLength(20).HasDefaultValue("PendingReview");
+            e.Property(x => x.ModerationReason).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.ModeratedAt).IsRequired(false);
             e.HasIndex(x => x.EmployeeId).HasDatabaseName("IX_Portfolio_EmployeeId");
+            e.HasIndex(x => new { x.EmployeeId, x.IsMain })
+                .HasDatabaseName("UX_Portfolio_EmployeeId_IsMain")
+                .IsUnique()
+                .HasFilter("[IsMain] = 1");
         });
 
         // BlockType
@@ -92,28 +108,27 @@ public class PortfolioDbContext : DbContext
         {
             e.ToTable("Compliment");
             e.HasKey(x => x.Id);
-            e.Property(x => x.Content).HasColumnType("nvarchar(max)").IsRequired();
+            e.Property(x => x.Content).HasColumnType("nvarchar(max)").IsRequired(false);
             e.Property(x => x.State).HasDefaultValue(ComplimentState.Pending);
-            e.Property(x => x.IsDeleted).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
             e.Property(x => x.Score).IsRequired(false);
             e.Property(x => x.UpdatedAt).IsRequired(false);
             e.Property(x => x.UpdatedBy).IsRequired(false);
 
-            // Filtered UNIQUE: one active compliment per company per portfolio
-            e.HasIndex(x => new { x.PortfolioId, x.CompanyId })
-             .HasDatabaseName("UX_Compliment_Portfolio_Company_Active")
-             .HasFilter("[IsDeleted] = 0")
+            // Filtered UNIQUE: one active compliment per user per portfolio
+            e.HasIndex(x => new { x.PortfolioId, x.UserId })
+             .HasDatabaseName("UX_Compliment_Portfolio_User_Active")
+             .HasFilter("[State] <> 3")
              .IsUnique();
 
-            e.HasIndex(x => new { x.PortfolioId, x.CompanyId, x.State })
-             .HasDatabaseName("IX_Compliment_Portfolio_Company_State");
+            e.HasIndex(x => new { x.PortfolioId, x.UserId, x.State })
+             .HasDatabaseName("IX_Compliment_Portfolio_User_State");
 
-            // Global query filter: multi-tenant isolation + soft delete
+            // Global query filter: multi-tenant isolation + state-based deletion
             e.HasQueryFilter(c =>
-                !c.IsDeleted &&
+                c.State != ComplimentState.Deleted &&
                 (_currentUser.IsAdmin ||
-                 (_currentUser.HasCompany && c.CompanyId == _currentUser.CompanyId)));
+                 (_currentUser.UserId > 0 && c.UserId == _currentUser.UserId)));
 
             e.HasOne(x => x.Portfolio)
              .WithMany(x => x.Compliments)
@@ -128,12 +143,14 @@ public class PortfolioDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.CompanyId).IsRequired();
             e.Property(x => x.PortfolioId).IsRequired();
+            e.Property(x => x.CategoryId).IsRequired(false);
             e.Property(x => x.InterestLevel).HasMaxLength(10).IsRequired();
             e.Property(x => x.FollowedAt).HasDefaultValueSql("DATEADD(HOUR, 7, GETUTCDATE())");
             e.Property(x => x.UpdatedAt).IsRequired(false);
 
             e.HasIndex(x => x.CompanyId).HasDatabaseName("IX_PortfolioFollow_CompanyId");
             e.HasIndex(x => x.PortfolioId).HasDatabaseName("IX_PortfolioFollow_PortfolioId");
+            e.HasIndex(x => x.CategoryId).HasDatabaseName("IX_PortfolioFollow_CategoryId");
             e.HasIndex(x => new { x.CompanyId, x.PortfolioId })
              .HasDatabaseName("UX_PortfolioFollow_Company_Portfolio")
              .IsUnique();
@@ -142,6 +159,65 @@ public class PortfolioDbContext : DbContext
              .WithMany(x => x.Follows)
              .HasForeignKey(x => x.PortfolioId)
              .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.Category)
+             .WithMany(x => x.Follows)
+             .HasForeignKey(x => x.CategoryId)
+             .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<PortfolioFollowCategory>(e =>
+        {
+            e.ToTable("PortfolioFollowCategory");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.CompanyId).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Code).HasMaxLength(100).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("DATEADD(HOUR, 7, GETUTCDATE())");
+            e.Property(x => x.UpdatedAt).IsRequired(false);
+
+            e.HasIndex(x => x.CompanyId).HasDatabaseName("IX_PortfolioFollowCategory_CompanyId");
+            e.HasIndex(x => new { x.CompanyId, x.Code })
+             .HasDatabaseName("UX_PortfolioFollowCategory_Company_Code")
+             .IsUnique();
+        });
+
+        // Criterion
+        modelBuilder.Entity<Criterion>(e =>
+        {
+            e.ToTable("Criterion");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(255).IsRequired();
+            e.Property(x => x.Kind).HasMaxLength(100).IsRequired();
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+
+            e.HasIndex(x => x.Kind).HasDatabaseName("IX_Criterion_Kind");
+        });
+
+        // PortfolioPreview
+        modelBuilder.Entity<PortfolioPreview>(e =>
+        {
+            e.ToTable("PortfolioPreview");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.PortfolioId).IsRequired();
+            e.Property(x => x.PreviewJson).HasColumnType("nvarchar(max)").HasDefaultValue("{}");
+            e.Property(x => x.HighlightsDescription).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.Version).HasDefaultValue(1);
+            e.Property(x => x.RegeneratedCount).HasDefaultValue(0);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("GETDATE()");
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.GenerationModel).HasMaxLength(50).HasDefaultValue("gemini-1.5-pro");
+            e.Property(x => x.TokensUsed).IsRequired(false);
+
+            e.HasIndex(x => x.PortfolioId)
+                .IsUnique()
+                .HasDatabaseName("UX_PortfolioPreview_PortfolioId");
+
+            e.HasOne(x => x.Portfolio)
+                .WithMany()
+                .HasForeignKey(x => x.PortfolioId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -7,10 +7,13 @@ namespace Connection.API.Hubs;
 public class ChatHub : Hub
 {
     private readonly IConnectionService _service;
+    private readonly IConnectionEventPublisher _eventPublisher;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int RoomId, int UserId)> ActiveRoomConnections = new();
 
-    public ChatHub(IConnectionService service)
+    public ChatHub(IConnectionService service, IConnectionEventPublisher eventPublisher)
     {
         _service = service;
+        _eventPublisher = eventPublisher;
     }
 
     public override async Task OnConnectedAsync()
@@ -25,6 +28,12 @@ public class ChatHub : Hub
         }
     }
 
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        ActiveRoomConnections.TryRemove(Context.ConnectionId, out _);
+        await base.OnDisconnectedAsync(exception);
+    }
+
     public async Task JoinRoom(int roomId)
     {
         // add connection to group
@@ -34,9 +43,11 @@ public class ChatHub : Hub
         var userIdClaim = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!int.TryParse(userIdClaim, out var userId))
         {
-            // cannot determine user, just return after joining
+        // cannot determine user, just return after joining
             return;
         }
+
+        ActiveRoomConnections[Context.ConnectionId] = (roomId, userId);
 
         // mark messages in room as read for this user (auto behavior when opening room)
         var updatedMessageIds = await _service.MarkRoomMessagesAsReadAsync(roomId, userId);
@@ -45,11 +56,21 @@ public class ChatHub : Hub
         {
             // notify group about read receipts
             await Clients.Group(roomId.ToString()).SendAsync("MessagesRead", new { roomId, userId, messageIds = updatedMessageIds });
+
+            // Ensure the other user gets the read receipt even if they are NOT in the room right now (e.g., they are in the home page)
+            var roomUsers = await _service.GetRoomUsersAsync(roomId);
+            var roomConn = roomUsers.FirstOrDefault();
+            if (roomConn != default)
+            {
+                var otherUserId = roomConn.UserIdFrom == userId ? roomConn.UserIdTo : roomConn.UserIdFrom;
+                await Clients.Group($"user_{otherUserId}").SendAsync("MessagesRead", new { roomId, userId, messageIds = updatedMessageIds });
+            }
         }
     }
 
     public async Task LeaveRoom(int roomId)
     {
+        ActiveRoomConnections.TryRemove(Context.ConnectionId, out _);
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId.ToString());
     }
 
@@ -63,13 +84,15 @@ public class ChatHub : Hub
             return;
         }
 
+        var isReceiverInRoom = ActiveRoomConnections.Values.Any(v => v.RoomId == roomId && v.UserId != senderId);
+
         var message = new Connection.Domain.Entities.Message
         {
             UserId = senderId,
             MessageRoomId = roomId,
             Content = content,
             CreatedAt = DateTime.UtcNow,
-            Status = 0
+            Status = isReceiverInRoom ? 1 : 0
         };
 
         var created = await _service.CreateMessageAsync(message);
@@ -96,27 +119,32 @@ public class ChatHub : Hub
         var roomUsers = await _service.GetRoomUsersAsync(roomId);
         if (roomUsers != null)
         {
-            foreach (var user in roomUsers)
+            var roomConn = roomUsers.FirstOrDefault();
+            if (roomConn != default)
             {
-                // Don't notify the sender
-                if (user.Id != senderId)
-                {
-                    var unreadCount = await _service.GetUnreadMessageCountAsync(roomId, user.Id);
+                // The other person in the connection
+                var targetUserId = roomConn.UserIdFrom == senderId ? roomConn.UserIdTo : roomConn.UserIdFrom;
 
-                    // Send full room summary structure matching API response
-                    await Clients.Group($"user_{user.Id}").SendAsync("RoomUpdated",
-                        new
-                        {
-                            roomId,
-                            profileId = room.Connection?.ProfileId ?? 0,
-                            connectionId = room.ConnectionId,
-                            userIdFrom = user.UserIdFrom,
-                            userIdTo = user.UserIdTo,
-                            lastContent = dto.Content,
-                            lastAt = dto.CreatedAt,
-                            unreadCount
-                        });
-                }
+                var unreadCount = await _service.GetUnreadMessageCountAsync(roomId, targetUserId);
+
+                // Send full room summary structure matching API response
+                await Clients.Group($"user_{targetUserId}").SendAsync("RoomUpdated",
+                    new
+                    {
+                        roomId,
+                        profileId = room.Connection?.ProfileId ?? 0,
+                        connectionId = room.ConnectionId,
+                        userIdFrom = roomConn.UserIdFrom,
+                        userIdTo = roomConn.UserIdTo,
+                        lastContent = dto.Content,
+                        lastAt = dto.CreatedAt,
+                        unreadCount
+                    });
+
+                // Publish to Realtime Service (for users on /hubs/realtime)
+                _ = _eventPublisher.PublishNewMessageNotificationAsync(
+                    created.Id, roomId, senderId, targetUserId,
+                    dto.Content, dto.CreatedAt);
             }
         }
     }

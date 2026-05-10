@@ -1,0 +1,80 @@
+```mermaid
+flowchart LR
+
+%% ================= CLIENT =================
+subgraph Client
+Browser["Web Browser"]
+Mobile["Mobile App"]
+end
+
+%% ================= EDGE =================
+Gateway["API Gateway (YARP)"]
+Browser -- "HTTP Request" --> Gateway
+Mobile -- "HTTP Request" --> Gateway
+
+%% ================= SERVER =================
+subgraph Server
+API["ASP.NET Core REST API"]
+SignalR["SignalR Hub"]
+Background["Background Jobs<br/>- Email sending<br/>- AI processing<br/>- File processing<br/>- Scheduled tasks"]
+Redis[(Redis Cache)]
+SQL[(SQL Server Database)]
+Rabbit[(RabbitMQ Event Bus)]
+end
+
+Gateway -- "Route Request" --> API
+API -- "HTTP Response" --> Gateway
+Gateway -- "HTTP Response" --> Browser
+Gateway -- "HTTP Response" --> Mobile
+
+%% ================= STORAGE =================
+subgraph FileStorage
+Cloudinary["Cloudinary Storage"]
+end
+
+%% ================= THIRD PARTY =================
+subgraph ThirdPartyServices
+Auth["OAuth Authentication"]
+AI["AI Service"]
+Payment["Payment Gateway"]
+end
+
+%% ===== REALTIME =====
+Browser -. "WebSocket" .-> SignalR
+SignalR -. "Push Event" .-> Browser
+Mobile -. "WebSocket" .-> SignalR
+SignalR -. "Push Event" .-> Mobile
+API --> SignalR
+
+%% ===== DATABASE =====
+API -- "SQL Query" --> SQL
+SQL -- "Query Result" --> API
+Background -- "SQL Query" --> SQL
+SQL -- "Result" --> Background
+
+%% ===== CACHE =====
+API -- "Redis GET/SET" --> Redis
+Redis -- "Cached Data" --> API
+
+%% ===== MESSAGE BUS =====
+API <--> Rabbit
+Background <--> Rabbit
+
+%% ===== FILE STORAGE =====
+API -- "Upload File" --> Cloudinary
+Cloudinary -- "File URL" --> API
+
+%% ===== BACKGROUND JOB =====
+API --> Background
+
+%% ===== THIRD PARTY =====
+API -- "Auth Request" --> Auth
+Auth -- "Auth Response" --> API
+
+Background -- "AI Request" --> AI
+AI -- "AI Result" --> Background
+
+API -- "Payment Request" --> Payment
+Payment -- "Payment Result" --> API
+Payment -- "Webhook" --> API
+```

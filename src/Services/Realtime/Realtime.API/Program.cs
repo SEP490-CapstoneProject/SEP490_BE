@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Realtime.API.Hubs;
 using Realtime.API.Services;
+using Realtime.Application.Clients;
 using Realtime.Application.Interfaces;
 using Realtime.Infrastructure.Azure;
 using Realtime.Infrastructure.Messaging;
@@ -14,9 +15,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddAzureKeyVault();
 
-var jwtKey = builder.Configuration["JwtSettings:SecretKey"] ?? "default-secret-key-32-characters!";
-var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "SkillSnapAuth";
-var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "SkillSnapUsers";
+var jwtKey = builder.Configuration["JwtSettings:Secret"] ?? "default-secret-key-32-characters!";
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "RecruitmentPlatform";
+var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "RecruitmentPlatformUsers";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -78,7 +79,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "https://sep-490-web-fork.vercel.app",
                   "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app/",
+                  "https://sep-490-dashboard-fork.vercel.app",
                   "http://localhost:5173"
               )
               .AllowAnyMethod()
@@ -117,10 +118,26 @@ else
 
 builder.Services.AddSingleton<IRealtimePushService, SignalRPushService>();
 
+// FCM notification client for calling Notification Service
+builder.Services.AddHttpClient<INotificationServiceClient, Realtime.Infrastructure.Clients.NotificationServiceClient>()
+    .ConfigureHttpClient(client =>
+    {
+        var notificationServiceUrl = builder.Configuration["Services:NotificationService:Url"] 
+            ?? "http://notification-service:5001";
+        client.BaseAddress = new Uri(notificationServiceUrl);
+        client.Timeout = TimeSpan.FromSeconds(10);
+    });
+
+// Debouncer: gom tin nhắn trong 2 giây rồi push 1 lần — tránh spam notification
+builder.Services.AddSingleton<Realtime.Infrastructure.Messaging.NewMessageDebouncer>();
+
 builder.Services.AddHostedService<CommentEventConsumer>();
 builder.Services.AddHostedService<ReplyEventConsumer>();
 builder.Services.AddHostedService<NotificationEventConsumer>();
 builder.Services.AddHostedService<PostFavoriteEventConsumer>();
+builder.Services.AddHostedService<ConnectionRequestedEventConsumer>();
+builder.Services.AddHostedService<ConnectionAcceptedEventConsumer>();
+builder.Services.AddHostedService<NewMessageNotificationEventConsumer>();
 
 var app = builder.Build();
 

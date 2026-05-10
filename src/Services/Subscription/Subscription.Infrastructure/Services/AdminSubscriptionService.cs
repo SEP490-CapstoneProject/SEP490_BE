@@ -12,11 +12,16 @@ public class AdminSubscriptionService : IAdminSubscriptionService
 {
     private readonly SubscriptionDbContext _context;
     private readonly IAuditLogService _auditLogService;
+    private readonly ISubscriptionUserProfileClient _userProfileClient;
 
-    public AdminSubscriptionService(SubscriptionDbContext context, IAuditLogService auditLogService)
+    public AdminSubscriptionService(
+        SubscriptionDbContext context,
+        IAuditLogService auditLogService,
+        ISubscriptionUserProfileClient userProfileClient)
     {
         _context = context;
         _auditLogService = auditLogService;
+        _userProfileClient = userProfileClient;
     }
 
     public async Task<PlanDto> CreatePlanAsync(CreatePlanRequest request)
@@ -76,12 +81,12 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         if (plan == null)
             throw new KeyNotFoundException($"Plan with ID {planId} not found");
 
-        // Check if plan has active subscriptions
-        var hasActiveSubscriptions = await _context.Subscriptions
-            .AnyAsync(s => s.PlanId == planId && s.Status == Domain.Enums.SubscriptionStatus.Active);
+        // Prevent FK violation: plan cannot be removed when any subscription references it
+        var hasAnySubscriptions = await _context.Subscriptions
+            .AnyAsync(s => s.PlanId == planId);
 
-        if (hasActiveSubscriptions)
-            throw new InvalidOperationException("Cannot delete plan with active subscriptions");
+        if (hasAnySubscriptions)
+            throw new InvalidOperationException("Cannot delete plan because it is referenced by existing subscriptions");
 
         var oldValues = JsonSerializer.Serialize(plan);
 
@@ -125,6 +130,20 @@ public class AdminSubscriptionService : IAdminSubscriptionService
     }
 
     // Plan Feature CRUD Operations
+    public async Task<IEnumerable<Subscription.Application.DTOs.Admin.PlanFeatureDto>> GetPlanFeaturesAsync(int planId)
+    {
+        var planExists = await _context.Plans.AnyAsync(p => p.Id == planId);
+        if (!planExists)
+            throw new KeyNotFoundException($"Plan with ID {planId} not found");
+
+        var features = await _context.PlanFeatures
+            .Where(f => f.PlanId == planId)
+            .OrderBy(f => f.Id)
+            .ToListAsync();
+
+        return features.Select(MapToPlanFeatureDto);
+    }
+
     public async Task<Subscription.Application.DTOs.Admin.PlanFeatureDto> AddPlanFeatureAsync(int planId, CreatePlanFeatureRequest request)
     {
         // Check if plan exists
@@ -244,7 +263,9 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             .Take(filter.PageSize)
             .ToListAsync();
 
-        return subscriptions.Select(MapToAdminSubscriptionDto);
+        var items = subscriptions.Select(MapToAdminSubscriptionDto).ToList();
+        await EnrichUserProfilesAsync(items);
+        return items;
     }
 
     public async Task<AdminSubscriptionDto?> GetSubscriptionByIdAsync(int subscriptionId)
@@ -262,6 +283,8 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         {
             Id = s.Id,
             UserId = s.UserId,
+            UserName = "Unknown",
+            UserAvatar = string.Empty,
             PlanId = s.PlanId,
             PlanName = s.Plan?.Name ?? "Unknown",
             StartDate = s.StartDate,
@@ -285,6 +308,8 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         {
             Id = s.Id,
             UserId = s.UserId,
+            UserName = "Unknown",
+            UserAvatar = string.Empty,
             PlanId = s.PlanId,
             PlanName = s.Plan?.Name ?? "Unknown",
             StartDate = s.StartDate,
@@ -295,6 +320,23 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt
         });
+    }
+
+    private async Task EnrichUserProfilesAsync(List<AdminSubscriptionDto> items)
+    {
+        var userIds = items.Select(x => x.UserId);
+        var profileMap = await _userProfileClient.GetUsersBatchAsync(userIds);
+
+        foreach (var item in items)
+        {
+            if (!profileMap.TryGetValue(item.UserId, out var profile))
+            {
+                continue;
+            }
+
+            item.UserName = profile.Name;
+            item.UserAvatar = profile.Avatar;
+        }
     }
     public async Task CancelSubscriptionAsync(int subscriptionId, AdminCancelRequest request)
     {

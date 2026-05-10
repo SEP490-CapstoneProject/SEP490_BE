@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,6 +11,7 @@ namespace Payment.Infrastructure.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            /*
             migrationBuilder.CreateTable(
                 name: "OutboxEvents",
                 columns: table => new
@@ -30,6 +31,7 @@ namespace Payment.Infrastructure.Data.Migrations
                 {
                     table.PrimaryKey("PK_OutboxEvents", x => x.Id);
                 });
+            */
 
             migrationBuilder.CreateTable(
                 name: "Payments",
@@ -56,6 +58,7 @@ namespace Payment.Infrastructure.Data.Migrations
                     table.PrimaryKey("PK_Payments", x => x.Id);
                 });
 
+            /*
             migrationBuilder.CreateTable(
                 name: "ProcessedEvents",
                 columns: table => new
@@ -69,6 +72,7 @@ namespace Payment.Infrastructure.Data.Migrations
                 {
                     table.PrimaryKey("PK_ProcessedEvents", x => x.EventId);
                 });
+            */
 
             migrationBuilder.CreateTable(
                 name: "PaymentHistories",
@@ -94,10 +98,12 @@ namespace Payment.Infrastructure.Data.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            /*
             migrationBuilder.CreateIndex(
                 name: "IX_OutboxEvents_Status_NextRetryAt",
                 table: "OutboxEvents",
                 columns: new[] { "Status", "NextRetryAt" });
+            */
 
             migrationBuilder.CreateIndex(
                 name: "IX_PaymentHistories_PaymentId",

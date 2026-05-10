@@ -51,6 +51,10 @@ namespace Notification.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETUTCDATE()");
 
+                    b.Property<string>("EventId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsRead")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -76,6 +80,11 @@ namespace Notification.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EventId", "UserId", "Type", "ObjectId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Unique_Notification_Event")
+                        .HasFilter("[EventId] IS NOT NULL");
 
                     b.HasIndex("UserId", "Id")
                         .HasDatabaseName("IX_Notification_UserId_Id");
