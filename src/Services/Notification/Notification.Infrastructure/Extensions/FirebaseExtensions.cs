@@ -20,51 +20,149 @@ public static class FirebaseExtensions
             // Check if Firebase is already initialized
             if (FirebaseApp.DefaultInstance != null)
             {
-                Console.WriteLine("✅ Firebase Admin SDK already initialized");
+                // Already initialized in a previous app startup
                 return services;
             }
 
-            var credentialsPath = configuration["Firebase:CredentialsPath"];
-            var credentialsJson = configuration["Firebase:CredentialsJson"];
+            // Log using ILogger (add it as a temporary service)
+            services.AddLogging();
+            var serviceProvider = services.BuildServiceProvider();
+            var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("Firebase.Initialization");
 
-            if (!string.IsNullOrEmpty(credentialsPath) && File.Exists(credentialsPath))
+            logger.LogInformation("🔥 [FIREBASE_CONFIG] Scanning IConfiguration for Firebase keys...");
+            var firebaseConfigs = configuration.AsEnumerable()
+                .Where(x => !string.IsNullOrEmpty(x.Key) && x.Key.Contains("Firebase"))
+                .OrderBy(x => x.Key)
+                .ToList();
+
+            if (firebaseConfigs.Any())
             {
-                Console.WriteLine($"🔥 Initializing Firebase Admin SDK with credentials from: {credentialsPath}");
-                FirebaseApp.Create(new AppOptions
+                foreach (var cfg in firebaseConfigs)
                 {
-                    Credential = GoogleCredential.FromFile(credentialsPath),
-                    ProjectId = configuration["Firebase:ProjectId"]
-                });
-                Console.WriteLine("✅ Firebase Admin SDK initialized successfully with file credentials");
-            }
-            else if (!string.IsNullOrEmpty(credentialsJson))
-            {
-                Console.WriteLine("🔥 Initializing Firebase Admin SDK with credentials from environment variable");
-                // Write JSON to temporary file
-                var tempPath = Path.Combine(Path.GetTempPath(), "firebase-credentials.json");
-                File.WriteAllText(tempPath, credentialsJson);
-
-                FirebaseApp.Create(new AppOptions
-                {
-                    Credential = GoogleCredential.FromFile(tempPath),
-                    ProjectId = configuration["Firebase:ProjectId"]
-                });
-
-                // Clean up temp file
-                try { File.Delete(tempPath); } catch { }
-
-                Console.WriteLine("✅ Firebase Admin SDK initialized successfully with environment credentials");
+                    var valueLength = cfg.Value?.Length ?? 0;
+                    var valuePreview = valueLength > 0 ? cfg.Value.Substring(0, Math.Min(30, valueLength)) : "(empty)";
+                    logger.LogInformation($"   - {cfg.Key}: {valueLength} chars, preview: {valuePreview}");
+                }
             }
             else
             {
-                Console.WriteLine("⚠️  Firebase credentials not found in configuration. Firebase will be unavailable.");
-                Console.WriteLine("   Set Firebase:CredentialsPath or Firebase:CredentialsJson in configuration.");
+                logger.LogInformation("   (no Firebase keys found)");
+            }
+
+            var projectId = configuration["Firebase:ProjectId"];
+            var credentialsPath = configuration["Firebase:CredentialsPath"];
+            // Check both V3, V2 and original key names. Prefer first non-empty candidate with reasonable length.
+            var candidates = new[] { "Firebase:CredentialsJsonV3", "Firebase:CredentialsJsonV2", "Firebase:CredentialsJson" };
+            string credentialsJson = null;
+            foreach (var key in candidates)
+            {
+                var val = configuration[key];
+                if (!string.IsNullOrWhiteSpace(val) && val.Length > 200)
+                {
+                    credentialsJson = val;
+                    logger.LogInformation($"   Selected credentials from {key} ({val.Length} chars)");
+                    break;
+                }
+            }
+            // If none met the length threshold, fall back to any non-empty value
+            if (credentialsJson == null)
+            {
+                foreach (var key in candidates)
+                {
+                    var val = configuration[key];
+                    if (!string.IsNullOrWhiteSpace(val))
+                    {
+                        credentialsJson = val;
+                        logger.LogInformation($"   Fallback selected credentials from {key} ({val.Length} chars)");
+                        break;
+                    }
+                }
+            }
+
+            logger.LogInformation("🔥 [FIREBASE_INIT] Starting Firebase Admin SDK initialization");
+            logger.LogInformation($"   ProjectId: {(!string.IsNullOrEmpty(projectId) ? projectId : "NOT SET ❌")}");
+            logger.LogInformation($"   CredentialsPath: {(!string.IsNullOrEmpty(credentialsPath) ? credentialsPath : "NOT SET ❌")}");
+            var v2 = configuration["Firebase:CredentialsJsonV2"];
+            var v1 = configuration["Firebase:CredentialsJson"];
+            logger.LogInformation($"   Firebase:CredentialsJsonV2: {(v2 != null ? $"{v2.Length} chars ✅" : "NOT SET")}");
+            logger.LogInformation($"   Firebase:CredentialsJson (V1): {(v1 != null ? $"{v1.Length} chars" : "NOT SET")}");
+            logger.LogInformation($"   Using credentials: {(credentialsJson != null ? "Selected from configuration" : "NONE ❌")}");
+
+            if (!string.IsNullOrEmpty(credentialsPath) && File.Exists(credentialsPath))
+            {
+                logger.LogInformation($"🔥 [FIREBASE_FILE] Loading credentials from file: {credentialsPath}");
+                var fileInfo = new FileInfo(credentialsPath);
+                logger.LogInformation($"   File size: {fileInfo.Length} bytes");
+                
+                FirebaseApp.Create(new AppOptions
+                {
+                    Credential = GoogleCredential.FromFile(credentialsPath),
+                    ProjectId = projectId
+                });
+                logger.LogInformation("✅ [FIREBASE_SUCCESS] Firebase Admin SDK initialized with file credentials");
+            }
+            else if (!string.IsNullOrEmpty(credentialsJson))
+            {
+                logger.LogInformation("🔥 [FIREBASE_ENV] Loading credentials from environment/KeyVault");
+                logger.LogInformation($"   Credentials JSON length: {credentialsJson.Length} bytes");
+                
+                try
+                {
+                    // Try using GoogleCredential.FromJson() directly instead of temp file
+                    // This avoids any file I/O issues with newline escaping
+                    logger.LogInformation("🔥 [FIREBASE_PARSING] Attempting to parse JSON credentials directly...");
+                    
+                    var credential = GoogleCredential.FromJson(credentialsJson);
+                    
+                    logger.LogInformation("✅ [FIREBASE_PARSED] Successfully parsed JSON credentials");
+                    logger.LogInformation($"   Credential type: {credential.GetType().Name}");
+                    
+                    // Create Firebase app with the credential
+                    FirebaseApp.Create(new AppOptions
+                    {
+                        Credential = credential,
+                        ProjectId = projectId
+                    });
+
+                    logger.LogInformation("✅ [FIREBASE_SUCCESS] Firebase Admin SDK initialized with environment credentials");
+                    
+                    // Verify initialization was successful
+                    var app = FirebaseApp.DefaultInstance;
+                    if (app != null)
+                    {
+                        logger.LogInformation($"🔥 [FIREBASE_VERIFY] Confirmed: FirebaseApp.DefaultInstance is initialized");
+                        logger.LogInformation($"   AppName: {app.Name}");
+                    }
+                    else
+                    {
+                        logger.LogError($"❌ [FIREBASE_VERIFY] ERROR: FirebaseApp.DefaultInstance is still null!");
+                    }
+                }
+                catch (Exception jsonEx)
+                {
+                    logger.LogError(jsonEx, $"❌ [FIREBASE_JSON_ERROR] JSON parse/credential error");
+                    throw;
+                }
+            }
+            else
+            {
+                logger.LogError("❌ [FIREBASE_MISSING] Firebase credentials not found in configuration");
+                logger.LogError("   Set Firebase:CredentialsPath or Firebase:CredentialsJson in configuration or Azure KeyVault");
+                logger.LogError("   FCM notifications will be unavailable until credentials are properly configured");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️  Error initializing Firebase Admin SDK: {ex.Message}");
-            Console.WriteLine("   FCM notifications will be unavailable until Firebase is properly configured.");
+            // For critical errors during startup, use Console.Error as fallback
+            Console.Error.WriteLine($"❌ [FIREBASE_ERROR] Error initializing Firebase Admin SDK");
+            Console.Error.WriteLine($"   Exception type: {ex.GetType().Name}");
+            Console.Error.WriteLine($"   Message: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.Error.WriteLine($"   Inner error: {ex.InnerException.Message}");
+            }
+            Console.Error.WriteLine("   FCM notifications will be unavailable until Firebase is properly configured");
         }
 
         return services;
@@ -104,3 +202,4 @@ public static class FirebaseExtensions
         }
     }
 }
+
