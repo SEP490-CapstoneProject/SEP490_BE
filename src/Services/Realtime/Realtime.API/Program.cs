@@ -5,9 +5,11 @@ using Microsoft.OpenApi.Models;
 using Realtime.API.Hubs;
 using Realtime.API.Services;
 using Realtime.Application.Interfaces;
+using Realtime.Application.Clients;
 using Realtime.Infrastructure.Azure;
 using Realtime.Infrastructure.Messaging;
 using Realtime.Infrastructure.Services;
+using Realtime.Infrastructure.Clients;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);

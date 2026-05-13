@@ -59,6 +59,22 @@ public class PortfolioRepository : IPortfolioRepository
         return (items, total, rankingMap);
     }
 
+    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total)> GetPendingForModerationAsync(int page, int pageSize)
+    {
+        var query = _context.Portfolios
+            .Where(p => p.ModerationStatus == "PendingReview")
+            .OrderByDescending(p => p.ModeratedAt ?? p.UpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.Id);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
     public async Task<bool> ExistsByEmployeeIdAsync(int employeeId)
         => await _context.Portfolios.AnyAsync(p => p.EmployeeId == employeeId);
 

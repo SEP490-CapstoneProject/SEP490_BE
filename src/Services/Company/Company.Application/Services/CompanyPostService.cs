@@ -202,6 +202,25 @@ public class CompanyPostService : ICompanyPostService
             };
 
             await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
+
+            var triageEvt = new PostPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = string.Empty,
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "Bài đăng tuyển dụng chờ duyệt thủ công",
+                Content = $"Bài đăng #{created.PostId} cần admin/moderator xem xét. Lý do: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Company",
+                TargetRoles = new[] { "ADMIN", "MODERATOR" },
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(triageEvt);
         }
         else
         {

@@ -174,6 +174,13 @@ public class RabbitMQConsumer : BackgroundService
                 return;
             }
 
+            if (IsRoleTargetedPendingReviewEvent(evt))
+            {
+                await HandleRoleTargetedPendingReviewAsync(scope.ServiceProvider, evt);
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                return;
+            }
+
             if (string.IsNullOrEmpty(evt.UserId))
             {
                 await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
@@ -347,6 +354,17 @@ public class RabbitMQConsumer : BackgroundService
         }
     }
 
+    private static bool IsRoleTargetedPendingReviewEvent(NotificationEvent evt)
+    {
+        if (evt.TargetRoles is not { Length: > 0 })
+        {
+            return false;
+        }
+
+        return string.Equals(evt.EventType, "post.pending.review", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(evt.EventType, "portfolio.pending.review", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string ExtractActorNameFromContent(string content)
     {
         // Extract actor name from content like "John Doe đã thích bài viết của bạn"
@@ -433,6 +451,68 @@ public class RabbitMQConsumer : BackgroundService
             }
 
             // Send FCM push notification to all user's active devices
+            await SendFcmPushAsync(services, entity);
+
+            if (cache != null)
+            {
+                await cache.RemoveAsync($"unread:{recipientUserId}");
+            }
+
+            await eventPublisher.PublishNotificationCreatedAsync(createdEvent);
+        }
+    }
+
+    private async Task HandleRoleTargetedPendingReviewAsync(IServiceProvider services, NotificationEvent evt)
+    {
+        var targetRoles = evt.TargetRoles is { Length: > 0 }
+            ? evt.TargetRoles
+            : ["ADMIN", "MODERATOR"];
+
+        var recipientResolver = services.GetRequiredService<IRecipientResolverClient>();
+        var recipients = await recipientResolver.GetActiveUserIdsByRolesAsync(targetRoles);
+        if (recipients.Count == 0)
+        {
+            _logger.LogInformation(
+                "No recipients found for pending review event. EventType={EventType}, ObjectId={ObjectId}, Roles={Roles}",
+                evt.EventType,
+                evt.ObjectId,
+                string.Join(",", targetRoles));
+            return;
+        }
+
+        var notificationService = services.GetRequiredService<INotificationService>();
+        var eventPublisher = services.GetRequiredService<INotificationEventPublisher>();
+        var cache = services.GetService<IDistributedCache>();
+
+        foreach (var recipientUserId in recipients)
+        {
+            if (!string.IsNullOrWhiteSpace(evt.ActorId) &&
+                string.Equals(recipientUserId, evt.ActorId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var entity = new NotificationEntity
+            {
+                UserId = recipientUserId,
+                EventId = evt.EventId,
+                Title = evt.Title,
+                Content = evt.Content,
+                Type = evt.Type,
+                ObjectId = evt.ObjectId,
+                ActorId = evt.ActorId,
+                ActorType = string.IsNullOrWhiteSpace(evt.ActorType) ? "SYSTEM" : evt.ActorType,
+                CreatedAt = evt.CreatedAt == default ? VietnamTime.Now() : evt.CreatedAt,
+                IsRead = false
+            };
+
+            await notificationService.CreateNotificationAsync(entity);
+            var createdEvent = await notificationService.BuildCreatedEventAsync(entity);
+            if (!string.IsNullOrWhiteSpace(evt.EventId))
+            {
+                createdEvent.EventId = evt.EventId;
+            }
+
             await SendFcmPushAsync(services, entity);
 
             if (cache != null)

@@ -17,6 +17,9 @@ public interface IPortfolioService
     Task<CreatePortfolioResponse> UpdateFullPortfolioAsync(int id, int employeeId, UpdateFullPortfolioRequest request, Dictionary<string, IFormFile> fileMap);
     Task<bool> DeleteAsync(int id, int employeeId);
     Task<CreatePortfolioResponse> CreatePortfolioAsync(CreatePortfolioRequest request, Dictionary<string, IFormFile> fileMap);
+    Task<PagedResult<PortfolioDto>> GetPendingPortfoliosAsync(int page, int pageSize);
+    Task<PortfolioDto> ApprovePortfolioAsync(int portfolioId, int reviewerId, string actorRole, string? notes);
+    Task<PortfolioDto> RejectPortfolioAsync(int portfolioId, int reviewerId, string actorRole, string reason);
     Task<PagedResult<PortfolioWithComplimentDto>> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams);
     Task<JobMatchPagedResult> MatchJobsForPortfolioAsync(int portfolioId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default);
