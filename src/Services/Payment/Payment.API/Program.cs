@@ -63,7 +63,7 @@ builder.Services.AddHttpClient<PayOSHttpClient>(client =>
 // Plan Price Provider (HTTP client to Subscription Service)
 builder.Services.AddHttpClient<IPlanPriceProvider, HttpPlanPriceProvider>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "https://api-gateway.grayforest-11aba44e.southeastasia.azurecontainerapps.io");
+    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "https://subscription-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io");
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
