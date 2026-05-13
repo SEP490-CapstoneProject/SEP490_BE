@@ -64,7 +64,7 @@ builder.Services.AddDbContext<PortfolioDbContext>(options =>
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
+var secretKey = jwtSettings["Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -79,8 +79,8 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = jwtSettings["Issuer"] ?? "RecruitmentPlatform",
+        ValidAudience = jwtSettings["Audience"] ?? "RecruitmentPlatformUsers",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
 });
@@ -100,6 +100,7 @@ builder.Services.AddScoped<IBlockRepository, BlockRepository>();
 builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
 builder.Services.AddScoped<IComplimentRepository, ComplimentRepository>();
 builder.Services.AddScoped<ICriterionRepository, CriterionRepository>();
+builder.Services.AddScoped<IPortfolioPreviewRepository, PortfolioPreviewRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
@@ -109,7 +110,11 @@ builder.Services.AddScoped<IBlockTypeService, BlockTypeService>();
 builder.Services.AddScoped<IComplimentService, ComplimentService>();
 builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCategoryService>();
+builder.Services.AddScoped<IPortfolioPreviewService, PortfolioPreviewService>();
+builder.Services.AddScoped<GoogleAiPreviewGenerator>();
 builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
+builder.Services.AddScoped<IPortfolioNotificationEventPublisher, PortfolioNotificationEventPublisher>();
+builder.Services.AddScoped<IPortfolioModerationEventPublisher, PortfolioModerationEventPublisher>();
 builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
 builder.Services.AddHostedService<PortfolioEmbeddingConsumer>();
 builder.Services.AddHostedService<PortfolioEmbeddingBackfillWorker>();
@@ -158,6 +163,12 @@ builder.Services.AddHttpClient<ICompanyMatchingClient, CompanyMatchingClient>(cl
 {
     client.BaseAddress = new Uri(serviceUrls["CompanyService"] ?? "http://company-service:8080");
     client.Timeout = TimeSpan.FromSeconds(2);
+});
+
+builder.Services.AddHttpClient<GoogleAiPreviewGenerator>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 // CORS

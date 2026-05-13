@@ -1,16 +1,19 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using Realtime.Application.Interfaces;
+using Realtime.Application.Clients;
 using RecruitmentPlatform.Contracts.Realtime;
 
 namespace Realtime.Infrastructure.Messaging;
 
 /// <summary>
-/// Debounces NewMessageNotificationEvent theo từng user (toUserId).
-/// Gom TẤT CẢ tin nhắn mới từ mọi room trong cửa sổ 2 giây thành 1 push duy nhất.
+/// Debounces FCM push notifications theo từng user (toUserId).
+/// Gom TẤT CẢ tin nhắn mới từ mọi room trong cửa sổ 2 giây thành 1 FCM push duy nhất.
+/// 
+/// Lưu ý: SignalR push (realtime) được thực hiện ngay lập tức ở Consumer với đầy đủ thông tin.
+/// Debouncer này chỉ phụ trách FCM aggregation (offline delivery).
 /// 
 /// Ví dụ: Room A gửi 2 tin, Room B gửi 3 tin trong 2 giây
-///   → Push 1 lần: { toUserId: X, totalNewMessages: 5 }
+///   → FCM push 1 lần: { toUserId: X, totalNewMessages: 5 }
 /// </summary>
 public sealed class NewMessageDebouncer : IDisposable
 {
@@ -25,18 +28,20 @@ public sealed class NewMessageDebouncer : IDisposable
 
     private static readonly TimeSpan DebounceWindow = TimeSpan.FromSeconds(2);
 
-    private readonly IRealtimePushService _pushService;
+    private readonly INotificationServiceClient? _notificationClient;
     private readonly ILogger<NewMessageDebouncer> _logger;
     private readonly ConcurrentDictionary<int, PendingBatch> _pending = new();
 
-    public NewMessageDebouncer(IRealtimePushService pushService, ILogger<NewMessageDebouncer> logger)
+    public NewMessageDebouncer(
+        INotificationServiceClient? notificationClient,
+        ILogger<NewMessageDebouncer> logger)
     {
-        _pushService = pushService;
+        _notificationClient = notificationClient;
         _logger      = logger;
     }
 
     /// <summary>
-    /// Đăng ký 1 tin nhắn mới. Cộng dồn vào batch của toUserId và reset/bắt đầu timer 2s.
+    /// Đăng ký 1 tin nhắn mới để FCM debounce. Cộng dồn vào batch của toUserId và reset/bắt đầu timer 2s.
     /// </summary>
     public void Add(NewMessageNotificationEvent evt)
     {
@@ -59,7 +64,7 @@ public sealed class NewMessageDebouncer : IDisposable
         }
 
         _logger.LogDebug(
-            "Debouncer: buffered msg for user {ToUserId}, total pending={Total}",
+            "Debouncer: buffered FCM msg for user {ToUserId}, total pending={Total}",
             evt.ToUserId, batch.TotalCount);
     }
 
@@ -78,10 +83,24 @@ public sealed class NewMessageDebouncer : IDisposable
         timer?.Dispose();
 
         _logger.LogInformation(
-            "Debouncer: push {Total} new message(s) to user {ToUserId}",
+            "Debouncer: FCM push {Total} new message(s) to user {ToUserId}",
             batch.TotalCount, toUserId);
 
-        _ = _pushService.PushNewMessageNotificationAsync(toUserId, batch.TotalCount);
+        // Send FCM push notification for offline delivery
+        if (_notificationClient != null)
+        {
+            _ = _notificationClient.SendAggregatedMessageNotificationAsync(toUserId, batch.TotalCount)
+                .ContinueWith(task =>
+                {
+                    if (task.IsFaulted)
+                    {
+                        _logger.LogError(
+                            task.Exception,
+                            "Error sending FCM notification to user {ToUserId}",
+                            toUserId);
+                    }
+                });
+        }
     }
 
     public void Dispose()

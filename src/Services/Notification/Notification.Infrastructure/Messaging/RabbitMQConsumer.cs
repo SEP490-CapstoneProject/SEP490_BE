@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Notification.Application.Helpers;
 using Notification.Application.Interfaces;
+using Notification.Application.Mappers;
 using Notification.Application.Services;
 using Notification.Domain.Entities;
 using RabbitMQ.Client;
@@ -29,15 +30,31 @@ public class RabbitMQConsumer : BackgroundService
     private const string DlxExchange = "skillsnap.events.dlx";
     private const string DlqQueue = "notification.events.dlq";
 
-    private static readonly string[] BindingKeys = { "post.#", "connection.*", "portfolio.*", "job.*", "system.*" };
+    private static readonly string[] BindingKeys = { "post.#", "connection.#", "portfolio.#", "job.#", "system.#" };
     private static readonly HashSet<string> NotificationEventTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "post.favorite",
         "post.comment.created",
         "post.reply.created",
         "post.report.removed",
-        "post.report.created"
+        "post.report.created",
+        "post.rejected",
+        "post.approved",
+        "post.pending.review",
+        "job.application.created",
+        "job.application.received",
+        "job.application.status.updated",
+        "connection.request.created",
+        "connection.request.accepted",
+        "portfolio.compliment.created",
+        "portfolio.rejected",
+        "portfolio.approved",
+        "portfolio.pending.review"
     };
+    
+    // Fallback in-memory cache when Redis fails - maps EventId → processed timestamp
+    private static readonly Dictionary<string, DateTime> ProcessedEvents = new();
+    private static readonly object ProcessedEventsLock = new object();
 
     public RabbitMQConsumer(
         IServiceScopeFactory scopeFactory,
@@ -51,16 +68,23 @@ public class RabbitMQConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var host = _config["RabbitMQ:HostName"] ?? _config["RabbitMQ:Host"] ?? "localhost";
-        var userName = _config["RabbitMQ:UserName"] ?? _config["RabbitMQ:Username"] ?? "guest";
-        var factory = new ConnectionFactory
+        var uri = _config["RabbitMQ:Uri"];
+        var factory = new ConnectionFactory();
+
+        if (!string.IsNullOrEmpty(uri))
         {
-            HostName = host,
-            UserName = userName,
-            Password = _config["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _config["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_config["RabbitMQ:Port"], out var port) ? port : 5672
-        };
+            factory.Uri = new Uri(uri);
+        }
+        else
+        {
+            var host = _config["RabbitMQ:HostName"] ?? _config["RabbitMQ:Host"] ?? "localhost";
+            var userName = _config["RabbitMQ:UserName"] ?? _config["RabbitMQ:Username"] ?? "guest";
+            factory.HostName = host;
+            factory.UserName = userName;
+            factory.Password = _config["RabbitMQ:Password"] ?? "guest";
+            factory.VirtualHost = _config["RabbitMQ:VirtualHost"] ?? "/";
+            factory.Port = int.TryParse(_config["RabbitMQ:Port"], out var port) ? port : 5672;
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -186,26 +210,61 @@ public class RabbitMQConsumer : BackgroundService
                 return;
             }
 
+            var cache = scope.ServiceProvider.GetService<IDistributedCache>();
+
+            // CRITICAL: Idempotency check BEFORE aggregation - ensures all notification types are protected
+            // Supports both Redis (primary) and in-memory fallback (if Redis unavailable)
+            if (!string.IsNullOrWhiteSpace(evt.EventId))
+            {
+                var isDuplicate = await CheckAndMarkIdempotencyAsync(evt.EventId, cache);
+                if (isDuplicate)
+                {
+                    _logger.LogDebug("Skipped duplicate notification event: EventId={EventId}, EventType={EventType}", 
+                        evt.EventId, evt.EventType);
+                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    return;
+                }
+            }
+
             // Check if this is a post.favorite event for aggregation
             if (evt.EventType == "post.favorite")
             {
                 var aggregationService = scope.ServiceProvider.GetService<FavoriteAggregationService>();
                 if (aggregationService != null)
                 {
-                    var actorName = ExtractActorNameFromContent(evt.Content);
-                    var isAggregated = await aggregationService.TryAggregateAsync(
-                        int.Parse(evt.ObjectId ?? "0"), 
-                        evt.UserId, 
-                        evt.ActorId ?? "", 
-                        actorName);
-
-                    if (isAggregated)
+                    try
                     {
-                        // Event was aggregated, don't create notification yet
+                        var actorName = ExtractActorNameFromContent(evt.Content);
+                        _logger.LogInformation("🔔 [FAV_RCV] EventType={EventType}, PostId={PostId}, ActorId={ActorId}, ActorName={ActorName}", 
+                            evt.EventType, evt.ObjectId, evt.ActorId, actorName);
+                        
+                        var isAggregated = await aggregationService.TryAggregateAsync(
+                            int.Parse(evt.ObjectId ?? "0"), 
+                            evt.UserId, 
+                            evt.ActorId ?? "", 
+                            actorName);
+
+                        _logger.LogInformation("🔔 [FAV_AGG_RESULT] IsAggregated={IsAggregated}, PostId={PostId}", 
+                            isAggregated, evt.ObjectId);
+
+                        if (isAggregated)
+                        {
+                            // Event was aggregated, don't create notification yet
+                            await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                            return;
+                        }
+                        // Event was NOT aggregated on first try, but still wait for flush service
+                        // to create aggregated notification (pure aggregation)
                         await _channel.BasicAckAsync(ea.DeliveryTag, false);
                         return;
                     }
-                    // If not aggregated, fall through to create notification immediately
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "🔔 [FAV_ERROR] Aggregation failed for post.favorite event. Storing as aggregated to prevent immediate notification.");
+                        // Don't fall through - wait for flush service or retry aggregation
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
+                    }
                 }
             }
             else if (evt.EventType == "post.comment.created" || evt.EventType == "post.reply.created")
@@ -213,17 +272,31 @@ public class RabbitMQConsumer : BackgroundService
                 var aggregationService = scope.ServiceProvider.GetService<CommentReplyAggregationService>();
                 if (aggregationService != null && !string.IsNullOrWhiteSpace(evt.ActorId))
                 {
-                    var actorName = !string.IsNullOrWhiteSpace(evt.Author?.Name) ? evt.Author.Name : "Ai đó";
-                    var objectId = string.IsNullOrWhiteSpace(evt.ObjectId) ? "0" : evt.ObjectId;
-                    var isAggregated = await aggregationService.TryAggregateAsync(
-                        evt.EventType,
-                        objectId,
-                        evt.UserId,
-                        evt.ActorId,
-                        actorName);
-
-                    if (isAggregated)
+                    try
                     {
+                        var actorName = !string.IsNullOrWhiteSpace(evt.Author?.Name) ? evt.Author.Name : "Ai đó";
+                        var objectId = string.IsNullOrWhiteSpace(evt.ObjectId) ? "0" : evt.ObjectId;
+                        var isAggregated = await aggregationService.TryAggregateAsync(
+                            evt.EventType,
+                            objectId,
+                            evt.UserId,
+                            evt.ActorId,
+                            actorName);
+
+                        if (isAggregated)
+                        {
+                            await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                            return;
+                        }
+                        // Even if first event in aggregation, wait for flush service
+                        // to create aggregated notification (pure aggregation)
+                        await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Aggregation failed for {EventType} event. Storing as aggregated to prevent immediate notification.", evt.EventType);
+                        // Don't fall through - wait for flush service or retry aggregation
                         await _channel.BasicAckAsync(ea.DeliveryTag, false);
                         return;
                     }
@@ -237,11 +310,14 @@ public class RabbitMQConsumer : BackgroundService
             var entity = new NotificationEntity
             {
                 UserId = evt.UserId,
+                EventId = evt.EventId,
                 Title = evt.Title,
                 Content = ResolveNotificationContent(evt, actorNameForContent),
                 Type = evt.Type,
                 ObjectId = evt.ObjectId,
                 ActorId = evt.ActorId,
+                ActorName = evt.Author?.Name,
+                ActorAvatar = evt.Author?.Avatar,
                 ActorType = evt.ActorType,
                 CreatedAt = evt.CreatedAt == default ? VietnamTime.Now() : evt.CreatedAt
             };
@@ -253,7 +329,9 @@ public class RabbitMQConsumer : BackgroundService
                 createdEvent.EventId = evt.EventId;
             }
 
-            var cache = scope.ServiceProvider.GetService<IDistributedCache>();
+            // Send FCM push notification to all user's active devices
+            await SendFcmPushAsync(scope.ServiceProvider, entity);
+
             if (cache != null)
                 await cache.RemoveAsync($"unread:{evt.UserId}");
 
@@ -353,12 +431,155 @@ public class RabbitMQConsumer : BackgroundService
                 createdEvent.EventId = evt.EventId;
             }
 
+            // Send FCM push notification to all user's active devices
+            await SendFcmPushAsync(services, entity);
+
             if (cache != null)
             {
                 await cache.RemoveAsync($"unread:{recipientUserId}");
             }
 
             await eventPublisher.PublishNotificationCreatedAsync(createdEvent);
+        }
+    }
+
+    private async Task SendFcmPushAsync(IServiceProvider services, NotificationEntity notification)
+    {
+        try
+        {
+            var fcmService = services.GetService<IFcmService>();
+            var deviceTokenService = services.GetService<IDeviceTokenService>();
+            var settingsService = services.GetService<INotificationSettingsService>();
+
+            if (fcmService == null || deviceTokenService == null)
+            {
+                _logger.LogDebug("FCM or DeviceTokenService not available, skipping push notification");
+                return;
+            }
+
+            // Get user's notification settings
+            if (settingsService != null)
+            {
+                var userSettings = await settingsService.GetUserSettingsAsync(notification.UserId);
+                if (userSettings != null && !userSettings.PushNotificationsEnabled)
+                {
+                    _logger.LogDebug("Push notifications disabled for user {UserId}", notification.UserId);
+                    return;
+                }
+            }
+
+            // Get active device tokens for user
+            var deviceTokens = await deviceTokenService.GetActiveTokensForUserAsync(notification.UserId);
+
+            if (deviceTokens == null || deviceTokens.Count == 0)
+            {
+                _logger.LogDebug("No active device tokens for user {UserId}", notification.UserId);
+                return;
+            }
+
+            // Convert notification to FCM format
+            var (title, body) = FcmNotificationMapper.ToFcmNotificationText(notification);
+            var data = FcmNotificationMapper.ToFcmDataPayload(notification);
+
+            // Send to all devices
+            if (deviceTokens.Count == 1)
+            {
+                var messageId = await fcmService.SendNotificationAsync(
+                    deviceTokens[0].DeviceToken,
+                    title,
+                    body,
+                    data);
+
+                if (!string.IsNullOrEmpty(messageId))
+                {
+                    _logger.LogInformation(
+                        "FCM notification sent to user {UserId}. NotificationId={NotificationId}, MessageId={MessageId}",
+                        notification.UserId, notification.Id, messageId);
+                }
+            }
+            else
+            {
+                var tokens = deviceTokens.Select(dt => dt.DeviceToken).ToList();
+                var success = await fcmService.SendMulticastAsync(tokens, title, body, data);
+
+                if (success)
+                {
+                    _logger.LogInformation(
+                        "FCM multicast sent to user {UserId}. NotificationId={NotificationId}, DeviceCount={DeviceCount}",
+                        notification.UserId, notification.Id, deviceTokens.Count);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending FCM push notification for notification {NotificationId}", notification.Id);
+        }
+    }
+
+    private async Task<bool> CheckAndMarkIdempotencyAsync(string eventId, IDistributedCache? cache)
+    {
+        var idempotencyKey = $"notification-event:{eventId}";
+        
+        // Try Redis first (primary cache)
+        if (cache != null)
+        {
+            try
+            {
+                var existingEntry = await cache.GetStringAsync(idempotencyKey);
+                if (existingEntry != null)
+                {
+                    return true; // Duplicate found in Redis
+                }
+
+                // Mark as processed for 24 hours
+                await cache.SetStringAsync(idempotencyKey, "processed", 
+                    new DistributedCacheEntryOptions 
+                    { 
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) 
+                    });
+                return false; // Not a duplicate, marked in Redis
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Redis idempotency check failed for EventId={EventId}. Falling back to in-memory cache.", eventId);
+                // Fall through to in-memory fallback
+            }
+        }
+
+        // Fallback: Use in-memory cache when Redis is unavailable
+        lock (ProcessedEventsLock)
+        {
+            if (ProcessedEvents.TryGetValue(eventId, out var timestamp))
+            {
+                // Check if still within 24-hour window
+                if (DateTime.UtcNow - timestamp < TimeSpan.FromHours(24))
+                {
+                    return true; // Duplicate found in in-memory cache
+                }
+                else
+                {
+                    ProcessedEvents.Remove(eventId); // Cleanup expired entry
+                }
+            }
+
+            // Mark as processed
+            ProcessedEvents[eventId] = DateTime.UtcNow;
+            
+            // Cleanup entries older than 24 hours periodically
+            if (ProcessedEvents.Count > 10000)
+            {
+                var cutoff = DateTime.UtcNow.AddHours(-24);
+                var expiredKeys = ProcessedEvents
+                    .Where(kvp => kvp.Value < cutoff)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var key in expiredKeys)
+                {
+                    ProcessedEvents.Remove(key);
+                }
+            }
+
+            return false; // Not a duplicate, marked in in-memory cache
         }
     }
 

@@ -15,3 +15,20 @@
 **/.env
 **/secrets.json
 **/appsettings.Development.json
+
+# Additional exclusions for optimization
+**/.idea
+**/*.swp
+**/*.swo
+**/.DS_Store
+**/Thumbs.db
+**/*.log
+**/*.tmp
+**/*.md
+**/Tests
+**/UnitTests
+**/test
+**/*test*
+**/.circleci
+**/.github
+**/.gitlab-ci.yml

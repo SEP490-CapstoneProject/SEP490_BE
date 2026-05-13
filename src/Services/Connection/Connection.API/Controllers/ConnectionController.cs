@@ -56,6 +56,24 @@ public class ConnectionController : ControllerBase
             created.Id, created.UserIdFrom, created.UserIdTo,
             created.ProfileId, created.CreateAt);
 
+        // 3) Notification event with actor data
+        var actorProfile = await GetUserProfileAsync(created.UserIdFrom);
+        _ = _eventPublisher.PublishConnectionRequestNotificationAsync(new ConnectionNotificationEventPayload
+        {
+            EventType = "connection.request.created",
+            UserId = created.UserIdTo.ToString(),
+            ActorId = created.UserIdFrom.ToString(),
+            ActorType = "USER",
+            ObjectId = created.Id.ToString(),
+            Title = "Đã nhận yêu cầu kết nối",
+            Content = actorProfile != null 
+                ? $"{actorProfile.Name} vừa gửi cho bạn một yêu cầu kết nối."
+                : "Bạn vừa nhận được một yêu cầu kết nối mới.",
+            Type = "CONNECTION_REQUEST_SENT",
+            Author = actorProfile,
+            CreatedAt = created.CreateAt
+        });
+
         return CreatedAtAction(nameof(GetConnectionById), new { id = created.Id }, created);
     }
 
@@ -112,6 +130,24 @@ public class ConnectionController : ControllerBase
             _ = _eventPublisher.PublishConnectionAcceptedAsync(
                 updated.Id, updated.UserIdFrom, updated.UserIdTo,
                 updated.ConnectionAt ?? DateTime.UtcNow);
+
+            // 3) Notification event with actor data
+            var acceptorProfile = await GetUserProfileAsync(updated.UserIdTo);
+            _ = _eventPublisher.PublishConnectionAcceptedNotificationAsync(new ConnectionNotificationEventPayload
+            {
+                EventType = "connection.request.accepted",
+                UserId = updated.UserIdFrom.ToString(),
+                ActorId = updated.UserIdTo.ToString(),
+                ActorType = "USER",
+                ObjectId = updated.Id.ToString(),
+                Title = "Yêu cầu kết nối đã được chấp nhận",
+                Content = acceptorProfile != null
+                    ? $"{acceptorProfile.Name} đã chấp nhận yêu cầu kết nối của bạn."
+                    : "Yêu cầu kết nối của bạn đã được chấp nhận.",
+                Type = "CONNECTION_REQUEST_ACCEPTED",
+                Author = acceptorProfile,
+                CreatedAt = updated.ConnectionAt ?? DateTime.UtcNow
+            });
         }
         else if (status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.BLOCK)
         {
@@ -361,5 +397,63 @@ public class ConnectionController : ControllerBase
         }
 
         return Ok(new { updated = updated?.Count ?? 0 });
+    }
+
+    private async Task<Connection.Application.DTOs.NotificationActorDto?> GetUserProfileAsync(int userId)
+    {
+        try
+        {
+            var client = _httpClientFactory.CreateClient("UserProfile");
+            
+            // Try company first
+            var companyRes = await client.GetAsync($"/api/company/by-user/{userId}");
+            if (companyRes.IsSuccessStatusCode)
+            {
+                var json = await companyRes.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var name = doc.RootElement.TryGetProperty("companyName", out var comp) 
+                    ? comp.GetString() 
+                    : null;
+                var avatar = doc.RootElement.TryGetProperty("avatar", out var av) 
+                    ? av.GetString() 
+                    : null;
+                
+                return new Connection.Application.DTOs.NotificationActorDto
+                {
+                    Id = userId,
+                    Name = name ?? "Unknown",
+                    Avatar = avatar ?? string.Empty,
+                    Role = "COMPANY"
+                };
+            }
+
+            // Try employee
+            var employeeRes = await client.GetAsync($"/api/employee/by-user/{userId}");
+            if (employeeRes.IsSuccessStatusCode)
+            {
+                var json = await employeeRes.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var name = doc.RootElement.TryGetProperty("name", out var nm) 
+                    ? nm.GetString() 
+                    : null;
+                var avatar = doc.RootElement.TryGetProperty("avatar", out var av) 
+                    ? av.GetString() 
+                    : null;
+                
+                return new Connection.Application.DTOs.NotificationActorDto
+                {
+                    Id = userId,
+                    Name = name ?? "Unknown",
+                    Avatar = avatar ?? string.Empty,
+                    Role = "USER"
+                };
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

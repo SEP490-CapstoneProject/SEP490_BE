@@ -14,7 +14,38 @@ public class NotificationRepository : INotificationRepository
     public async Task<(List<NotificationEntity> Items, int? NextCursor)> GetNotificationsAsync(string userId, int? cursor, int limit)
     {
         var query = _db.Notifications.Where(n => n.UserId == userId);
+        return await ApplyCursorPagingAsync(query, cursor, limit);
+    }
 
+    public async Task<(List<NotificationEntity> Items, int? NextCursor)> GetNotificationsByTypeFilterAsync(
+        string userId,
+        int? cursor,
+        int limit,
+        IReadOnlyCollection<string> types,
+        bool includeTypes)
+    {
+        var query = _db.Notifications.Where(n => n.UserId == userId);
+        var normalizedTypes = types
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (normalizedTypes.Length > 0)
+        {
+            query = includeTypes
+                ? query.Where(n => normalizedTypes.Contains(n.Type))
+                : query.Where(n => !normalizedTypes.Contains(n.Type));
+        }
+
+        return await ApplyCursorPagingAsync(query, cursor, limit);
+    }
+
+    private static async Task<(List<NotificationEntity> Items, int? NextCursor)> ApplyCursorPagingAsync(
+        IQueryable<NotificationEntity> query,
+        int? cursor,
+        int limit)
+    {
         if (cursor.HasValue)
             query = query.Where(n => n.Id < cursor.Value);
 

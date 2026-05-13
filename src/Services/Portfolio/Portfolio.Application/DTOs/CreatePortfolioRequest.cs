@@ -32,5 +32,7 @@ public class CreatePortfolioResponse
 {
     public int PortfolioId { get; set; }
     public string? Message { get; set; }
+    public string? ModerationStatus { get; set; }
+    public string? ModerationReason { get; set; }
 }
 

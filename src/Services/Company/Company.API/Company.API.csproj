@@ -19,6 +19,7 @@
     <ProjectReference Include="..\Company.Application\Company.Application.csproj" />
     <ProjectReference Include="..\Company.Infrastructure\Company.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.AI\RecruitmentPlatform.AI.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Common\RecruitmentPlatform.Common.csproj" />
   </ItemGroup>
 
 </Project>

@@ -93,6 +93,19 @@ namespace Community.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("portfolioId");
 
+                    b.Property<string>("ReviewReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("reviewReason");
+
+                    b.Property<int?>("ReviewStatus")
+                        .HasColumnType("int")
+                        .HasColumnName("reviewStatus");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("reviewedAt");
+
                     b.Property<int>("Status")
                         .HasColumnType("int")
                         .HasColumnName("status");

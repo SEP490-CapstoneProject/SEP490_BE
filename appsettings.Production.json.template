@@ -1,0 +1,28 @@
+{
+  "Firebase": {
+    "Enabled": true,
+    "ProjectId": "recruitment-platform-prod",
+    "CredentialPath": "@Microsoft.KeyVault(SecretUri=https://your-keyvault.vault.azure.net/secrets/FirebaseServiceAccountKey/)"
+  },
+  "FCM": {
+    "AndroidPriority": "high",
+    "AndroidTTL": "3600s",
+    "IOSPriority": "10",
+    "BatchSize": 500,
+    "MaxRetries": 3,
+    "RetryDelayMs": 2000,
+    "AndroidUserPercentage": 0,
+    "IOSUserPercentage": 0
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.EntityFrameworkCore": "Information",
+      "Notification.Infrastructure": "Information"
+    }
+  },
+  "ApplicationInsights": {
+    "InstrumentationKey": "your-instrumentation-key"
+  }
+}

@@ -9,17 +9,24 @@ using Notification.Infrastructure.Azure;
 using Notification.Infrastructure.Clients;
 using Notification.Infrastructure.Configuration;
 using Notification.Infrastructure.Data;
+using Notification.Infrastructure.Extensions;
 using Notification.Infrastructure.Messaging;
 using Notification.Infrastructure.Repositories;
 using Notification.Infrastructure.Services;
+using RecruitmentPlatform.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddAzureKeyVault();
 
-var jwtKey = builder.Configuration["JwtSettings:SecretKey"] ?? "default-secret-key-32-characters!";
-var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "SkillSnapAuth";
-var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "SkillSnapUsers";
+// Use consistent JwtSettings configuration across all services
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings
+{
+    Secret = "default-secret-key-32-characters!",
+    Issuer = "RecruitmentPlatform",
+    Audience = "RecruitmentPlatformUsers"
+};
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -27,19 +34,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
             ValidateIssuer = true,
-            ValidIssuer = jwtIssuer,
+            ValidIssuer = jwtSettings.Issuer,
             ValidateAudience = true,
-            ValidAudience = jwtAudience,
+            ValidAudience = jwtSettings.Audience,
             ValidateLifetime = true
-        };
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                return Task.CompletedTask;
-            }
         };
     });
 
@@ -109,17 +109,20 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddHttpClient<IActorResolverClient, ActorResolverClient>(client =>
 {
-    var url = builder.Configuration["ServiceUrls:UserProfile"] ?? "http://userprofile-service:8080";
+    var url = builder.Configuration["ServiceUrls:UserProfile"] ?? "https://userprofile-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(10); // Increased from 5 to 10 seconds for more reliability
 });
 
 builder.Services.AddHttpClient<IRecipientResolverClient, RecipientResolverClient>(client =>
 {
-    var url = builder.Configuration["ServiceUrls:AuthService"] ?? "http://auth-service:8080";
+    var url = builder.Configuration["ServiceUrls:AuthService"] ?? "https://auth-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io";
     client.BaseAddress = new Uri(url);
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(10); // Increased from 5 to 10 seconds for more reliability
 });
+
+// Initialize Firebase Admin SDK
+builder.Services.AddFirebaseInitialization(builder.Configuration);
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
@@ -128,6 +131,14 @@ builder.Services.AddScoped<FavoriteAggregationService>();
 builder.Services.AddScoped<CommentReplyAggregationService>();
 builder.Services.AddScoped<PostReportAggregationService>();
 
+// FCM Services Registration
+builder.Services.AddScoped<IDeviceTokenService, DeviceTokenService>();
+builder.Services.AddScoped<IFcmService, FcmService>();
+builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
+builder.Services.AddScoped<FcmRetryService>();
+builder.Services.AddScoped<FcmAnalyticsService>();
+builder.Services.AddScoped<INotificationPublishingService, NotificationPublishingService>();
+
 builder.Services.AddHostedService<RabbitMQConsumer>();
 builder.Services.AddHostedService<AggregationFlushService>();
 
@@ -135,10 +146,29 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// Verify Firebase initialization
+try
 {
-    var db = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
-    db.Database.Migrate();
+    var logger = app.Services.GetService<ILogger<Program>>();
+    if (logger != null)
+    {
+        app.VerifyFirebaseInitialization(logger);
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error during Firebase verification: {ex.Message}");
+}
+
+// Apply all pending migrations with proper error handling and logging
+try
+{
+    await app.Services.ApplyMigrationsAsync();
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"❌ FATAL: Failed to apply database migrations: {ex}");
+    throw;
 }
 
 app.UseSwagger();
