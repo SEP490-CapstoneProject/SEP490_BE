@@ -350,7 +350,7 @@ public class CompanyPostService : ICompanyPostService
         }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
         var candidates = await _portfolioMatchingClient.GetPortfolioCandidatesAsync(cts.Token);
 
         var request = new MatchingRequest
