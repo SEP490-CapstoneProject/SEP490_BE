@@ -63,6 +63,7 @@ public sealed class PostFavoriteChangedEvent : RealtimeEventBase
     public int UserId { get; set; }
     public string Action { get; set; } = "FAVORITE"; // "FAVORITE" or "UNFAVORITE"
     public int NewFavoriteCount { get; set; }
+    public NotificationActorDto? Actor { get; set; }
 }
 
 public sealed class NotificationCreatedEvent : RealtimeEventBase
@@ -72,9 +73,23 @@ public sealed class NotificationCreatedEvent : RealtimeEventBase
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
+    public string Category { get; set; } = "system";
     public string? ObjectId { get; set; }
     public NotificationActorDto? Actor { get; set; }
     public bool IsRead { get; set; }
+}
+
+public sealed class PostModerationEvent : RealtimeEventBase
+{
+    public int PostId { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty; // "APPROVED" or "REJECTED"
+    public string Reason { get; set; } = string.Empty;
+    public string PostType { get; set; } = string.Empty; // "Community", "Company", "Portfolio"
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string? ActorId { get; set; }
+    public string ActorType { get; set; } = "SYSTEM";
 }
 
 /// <summary>
@@ -88,6 +103,9 @@ public sealed class ConnectionRequestedEvent : RealtimeEventBase
     public int ToUserId { get; set; }
     public int ProfileId { get; set; }
     public DateTime RequestedAt { get; set; }
+    public string? ActorId { get; set; }
+    public string ActorType { get; set; } = "USER";
+    public NotificationActorDto? Actor { get; set; }
 }
 
 /// <summary>
@@ -100,6 +118,9 @@ public sealed class ConnectionAcceptedEvent : RealtimeEventBase
     public int FromUserId { get; set; }
     public int ToUserId { get; set; }
     public DateTime AcceptedAt { get; set; }
+    public string? ActorId { get; set; }
+    public string ActorType { get; set; } = "USER";
+    public NotificationActorDto? Actor { get; set; }
 }
 
 /// <summary>
@@ -114,4 +135,7 @@ public sealed class NewMessageNotificationEvent : RealtimeEventBase
     public int ToUserId { get; set; }
     public string Content { get; set; } = string.Empty;
     public DateTime SentAt { get; set; }
+    public string? ActorId { get; set; }
+    public string ActorType { get; set; } = "USER";
+    public NotificationActorDto? Author { get; set; }
 }

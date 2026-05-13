@@ -179,7 +179,25 @@ public class CompanyPostController : ControllerBase
         try
         {
             var result = await _service.CreatePostAsync(request, companyId, fileMap);
+            
+            if (result != null && result.ReviewStatus == 4)
+            {
+                // Rejected by auto-moderation
+                return StatusCode(400, new { message = "Post was rejected by content moderation", reason = result.ReviewReason, data = result });
+            }
+            
+            if (result != null && result.ReviewStatus == 3)
+            {
+                // Pending manual review
+                return StatusCode(202, new { message = "Post awaiting manual review", reason = result.ReviewReason, data = result });
+            }
+            
+            // Approved
             return CreatedAtAction(nameof(GetDetail), new { id = result.PostId }, result);
+        }
+        catch (BadHttpRequestException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {

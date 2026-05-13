@@ -63,43 +63,50 @@ builder.Services.AddHttpClient<PayOSHttpClient>(client =>
 // Plan Price Provider (HTTP client to Subscription Service)
 builder.Services.AddHttpClient<IPlanPriceProvider, HttpPlanPriceProvider>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "https://subscription-service.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io");
+    client.BaseAddress = new Uri(builder.Configuration["Services:SubscriptionService"] ?? "https://api-gateway.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io");
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
 // RabbitMQ
 builder.Services.AddSingleton<IConnection>(sp =>
 {
-    var host = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq";
-    var port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
-    var username = builder.Configuration["RabbitMQ:Username"] ?? "guest";
-    var password = builder.Configuration["RabbitMQ:Password"] ?? "guest";
-    var virtualHost = builder.Configuration["RabbitMQ:VirtualHost"] ?? "/";
-    var useSsl = bool.TryParse(builder.Configuration["RabbitMQ:UseSsl"], out var ssl) && ssl;
+    var uri = builder.Configuration["RabbitMQ:Uri"];
+    var factory = new ConnectionFactory();
 
-    if (!useSsl && port == 5671)
+    if (!string.IsNullOrEmpty(uri))
     {
-        useSsl = true;
+        factory.Uri = new Uri(uri);
     }
-
-    var factory = new ConnectionFactory
+    else
     {
-        HostName = host,
-        Port = port,
-        UserName = username,
-        Password = password,
-        VirtualHost = virtualHost,
-        AutomaticRecoveryEnabled = true,
-        NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
-    };
+        var host = builder.Configuration["RabbitMQ:Host"] ?? "rabbitmq";
+        var port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
+        var username = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+        var password = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+        var virtualHost = builder.Configuration["RabbitMQ:VirtualHost"] ?? "/";
+        var useSsl = bool.TryParse(builder.Configuration["RabbitMQ:UseSsl"], out var ssl) && ssl;
 
-    if (useSsl)
-    {
-        factory.Ssl = new SslOption
+        if (!useSsl && port == 5671)
         {
-            Enabled = true,
-            ServerName = host
-        };
+            useSsl = true;
+        }
+
+        factory.HostName = host;
+        factory.Port = port;
+        factory.UserName = username;
+        factory.Password = password;
+        factory.VirtualHost = virtualHost;
+        factory.AutomaticRecoveryEnabled = true;
+        factory.NetworkRecoveryInterval = TimeSpan.FromSeconds(10);
+
+        if (useSsl)
+        {
+            factory.Ssl = new SslOption
+            {
+                Enabled = true,
+                ServerName = host
+            };
+        }
     }
 
     return factory.CreateConnection();

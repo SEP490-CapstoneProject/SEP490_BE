@@ -20,16 +20,23 @@ public sealed class PortfolioEmbeddingEventPublisher : IPortfolioEmbeddingEventP
 
     public async Task PublishPortfolioChangedAsync(int portfolioId, CancellationToken cancellationToken = default)
     {
-        var host = GetRabbitSetting("HostName", "Host", "localhost");
-        var userName = GetRabbitSetting("UserName", "Username", "guest");
-        var factory = new ConnectionFactory
+        var uri = _configuration["RabbitMQ:Uri"];
+        var factory = new ConnectionFactory();
+
+        if (!string.IsNullOrEmpty(uri))
         {
-            HostName = host,
-            UserName = userName,
-            Password = GetRabbitSetting("Password", defaultValue: "guest"),
-            VirtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/"),
-            Port = int.TryParse(GetRabbitSetting("Port", defaultValue: "5672"), out var port) ? port : 5672
-        };
+            factory.Uri = new Uri(uri);
+        }
+        else
+        {
+            var host = GetRabbitSetting("Host", "HostName", "localhost");
+            var userName = GetRabbitSetting("Username", "UserName", "guest");
+            factory.HostName = host;
+            factory.UserName = userName;
+            factory.Password = GetRabbitSetting("Password", defaultValue: "guest");
+            factory.VirtualHost = GetRabbitSetting("VirtualHost", defaultValue: "/");
+            factory.Port = int.TryParse(GetRabbitSetting("Port", defaultValue: "5672"), out var port) ? port : 5672;
+        }
 
         await using var connection = await factory.CreateConnectionAsync(cancellationToken);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);

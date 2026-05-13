@@ -41,6 +41,9 @@ public class CompanyDbContext : DbContext
             entity.Property(e => e.EmbeddingVersion).HasColumnName("embeddingVersion").HasDefaultValue(0);
             entity.Property(e => e.EmbeddingUpdatedAt).HasColumnName("embeddingUpdatedAt");
             entity.Property(e => e.EmbeddingStatus).HasColumnName("embeddingStatus").HasMaxLength(20).HasDefaultValue("Pending");
+            entity.Property(e => e.ReviewStatus).HasColumnName("reviewStatus");
+            entity.Property(e => e.ReviewReason).HasColumnName("reviewReason").HasMaxLength(500);
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewedAt");
 
             entity.Ignore(e => e.Company);
 

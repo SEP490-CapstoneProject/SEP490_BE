@@ -19,5 +19,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Notification.Application\Notification.Application.csproj" />
     <ProjectReference Include="..\Notification.Infrastructure\Notification.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Common\RecruitmentPlatform.Common.csproj" />
   </ItemGroup>
 </Project>

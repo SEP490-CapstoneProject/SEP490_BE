@@ -30,16 +30,25 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
 
     private ConnectionFactory CreateFactory()
     {
-        var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
-        var userName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
-        return new ConnectionFactory
+        var uri = _configuration["RabbitMQ:Uri"];
+        var factory = new ConnectionFactory();
+
+        if (!string.IsNullOrEmpty(uri))
         {
-            HostName = host,
-            UserName = userName,
-            Password = _configuration["RabbitMQ:Password"] ?? "guest",
-            VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/",
-            Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672
-        };
+            factory.Uri = new Uri(uri);
+        }
+        else
+        {
+            var host = _configuration["RabbitMQ:HostName"] ?? _configuration["RabbitMQ:Host"] ?? "localhost";
+            var userName = _configuration["RabbitMQ:UserName"] ?? _configuration["RabbitMQ:Username"] ?? "guest";
+            factory.HostName = host;
+            factory.UserName = userName;
+            factory.Password = _configuration["RabbitMQ:Password"] ?? "guest";
+            factory.VirtualHost = _configuration["RabbitMQ:VirtualHost"] ?? "/";
+            factory.Port = int.TryParse(_configuration["RabbitMQ:Port"], out var port) ? port : 5672;
+        }
+
+        return factory;
     }
 
     private async Task PublishAsync<T>(string routingKey, T payload, CancellationToken cancellationToken) where T : RealtimeEventBase
@@ -66,6 +75,29 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
         }
     }
 
+    private async Task PublishNotificationAsync(string routingKey, ConnectionNotificationEventPayload payload, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var connection = await CreateFactory().CreateConnectionAsync(cancellationToken);
+            await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+            await channel.ExchangeDeclareAsync(Exchange, ExchangeType.Topic, durable: true, cancellationToken: cancellationToken);
+
+            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+            await channel.BasicPublishAsync(Exchange, routingKey, body, cancellationToken);
+
+            _logger.LogInformation(
+                "Published notification event {EventType} to {RoutingKey}. UserId={UserId}",
+                payload.EventType, routingKey, payload.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to publish notification event {EventType}. RoutingKey={RoutingKey}",
+                payload.EventType, routingKey);
+        }
+    }
+
     public Task PublishConnectionRequestedAsync(
         int connectionId, int fromUserId, int toUserId, int profileId,
         DateTime requestedAt, CancellationToken cancellationToken = default)
@@ -78,6 +110,8 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
             ToUserId = toUserId,
             ProfileId = profileId,
             RequestedAt = requestedAt,
+            ActorId = fromUserId.ToString(),
+            ActorType = "USER",
             CreatedAt = DateTime.UtcNow
         };
         return PublishAsync("connection.requested", evt, cancellationToken);
@@ -94,6 +128,8 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
             FromUserId = fromUserId,
             ToUserId = toUserId,
             AcceptedAt = acceptedAt,
+            ActorId = toUserId.ToString(),
+            ActorType = "USER",
             CreatedAt = DateTime.UtcNow
         };
         return PublishAsync("connection.accepted", evt, cancellationToken);
@@ -112,8 +148,16 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
             ToUserId = toUserId,
             Content = content,
             SentAt = sentAt,
+            ActorId = fromUserId.ToString(),
+            ActorType = "USER",
             CreatedAt = DateTime.UtcNow
         };
         return PublishAsync("message.new", evt, cancellationToken);
     }
+
+    public Task PublishConnectionRequestNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default)
+        => PublishNotificationAsync("connection.request.created", payload, cancellationToken);
+
+    public Task PublishConnectionAcceptedNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default)
+        => PublishNotificationAsync("connection.request.accepted", payload, cancellationToken);
 }

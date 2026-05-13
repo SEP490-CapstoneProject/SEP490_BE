@@ -1,4 +1,6 @@
+using Community.Application.DTOs;
 using Community.Application.Helpers;
+using RecruitmentPlatform.Contracts.Realtime;
 
 namespace Community.Application.Models.Events;
 
@@ -15,4 +17,5 @@ public sealed class PostFavoriteNotificationEvent
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = "POST_FAVORITE";
     public DateTime CreatedAt { get; set; } = DateTimeHelper.GetVietnamTime();
+    public NotificationActorDto? Author { get; set; } // Actor information (name, avatar)
 }

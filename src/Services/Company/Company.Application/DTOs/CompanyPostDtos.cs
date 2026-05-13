@@ -18,6 +18,8 @@ public class CompanyPostFeedDto
     public string? EmploymentType { get; set; }
     public DateTime CreatedAt { get; set; }
     public bool IsSaved { get; set; }
+    public int? ReviewStatus { get; set; }
+    public string? ReviewReason { get; set; }
 }
 
 public class CompanyPostDetailDto
@@ -41,6 +43,8 @@ public class CompanyPostDetailDto
     public int Status { get; set; }
     public List<MediaItemDto> Media { get; set; } = new();
     public bool IsSaved { get; set; }
+    public int? ReviewStatus { get; set; }
+    public string? ReviewReason { get; set; }
 }
 
 public class MediaItemDto
@@ -102,3 +106,14 @@ public class UpdatePostFullRequest
     public int Status { get; set; } = 1;
     public string? CoverImageKey { get; set; }
 }
+
+public class ApprovePostRequest
+{
+    public string? ApproverNotes { get; set; }
+}
+
+public class RejectPostRequest
+{
+    public string Reason { get; set; } = string.Empty;
+}
+

@@ -1,4 +1,5 @@
 using Company.Application.DTOs;
+using Company.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 
 namespace Company.Application.Interfaces;
@@ -18,5 +19,10 @@ public interface ICompanyPostService
     Task UnsavePostAsync(int postId, int userId);
     Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default);
+    
+    // Admin moderation operations
+    Task<List<CompanyPostDetailDto>> GetPendingPostsAsync(int skip, int take);
+    Task<CompanyPost> ApprovePostAsync(int postId, string? notes);
+    Task<CompanyPost> RejectPostAsync(int postId, string reason);
 }
 

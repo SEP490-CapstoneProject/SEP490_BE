@@ -1,5 +1,6 @@
 using Notification.Application.DTOs;
 using Notification.Application.Interfaces;
+using Notification.Domain.Constants;
 using Notification.Domain.Entities;
 
 namespace Notification.Application.Services;
@@ -18,18 +19,63 @@ public class NotificationService : INotificationService
     public async Task<CursorPagedResult<UserNotificationDto>> GetNotificationsAsync(string userId, int? cursor, int limit)
     {
         var (items, nextCursor) = await _repo.GetNotificationsAsync(userId, cursor, limit);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
 
+    public async Task<CursorPagedResult<UserNotificationDto>> GetCommunityNotificationsAsync(string userId, int? cursor, int limit)
+    {
+        var (items, nextCursor) = await _repo.GetNotificationsByTypeFilterAsync(
+            userId,
+            cursor,
+            limit,
+            NotificationTypeGroups.CommunityTypes,
+            includeTypes: true);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
+
+    public async Task<CursorPagedResult<UserNotificationDto>> GetSystemNotificationsAsync(string userId, int? cursor, int limit)
+    {
+        var (items, nextCursor) = await _repo.GetNotificationsByTypeFilterAsync(
+            userId,
+            cursor,
+            limit,
+            NotificationTypeGroups.CommunityTypes,
+            includeTypes: false);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
+
+    private async Task<CursorPagedResult<UserNotificationDto>> BuildPagedResultAsync(List<NotificationEntity> items, int? nextCursor)
+    {
         var actorMap = new Dictionary<string, ActorDto>();
+        
+        // First, try to use stored actor data from notifications
         var uniqueActors = items
             .Where(n => n.ActorId != null && n.ActorType != "SYSTEM")
-            .Select(n => (n.ActorId!, n.ActorType))
+            .Select(n => (n.ActorId!, n.ActorType, n.ActorName, n.ActorAvatar))
             .Distinct()
             .ToList();
 
-        foreach (var (actorId, actorType) in uniqueActors)
+        foreach (var (actorId, actorType, storedName, storedAvatar) in uniqueActors)
         {
             if (!actorMap.ContainsKey(actorId))
-                actorMap[actorId] = await ResolveActorAsync(actorId, actorType) ?? BuildFallbackActor(actorId);
+            {
+                // Use stored actor data if available
+                if (!string.IsNullOrWhiteSpace(storedName))
+                {
+                    actorMap[actorId] = new ActorDto
+                    {
+                        Id = int.TryParse(actorId, out var parsedId) ? parsedId : 0,
+                        Name = storedName,
+                        Avatar = storedAvatar ?? string.Empty,
+                        Role = actorType == "COMPANY" ? "COMPANY" : "USER"
+                    };
+                }
+                else
+                {
+                    // Fallback to HTTP enrichment if stored data missing
+                    actorMap[actorId] = await ResolveActorAsync(actorId, actorType) ?? BuildFallbackActor(actorId);
+                }
+            }
         }
 
         var dtos = items.Select(n => new UserNotificationDto
@@ -64,7 +110,27 @@ public class NotificationService : INotificationService
 
     public async Task<NotificationCreatedEventDto> BuildCreatedEventAsync(NotificationEntity entity)
     {
-        var actor = await ResolveActorAsync(entity.ActorId, entity.ActorType);
+        ActorDto? actor = null;
+
+        // PRIORITY 1: Use stored actor data (from event.Author)
+        // This eliminates dependency on HTTP enrichment for fresh events
+        if (!string.IsNullOrWhiteSpace(entity.ActorName) && entity.ActorType != "SYSTEM")
+        {
+            actor = new ActorDto
+            {
+                Id = int.TryParse(entity.ActorId, out var parsedId) ? parsedId : 0,
+                Name = entity.ActorName,
+                Avatar = entity.ActorAvatar ?? string.Empty,
+                Role = entity.ActorType == "COMPANY" ? "COMPANY" : "USER"
+            };
+        }
+        else if (entity.ActorType != "SYSTEM")
+        {
+            // PRIORITY 2: Fallback to HTTP enrichment only if stored data missing
+            actor = await ResolveActorAsync(entity.ActorId, entity.ActorType);
+        }
+        // If ActorType == "SYSTEM", actor stays NULL (don't show system actor)
+
         return new NotificationCreatedEventDto
         {
             NotificationId = entity.Id,
@@ -72,6 +138,7 @@ public class NotificationService : INotificationService
             Title = entity.Title,
             Content = entity.Content,
             Type = entity.Type,
+            Category = NotificationTypeGroups.ResolveCategory(entity.Type),
             ObjectId = entity.ObjectId,
             Actor = actor,
             CreatedAt = entity.CreatedAt,

@@ -24,6 +24,11 @@ public interface ICommunityService
     Task<List<CommunityPostReportDto>> GetPostReportsAsync(AdminPostReportFilter filter);
     Task<CommunityPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request);
 
+    // Admin moderation operations
+    Task<OffsetPagedResult<AdminCommunityPostDto>> GetPendingPostsAsync(int skip, int take);
+    Task<CommunityPost> ApprovePostAsync(int postId, string? notes);
+    Task<CommunityPost> RejectPostAsync(int postId, string reason);
+
     // Ownership checks
     Task<int?> GetCommentOwnerAsync(int commentId);
     Task<int?> GetReplyOwnerAsync(int replyId);

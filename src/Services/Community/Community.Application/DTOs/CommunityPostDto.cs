@@ -29,6 +29,8 @@ public class CommunityPostDto
     public bool IsFavorited { get; set; }
     public bool IsSaved { get; set; }
     public string CreatedAt { get; set; } = string.Empty;
+    public int? ReviewStatus { get; set; }
+    public string? ReviewReason { get; set; }
 }
 
 public class AdminCommunityPostDto : CommunityPostDto
