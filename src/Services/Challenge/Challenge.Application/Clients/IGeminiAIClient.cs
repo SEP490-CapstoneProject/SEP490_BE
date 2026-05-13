@@ -37,4 +37,6 @@ public class SubmissionGradingResult
     public string Feedback { get; set; } = "";
     public string ModelName { get; set; } = "Gemini 1.5 Pro";
     public DateTime GradedAt { get; set; } = DateTime.UtcNow;
+    public List<string> Strengths { get; set; } = new();
+    public List<string> Improvements { get; set; } = new();
 }
