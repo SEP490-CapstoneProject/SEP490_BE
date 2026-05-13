@@ -29,10 +29,10 @@ public class NewMessageNotificationEventConsumer : RealtimeConsumerBase<NewMessa
     /// </summary>
     protected override Task PushAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken)
     {
-        // 1. Push ngay qua SignalR (realtime) với full info
-        _ = PushService.PushNewMessageNotificationAsync(evt, cancellationToken);
+        // 1. Push ngay qua SignalR (realtime) với full info on dedicated chat channel
+        _ = PushService.PushChatMessageNotificationAsync(evt, cancellationToken);
 
-        // 2. Gom vào FCM debouncer (offline push sau 2s)
+        // 2. Gom vào FCM debouncer (offline push sau 2s). Notification service still performs FCM sends; debouncer optional.
         _debouncer.Add(evt);
 
         return Task.CompletedTask;

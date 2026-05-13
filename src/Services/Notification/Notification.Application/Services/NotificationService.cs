@@ -44,6 +44,17 @@ public class NotificationService : INotificationService
         return await BuildPagedResultAsync(items, nextCursor);
     }
 
+    public async Task<CursorPagedResult<UserNotificationDto>> GetMessageNotificationsAsync(string userId, int? cursor, int limit)
+    {
+        var (items, nextCursor) = await _repo.GetNotificationsByTypeFilterAsync(
+            userId,
+            cursor,
+            limit,
+            new[] { "CHAT_MESSAGE" },
+            includeTypes: true);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
+
     private async Task<CursorPagedResult<UserNotificationDto>> BuildPagedResultAsync(List<NotificationEntity> items, int? nextCursor)
     {
         var actorMap = new Dictionary<string, ActorDto>();

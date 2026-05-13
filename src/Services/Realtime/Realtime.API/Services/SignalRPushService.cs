@@ -12,8 +12,7 @@ public class SignalRPushService : IRealtimePushService
     {
         "COMMUNITY",
         "POST_FAVORITE",
-        "COMMUNITY_REPORT_REVIEW",
-        "CHAT_MESSAGE"
+        "COMMUNITY_REPORT_REVIEW"
     };
 
     public SignalRPushService(IHubContext<RealtimeHub> hubContext)
@@ -81,8 +80,12 @@ public class SignalRPushService : IRealtimePushService
         return CommunityTypes.Contains(evt.Type);
     }
 
-    // Push new chat message notification (full info) to user's groups
+    // Push new chat message notification (full info) to user's groups using dedicated channel
+    public Task PushChatMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
+        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ReceiveChatNotification", evt, cancellationToken);
+
+    // Backwards-compatible alias
     public Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ReceiveNewMessageNotification", evt, cancellationToken);
+        => PushChatMessageNotificationAsync(evt, cancellationToken);
 }
 
