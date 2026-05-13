@@ -1,0 +1,37 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "Azure": {
+    "KeyVault": {
+      "Url": ""
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SkillSnapChallenge;Trusted_Connection=true;MultipleActiveResultSets=true;"
+  },
+  "JwtSettings": {
+    "SecretKey": "your-256-bit-secret-key-here-make-it-long",
+    "Issuer": "RecruitmentPlatform",
+    "Audience": "RecruitmentPlatformUsers"
+  },
+  "Gemini": {
+    "ApiKey": "your-gemini-api-key-here",
+    "Model": "gemini-1.5-pro"
+  },
+  "ServiceUrls": {
+    "UserProfileService": "http://userprofile-service:8080"
+  },
+  "RabbitMQ": {
+    "Uri": "",
+    "HostName": "rabbitmq",
+    "UserName": "guest",
+    "Password": "guest",
+    "VirtualHost": "/",
+    "Port": "5672"
+  }
+}
