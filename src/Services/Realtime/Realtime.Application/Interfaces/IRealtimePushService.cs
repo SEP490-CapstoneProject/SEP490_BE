@@ -13,4 +13,5 @@ public interface IRealtimePushService
     Task PushConnectionRequestedAsync(ConnectionRequestedEvent evt, CancellationToken cancellationToken = default);
     Task PushConnectionAcceptedAsync(ConnectionAcceptedEvent evt, CancellationToken cancellationToken = default);
     Task PushSkillPointsAwardedAsync(SkillPointsAwardedEvent evt, CancellationToken cancellationToken = default);
+    Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default);
 }

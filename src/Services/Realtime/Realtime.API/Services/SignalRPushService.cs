@@ -80,4 +80,9 @@ public class SignalRPushService : IRealtimePushService
 
         return CommunityTypes.Contains(evt.Type);
     }
+
+    // Push new chat message notification (full info) to user's groups
+    public Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
+        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ReceiveNewMessageNotification", evt, cancellationToken);
 }
+
