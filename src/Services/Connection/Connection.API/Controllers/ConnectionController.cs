@@ -356,15 +356,21 @@ public class ConnectionController : ControllerBase
         {
             var targetUserId = roomConn.UserIdFrom == currentUserId ? roomConn.UserIdTo : roomConn.UserIdFrom;
             var senderProfile = await _userProfileResolver.ResolveAsync(currentUserId);
-
-            _ = _eventPublisher.PublishNewMessageNotificationAsync(
-                created.Id,
-                roomId,
-                currentUserId,
-                targetUserId,
-                created.Content,
-                created.CreatedAt,
-                senderProfile);
+            _ = _eventPublisher.PublishChatMessageNotificationAsync(new ConnectionNotificationEventPayload
+            {
+                EventType = "connection.message.created",
+                UserId = targetUserId.ToString(),
+                ActorId = currentUserId.ToString(),
+                ActorType = "USER",
+                ObjectId = roomId.ToString(),
+                Title = senderProfile != null
+                    ? $"Tin nhắn mới từ {senderProfile.Name}"
+                    : "Tin nhắn mới",
+                Content = created.Content,
+                Type = "CHAT_MESSAGE",
+                Author = senderProfile,
+                CreatedAt = created.CreatedAt
+            });
         }
 
         return CreatedAtAction(nameof(GetLatestMessages), new { roomId = roomId }, created);

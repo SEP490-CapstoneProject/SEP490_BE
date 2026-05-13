@@ -144,12 +144,24 @@ public class ChatHub : Hub
                         unreadCount
                     });
 
-                // Publish to Realtime Service (for users on /hubs/realtime)
+                // Publish a notification event that Notification service will convert into
+                // realtime + FCM fanout, following the same envelope used by Community.
                 var senderProfile = await _userProfileResolver.ResolveAsync(senderId);
-
-                _ = _eventPublisher.PublishNewMessageNotificationAsync(
-                    created.Id, roomId, senderId, targetUserId,
-                    dto.Content, dto.CreatedAt, senderProfile);
+                _ = _eventPublisher.PublishChatMessageNotificationAsync(new ConnectionNotificationEventPayload
+                {
+                    EventType = "connection.message.created",
+                    UserId = targetUserId.ToString(),
+                    ActorId = senderId.ToString(),
+                    ActorType = "USER",
+                    ObjectId = roomId.ToString(),
+                    Title = senderProfile != null
+                        ? $"Tin nhắn mới từ {senderProfile.Name}"
+                        : "Tin nhắn mới",
+                    Content = dto.Content,
+                    Type = "CHAT_MESSAGE",
+                    Author = senderProfile,
+                    CreatedAt = dto.CreatedAt
+                });
             }
         }
     }

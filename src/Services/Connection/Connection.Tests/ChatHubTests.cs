@@ -28,14 +28,8 @@ public class ChatHubTests
 
         var mockPublisher = new Mock<IConnectionEventPublisher>();
         mockPublisher
-            .Setup(p => p.PublishNewMessageNotificationAsync(
-                It.IsAny<int>(),
-                It.IsAny<int>(),
-                It.IsAny<int>(),
-                It.IsAny<int>(),
-                It.IsAny<string>(),
-                It.IsAny<System.DateTime>(),
-                It.IsAny<NotificationActorDto?>(),
+            .Setup(p => p.PublishChatMessageNotificationAsync(
+                It.IsAny<ConnectionNotificationEventPayload>(),
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 

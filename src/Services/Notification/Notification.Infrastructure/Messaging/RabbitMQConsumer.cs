@@ -46,6 +46,7 @@ public class RabbitMQConsumer : BackgroundService
         "job.application.status.updated",
         "connection.request.created",
         "connection.request.accepted",
+        "connection.message.created",
         "portfolio.compliment.created",
         "portfolio.rejected",
         "portfolio.approved",

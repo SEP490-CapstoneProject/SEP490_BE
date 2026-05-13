@@ -12,7 +12,8 @@ public class SignalRPushService : IRealtimePushService
     {
         "COMMUNITY",
         "POST_FAVORITE",
-        "COMMUNITY_REPORT_REVIEW"
+        "COMMUNITY_REPORT_REVIEW",
+        "CHAT_MESSAGE"
     };
 
     public SignalRPushService(IHubContext<RealtimeHub> hubContext)
@@ -69,22 +70,6 @@ public class SignalRPushService : IRealtimePushService
             _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveSkillPointsAwarded", evt, cancellationToken),
             _hubContext.Clients.All.SendAsync("LeaderboardUpdated", payload, cancellationToken));
     }
-
-    public Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("NewMessageNotification", new
-        {
-            messageId = evt.MessageId,
-            roomId = evt.RoomId,
-            content = evt.Content,
-            sentAt = evt.SentAt,
-            sender = evt.Author == null ? null : new
-            {
-                id = evt.Author.Id,
-                name = evt.Author.Name,
-                avatar = evt.Author.Avatar,
-                role = evt.Author.Role
-            }
-        }, cancellationToken);
 
     private static bool IsCommunity(NotificationCreatedEvent evt)
     {

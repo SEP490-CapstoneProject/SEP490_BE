@@ -6,7 +6,8 @@ public static class NotificationTypeGroups
     [
         "COMMUNITY",
         "POST_FAVORITE",
-        "COMMUNITY_REPORT_REVIEW"
+        "COMMUNITY_REPORT_REVIEW",
+        "CHAT_MESSAGE"
     ];
 
     public const string CommunityCategory = "community";
