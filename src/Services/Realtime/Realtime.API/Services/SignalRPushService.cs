@@ -80,12 +80,12 @@ public class SignalRPushService : IRealtimePushService
         return CommunityTypes.Contains(evt.Type);
     }
 
-    // Push new chat message notification (full info) to user's groups using dedicated channel
+    // Push new chat message notification (full info) to user's groups using dedicated chat channel
     public Task PushChatMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
         => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ReceiveChatNotification", evt, cancellationToken);
 
-    // Backwards-compatible alias
+    // Preserve existing 'new message' push channel and behavior for backward compatibility
     public Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
-        => PushChatMessageNotificationAsync(evt, cancellationToken);
+        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ReceiveNewMessageNotification", evt, cancellationToken);
 }
 
