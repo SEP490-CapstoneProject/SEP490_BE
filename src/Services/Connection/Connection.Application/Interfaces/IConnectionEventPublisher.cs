@@ -9,6 +9,7 @@ public interface IConnectionEventPublisher
     Task PublishConnectionRequestedAsync(int connectionId, int fromUserId, int toUserId, int profileId, DateTime requestedAt, CancellationToken cancellationToken = default);
     Task PublishConnectionAcceptedAsync(int connectionId, int fromUserId, int toUserId, DateTime acceptedAt, CancellationToken cancellationToken = default);
     Task PublishNewMessageNotificationAsync(int messageId, int roomId, int fromUserId, int toUserId, string content, DateTime sentAt, CancellationToken cancellationToken = default);
+    Task PublishNewMessageNotificationAsync(int messageId, int roomId, int fromUserId, int toUserId, string content, DateTime sentAt, Connection.Application.DTOs.NotificationActorDto? author, CancellationToken cancellationToken = default);
     Task PublishConnectionRequestNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default);
     Task PublishConnectionAcceptedNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default);
 }

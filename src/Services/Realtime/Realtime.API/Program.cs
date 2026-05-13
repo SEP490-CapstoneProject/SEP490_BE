@@ -138,6 +138,7 @@ builder.Services.AddHostedService<PostFavoriteEventConsumer>();
 builder.Services.AddHostedService<ConnectionRequestedEventConsumer>();
 builder.Services.AddHostedService<ConnectionAcceptedEventConsumer>();
 builder.Services.AddHostedService<NewMessageNotificationEventConsumer>();
+builder.Services.AddHostedService<SkillPointsAwardedEventConsumer>();
 
 var app = builder.Build();
 
@@ -151,3 +152,5 @@ app.MapControllers();
 app.MapHub<RealtimeHub>("/hubs/realtime");
 
 app.Run();
+
+

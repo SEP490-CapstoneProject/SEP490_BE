@@ -60,7 +60,9 @@ public class FcmController : ControllerBase
             }
 
             // Build notification
-            var title = $"Message from {request.SenderName}";
+            var title = request.TotalMessageCount > 1
+                ? $"{request.TotalMessageCount} new messages from {request.SenderName}"
+                : $"Message from {request.SenderName}";
             var body = request.MessagePreview ?? "New message";
 
             var data = new Dictionary<string, string>
@@ -68,7 +70,10 @@ public class FcmController : ControllerBase
                 { "messageId", request.MessageId?.ToString() ?? "0" },
                 { "roomId", request.RoomId?.ToString() ?? "0" },
                 { "type", "chat_message" },
-                { "deepLink", $"app://chat/{request.RoomId}" }
+                { "deepLink", $"app://chat/{request.RoomId}" },
+                { "senderName", request.SenderName },
+                { "senderAvatar", request.SenderAvatar ?? string.Empty },
+                { "messagePreview", request.MessagePreview ?? string.Empty }
             };
 
             // Send FCM notification
@@ -108,6 +113,9 @@ public class FcmController : ControllerBase
             if (request.TotalMessageCount <= 0)
                 return BadRequest("TotalMessageCount must be > 0");
 
+            if (string.IsNullOrEmpty(request.SenderName))
+                return BadRequest("SenderName is required");
+
             // Get device tokens for recipient
             var deviceTokenEntities = await _deviceTokenService.GetActiveTokensForUserAsync(request.ToUserId.ToString());
             var tokens = deviceTokenEntities.Select(dt => dt.DeviceToken).ToList();
@@ -121,16 +129,21 @@ public class FcmController : ControllerBase
             }
 
             // Build notification
-            var title = "New Messages";
-            var body = request.TotalMessageCount == 1
-                ? "You have 1 new message"
-                : $"You have {request.TotalMessageCount} new messages";
+            var title = request.TotalMessageCount == 1
+                ? $"Message from {request.SenderName}"
+                : $"{request.TotalMessageCount} new messages from {request.SenderName}";
+            var body = request.MessagePreview ?? "New message";
 
             var data = new Dictionary<string, string>
             {
                 { "type", "aggregated_messages" },
                 { "messageCount", request.TotalMessageCount.ToString() },
-                { "deepLink", "app://chat" }
+                { "deepLink", "app://chat" },
+                { "senderName", request.SenderName },
+                { "senderAvatar", request.SenderAvatar ?? string.Empty },
+                { "messagePreview", request.MessagePreview ?? string.Empty },
+                { "messageId", request.MessageId?.ToString() ?? "0" },
+                { "roomId", request.RoomId?.ToString() ?? "0" }
             };
 
             // Send FCM notification
@@ -157,7 +170,9 @@ public class SendMessageNotificationRequest
     public int ToUserId { get; set; }
     public int? MessageId { get; set; }
     public int? RoomId { get; set; }
+    public int TotalMessageCount { get; set; } = 1;
     public string SenderName { get; set; } = "";
+    public string? SenderAvatar { get; set; }
     public string? MessagePreview { get; set; }
 }
 
@@ -165,4 +180,9 @@ public class SendAggregatedNotificationRequest
 {
     public int ToUserId { get; set; }
     public int TotalMessageCount { get; set; }
+    public string SenderName { get; set; } = "";
+    public string? SenderAvatar { get; set; }
+    public string? MessagePreview { get; set; }
+    public int? MessageId { get; set; }
+    public int? RoomId { get; set; }
 }

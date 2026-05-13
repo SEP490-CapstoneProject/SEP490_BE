@@ -23,6 +23,7 @@ public interface INotificationServiceClient
         int messageId,
         int roomId,
         string senderName,
+        string senderAvatar,
         string messagePreview);
 
     /// <summary>
@@ -31,5 +32,12 @@ public interface INotificationServiceClient
     /// <param name="toUserId">Recipient user ID</param>
     /// <param name="totalMessageCount">Total number of new messages</param>
     /// <returns>True if FCM send succeeded, false otherwise</returns>
-    Task<bool> SendAggregatedMessageNotificationAsync(int toUserId, int totalMessageCount);
+    Task<bool> SendAggregatedMessageNotificationAsync(
+        int toUserId,
+        int totalMessageCount,
+        string senderName,
+        string senderAvatar,
+        string messagePreview,
+        int messageId,
+        int roomId);
 }

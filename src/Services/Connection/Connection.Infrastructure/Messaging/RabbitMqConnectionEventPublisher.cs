@@ -5,6 +5,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RecruitmentPlatform.Contracts.Realtime;
+using ConnectionActorDto = Connection.Application.DTOs.NotificationActorDto;
+using RealtimeActorDto = RecruitmentPlatform.Contracts.Realtime.NotificationActorDto;
 
 namespace Connection.Infrastructure.Messaging;
 
@@ -138,6 +140,11 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
     public Task PublishNewMessageNotificationAsync(
         int messageId, int roomId, int fromUserId, int toUserId,
         string content, DateTime sentAt, CancellationToken cancellationToken = default)
+        => PublishNewMessageNotificationAsync(messageId, roomId, fromUserId, toUserId, content, sentAt, null, cancellationToken);
+
+    public Task PublishNewMessageNotificationAsync(
+        int messageId, int roomId, int fromUserId, int toUserId,
+        string content, DateTime sentAt, ConnectionActorDto? author, CancellationToken cancellationToken = default)
     {
         var evt = new NewMessageNotificationEvent
         {
@@ -150,6 +157,15 @@ public class RabbitMqConnectionEventPublisher : IConnectionEventPublisher
             SentAt = sentAt,
             ActorId = fromUserId.ToString(),
             ActorType = "USER",
+            Author = author == null
+                ? null
+                : new RealtimeActorDto
+                {
+                    Id = author.Id,
+                    Name = author.Name,
+                    Avatar = author.Avatar,
+                    Role = author.Role
+                },
             CreatedAt = DateTime.UtcNow
         };
         return PublishAsync("message.new", evt, cancellationToken);

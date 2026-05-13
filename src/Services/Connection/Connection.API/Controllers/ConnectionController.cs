@@ -13,17 +13,20 @@ public class ConnectionController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> _hubContext;
     private readonly IConnectionEventPublisher _eventPublisher;
+    private readonly Connection.Application.Interfaces.IUserProfileResolver _userProfileResolver;
 
     public ConnectionController(
         IConnectionService service,
         IHttpClientFactory httpClientFactory,
         Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> hubContext,
-        IConnectionEventPublisher eventPublisher)
+        IConnectionEventPublisher eventPublisher,
+        Connection.Application.Interfaces.IUserProfileResolver userProfileResolver)
     {
         _service = service;
         _httpClientFactory = httpClientFactory;
         _hubContext = hubContext;
         _eventPublisher = eventPublisher;
+        _userProfileResolver = userProfileResolver;
     }
 
     [HttpPost]
@@ -346,6 +349,24 @@ public class ConnectionController : ControllerBase
         };
 
         var created = await _service.CreateMessageAsync(message);
+
+        var roomUsers = await _service.GetRoomUsersAsync(roomId);
+        var roomConn = roomUsers.FirstOrDefault();
+        if (roomConn != default)
+        {
+            var targetUserId = roomConn.UserIdFrom == currentUserId ? roomConn.UserIdTo : roomConn.UserIdFrom;
+            var senderProfile = await _userProfileResolver.ResolveAsync(currentUserId);
+
+            _ = _eventPublisher.PublishNewMessageNotificationAsync(
+                created.Id,
+                roomId,
+                currentUserId,
+                targetUserId,
+                created.Content,
+                created.CreatedAt,
+                senderProfile);
+        }
+
         return CreatedAtAction(nameof(GetLatestMessages), new { roomId = roomId }, created);
     }
 

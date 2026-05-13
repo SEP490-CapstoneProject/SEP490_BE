@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Connection.Application.Interfaces;
 using System.Security.Claims;
+using System.Linq;
 
 namespace Connection.API.Hubs;
 
@@ -8,12 +9,14 @@ public class ChatHub : Hub
 {
     private readonly IConnectionService _service;
     private readonly IConnectionEventPublisher _eventPublisher;
+    private readonly IUserProfileResolver _userProfileResolver;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int RoomId, int UserId)> ActiveRoomConnections = new();
 
-    public ChatHub(IConnectionService service, IConnectionEventPublisher eventPublisher)
+    public ChatHub(IConnectionService service, IConnectionEventPublisher eventPublisher, IUserProfileResolver userProfileResolver)
     {
         _service = service;
         _eventPublisher = eventPublisher;
+        _userProfileResolver = userProfileResolver;
     }
 
     public override async Task OnConnectedAsync()
@@ -142,9 +145,11 @@ public class ChatHub : Hub
                     });
 
                 // Publish to Realtime Service (for users on /hubs/realtime)
+                var senderProfile = await _userProfileResolver.ResolveAsync(senderId);
+
                 _ = _eventPublisher.PublishNewMessageNotificationAsync(
                     created.Id, roomId, senderId, targetUserId,
-                    dto.Content, dto.CreatedAt);
+                    dto.Content, dto.CreatedAt, senderProfile);
             }
         }
     }
