@@ -23,4 +23,5 @@ public interface IConnectionRepository
     Task<int> GetUnreadMessageCountAsync(int roomId, int userId);
     Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2);
     Task<string?> GetConnectionStatusByIdAsync(int connectionId);
+    Task<Connection.Domain.Entities.Connection?> GetConnectionByRoomIdAsync(int roomId);
 }
