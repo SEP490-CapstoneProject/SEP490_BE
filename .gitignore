@@ -153,3 +153,8 @@ google-services.json
 ## OS
 .DS_Store
 Thumbs.db
+
+# Ignore build artifacts for Challenge service
+src/Services/Challenge/**/bin/
+src/Services/Challenge/**/obj/
+
