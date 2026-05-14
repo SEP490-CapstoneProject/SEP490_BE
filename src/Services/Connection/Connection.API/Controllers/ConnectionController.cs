@@ -180,22 +180,134 @@ public class ConnectionController : ControllerBase
         return Ok(new { connectionId, status });
     }
 
+    public class MatchByUsersRequest
+    {
+        public int UserId1 { get; set; }
+        public int UserId2 { get; set; }
+    }
+
+    [HttpPost("match-by-users")]
+    [Authorize]
+    public async Task<IActionResult> MatchByUsers([FromBody] MatchByUsersRequest request)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int currentUserId))
+        {
+            return Unauthorized(new { error = "Invalid or missing user ID in token" });
+        }
+
+        if (request.UserId1 != currentUserId && request.UserId2 != currentUserId)
+        {
+            return Forbid(); // Current user must be one of the UIDs
+        }
+
+        var (connectionId, status) = await _service.GetConnectionStatusByUsersAsync(request.UserId1, request.UserId2);
+        
+        if (connectionId == 0 || status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.PENDING.ToString())
+        {
+            return Ok(null);
+        }
+
+        // Update to MATCHED
+        var updated = await _service.UpdateConnectionStatusAsync(connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED, currentUserId);
+        if (updated == null) return NotFound();
+
+        // Send real-time events as done in UpdateStatus endpoint
+        await _hubContext.Clients.Group($"user_{updated.UserIdFrom}").SendAsync("ConnectionAccepted", new
+        {
+            connectionId = updated.Id,
+            fromUserId   = updated.UserIdFrom,
+            toUserId     = updated.UserIdTo,
+            status       = updated.Status
+        });
+        _ = _eventPublisher.PublishConnectionAcceptedAsync(updated.Id, updated.UserIdFrom, updated.UserIdTo, updated.ConnectionAt ?? DateTime.UtcNow);
+        var acceptorProfile = await GetUserProfileAsync(updated.UserIdTo);
+        _ = _eventPublisher.PublishConnectionAcceptedNotificationAsync(new ConnectionNotificationEventPayload
+        {
+            EventType = "connection.request.accepted",
+            UserId = updated.UserIdFrom.ToString(),
+            ActorId = updated.UserIdTo.ToString(),
+            ActorType = "USER",
+            ObjectId = updated.Id.ToString(),
+            Title = "Yêu cầu kết nối đã được chấp nhận",
+            Content = acceptorProfile != null
+                ? $"{acceptorProfile.Name} đã chấp nhận yêu cầu kết nối của bạn."
+                : "Yêu cầu kết nối của bạn đã được chấp nhận.",
+            Type = "CONNECTION_REQUEST_ACCEPTED",
+            Author = acceptorProfile,
+            CreatedAt = updated.ConnectionAt ?? DateTime.UtcNow
+        });
+
+        // Get the generated room summary
+        var roomSummary = await _service.GetRoomSummaryByConnectionIdAsync(updated.Id, currentUserId);
+        if (roomSummary == null) return Ok(null);
+
+        int otherUserId = roomSummary.UserIdFrom == currentUserId ? roomSummary.UserIdTo : roomSummary.UserIdFrom;
+        string name = otherUserId.ToString();
+        string? avatar = null;
+        string? cover = null;
+        string role = "USER";
+
+        var client = _httpClientFactory.CreateClient("UserProfile");
+        try
+        {
+            var res = await client.GetAsync($"/api/company/by-user/{otherUserId}");
+            if (res.IsSuccessStatusCode)
+            {
+                var json = await res.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("companyName", out var comp)) name = comp.GetString() ?? name;
+                if (doc.RootElement.TryGetProperty("avatar", out var av)) avatar = av.GetString();
+                if (doc.RootElement.TryGetProperty("coverImage", out var cv)) cover = cv.GetString();
+                role = "COMPANY";
+            }
+            else
+            {
+                var res2 = await client.GetAsync($"/api/employee/by-user/{otherUserId}");
+                if (res2.IsSuccessStatusCode)
+                {
+                    var json2 = await res2.Content.ReadAsStringAsync();
+                    using var doc2 = System.Text.Json.JsonDocument.Parse(json2);
+                    if (doc2.RootElement.TryGetProperty("name", out var nm)) name = nm.GetString() ?? name;
+                    if (doc2.RootElement.TryGetProperty("avatar", out var av2)) avatar = av2.GetString();
+                    if (doc2.RootElement.TryGetProperty("coverImage", out var cv2)) cover = cv2.GetString();
+                    role = "USER";
+                }
+            }
+        }
+        catch { }
+
+        return Ok(new
+        {
+            roomId = roomSummary.RoomId,
+            name = name,
+            avatar = avatar,
+            coverImage = cover,
+            role = role
+        });
+    }
+
     /// <summary>
-    /// Lấy trạng thái connection theo connectionId.
+    /// Lấy trạng thái connection theo roomId.
     /// STORED trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
     /// Trả về 404 nếu không tìm thấy connection.
     /// </summary>
-    [HttpGet("{connectionId}/status")]
-    public async Task<IActionResult> GetConnectionStatusById(int connectionId)
+    [HttpGet("rooms/{roomId}/status")]
+    public async Task<IActionResult> GetConnectionStatusByRoomId(int roomId)
     {
-        if (connectionId <= 0)
-            return BadRequest(new { error = "connectionId must be greater than 0" });
+        if (roomId <= 0)
+            return BadRequest(new { error = "roomId must be greater than 0" });
 
-        var status = await _service.GetConnectionStatusByIdAsync(connectionId);
-        if (status == null)
-            return NotFound(new { error = $"Connection {connectionId} not found" });
+        var conn = await _service.GetConnectionByRoomIdAsync(roomId);
+        if (conn == null)
+            return NotFound(new { error = $"Connection for room {roomId} not found" });
 
-        return Ok(new { connectionId, status });
+        if (conn.Status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.BLOCK.ToString())
+        {
+            return Ok(new { roomId, status = conn.Status, blockId = conn.BlockId });
+        }
+
+        return Ok(new { roomId, status = conn.Status });
     }
 
     [HttpGet("rooms/summary/{userId}")]
