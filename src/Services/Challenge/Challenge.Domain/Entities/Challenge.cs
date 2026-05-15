@@ -17,7 +17,7 @@ public class Challenge
 
     public ChallengeStatus Status { get; set; }
 
-    public Guid CurrentVersionId { get; set; }
+    public Guid? CurrentVersionId { get; set; }
 
     public Guid CreatedById { get; set; }
 

@@ -1,6 +1,7 @@
 using Challenge.Application.Clients;
 using Challenge.Application.Interfaces;
 using Challenge.Application.Services;
+using Challenge.Application.Services.AI;
 using Challenge.Infrastructure.Clients;
 using Challenge.Domain.Repositories;
 using Challenge.Infrastructure.Persistence.Repositories;
@@ -21,6 +22,9 @@ public static class ChallengeServiceCollectionExtensions
         services.AddScoped<IGradingService, GradingService>();
         services.AddScoped<ISkillPointService, SkillPointService>();
         services.AddScoped<IPortfolioSkillsService, PortfolioSkillsService>();
+        services.AddScoped<ISkillNormalizationService, SkillNormalizationService>();
+        services.AddScoped<IPromptSanitizationService, PromptSanitizationService>();
+        services.AddScoped<IGeminiAIService, GeminiAIService>();
 
         services.AddHttpClient<IActorResolverClient, ActorResolverClient>();
         services.AddHttpClient<IGeminiAIClient, GeminiAIClient>();

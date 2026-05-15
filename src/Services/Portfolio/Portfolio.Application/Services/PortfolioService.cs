@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using Portfolio.Application.BlockHandlers;
 using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
+using Portfolio.Application.Models.Events;
 using Portfolio.Domain.Entities;
+using Portfolio.Domain.Enums;
 using Microsoft.Extensions.Caching.Memory;
 using RecruitmentPlatform.AI.Abstractions;
 using RecruitmentPlatform.AI.Models;
@@ -25,6 +27,7 @@ public class PortfolioService : IPortfolioService
     private readonly ICompanyMatchingClient _companyMatchingClient;
     private readonly IPortfolioEmbeddingEventPublisher _embeddingEventPublisher;
     private readonly IPortfolioModerationEventPublisher _moderationEventPublisher;
+    private readonly IPortfolioNotificationEventPublisher _notificationEventPublisher;
     private readonly IMatchingEngine _matchingEngine;
     private readonly ITextNormalizer _textNormalizer;
     private readonly IEmbeddingService _embeddingService;
@@ -43,6 +46,7 @@ public class PortfolioService : IPortfolioService
         ICompanyMatchingClient companyMatchingClient,
         IPortfolioEmbeddingEventPublisher embeddingEventPublisher,
         IPortfolioModerationEventPublisher moderationEventPublisher,
+        IPortfolioNotificationEventPublisher notificationEventPublisher,
         IMatchingEngine matchingEngine,
         ITextNormalizer textNormalizer,
         IEmbeddingService embeddingService,
@@ -60,6 +64,7 @@ public class PortfolioService : IPortfolioService
         _companyMatchingClient = companyMatchingClient;
         _embeddingEventPublisher = embeddingEventPublisher;
         _moderationEventPublisher = moderationEventPublisher;
+        _notificationEventPublisher = notificationEventPublisher;
         _matchingEngine = matchingEngine;
         _textNormalizer = textNormalizer;
         _embeddingService = embeddingService;
@@ -1059,5 +1064,74 @@ public class PortfolioService : IPortfolioService
         {
             _logger.LogWarning(ex, "Failed to publish embedding event for portfolio {PortfolioId}", portfolioId);
         }
+    }
+
+    public async Task<PortfolioReportDto> ReportPortfolioAsync(int portfolioId, int reporterUserId, CreatePortfolioReportRequest request)
+    {
+        if (reporterUserId <= 0) throw new ArgumentException("Invalid reporter user ID");
+        
+        var portfolio = await _repo.GetByIdAsync(portfolioId);
+        if (portfolio == null) throw new KeyNotFoundException($"Portfolio {portfolioId} not found");
+
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 100)
+            throw new ArgumentException("Reason is required and must not exceed 100 characters");
+
+        if (!string.IsNullOrEmpty(request.Description) && request.Description.Length > 1000)
+            throw new ArgumentException("Description must not exceed 1000 characters");
+
+        var existingReport = await _repo.GetPortfolioReportByIdAndReporterAsync(portfolioId, reporterUserId);
+        if (existingReport != null)
+            throw new InvalidOperationException("You have already reported this portfolio");
+
+        var report = new PortfolioReport
+        {
+            PortfolioId = portfolioId,
+            ReporterUserId = reporterUserId,
+            Reason = request.Reason,
+            Description = request.Description,
+            Status = PortfolioReportStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var created = await _repo.CreatePortfolioReportAsync(report);
+
+        var @event = new PortfolioReportCreatedNotificationEvent
+        {
+            PortfolioId = portfolioId,
+            ReporterUserId = reporterUserId,
+            Reason = request.Reason,
+            Description = request.Description,
+            Title = $"Portfolio {portfolioId} has been reported",
+            Content = $"Portfolio has been reported for: {request.Reason}"
+        };
+
+        try
+        {
+            await _notificationEventPublisher.PublishReportCreatedAsync(@event);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish report created event for portfolio {PortfolioId}", portfolioId);
+        }
+
+        return MapToDto(created);
+    }
+
+    private PortfolioReportDto MapToDto(PortfolioReport report)
+    {
+        return new PortfolioReportDto
+        {
+            Id = report.Id,
+            PortfolioId = report.PortfolioId,
+            ReporterUserId = report.ReporterUserId,
+            Reason = report.Reason,
+            Description = report.Description,
+            Status = (int)report.Status,
+            ReviewedByUserId = report.ReviewedByUserId,
+            ReviewedAt = report.ReviewedAt,
+            ReviewNote = report.ReviewNote,
+            CreatedAt = report.CreatedAt,
+            UpdatedAt = report.UpdatedAt
+        };
     }
 }

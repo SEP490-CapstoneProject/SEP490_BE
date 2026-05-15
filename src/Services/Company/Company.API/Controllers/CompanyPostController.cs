@@ -304,4 +304,31 @@ public class CompanyPostController : ControllerBase
         await _service.UnsavePostAsync(id, userId);
         return Ok(new { message = "Post unsaved" });
     }
+
+    /// <summary>Report a job post</summary>
+    [Authorize]
+    [HttpPost("{postId:int}/report")]
+    public async Task<IActionResult> ReportPost(int postId, [FromBody] CreatePostReportRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized(new { error = "Invalid token" });
+
+        try
+        {
+            var created = await _service.ReportPostAsync(postId, userId.Value, request);
+            return StatusCode(201, created);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }

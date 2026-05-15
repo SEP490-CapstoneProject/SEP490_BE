@@ -24,5 +24,8 @@ public interface ICompanyPostService
     Task<List<CompanyPostDetailDto>> GetPendingPostsAsync(int skip, int take);
     Task<CompanyPost> ApprovePostAsync(int postId, string? notes);
     Task<CompanyPost> RejectPostAsync(int postId, string reason);
+
+    // Report operations
+    Task<CompanyPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request);
 }
 

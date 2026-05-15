@@ -53,6 +53,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ChallengeDbContext>();
+    db.Database.Migrate();
+}
+
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -66,26 +72,6 @@ app.UseAuthorization();
 
 app.UseChallengeApi();
 
-app.Lifetime.ApplicationStarted.Register(() =>
-{
-    _ = Task.Run(async () =>
-    {
-        using var scope = app.Services.CreateScope();
-        var logger = scope.ServiceProvider
-            .GetRequiredService<ILoggerFactory>()
-            .CreateLogger("ChallengeDatabaseMigration");
-
-        try
-        {
-            var dbContext = scope.ServiceProvider.GetRequiredService<ChallengeDbContext>();
-            await dbContext.Database.MigrateAsync();
-            logger.LogInformation("Challenge database migration completed.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Challenge database migration failed.");
-        }
-    });
-});
+await app.MigrateDatabaseAsync();
 
 app.Run();
