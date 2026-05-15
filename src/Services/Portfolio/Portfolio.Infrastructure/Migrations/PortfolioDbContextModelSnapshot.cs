@@ -504,6 +504,67 @@ namespace Portfolio.Infrastructure.Migrations
                     b.ToTable("PortfolioPreview", (string)null);
                 });
 
+            modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("PortfolioId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("ReporterUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReviewedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PortfolioId")
+                        .HasDatabaseName("IX_PortfolioReport_PortfolioId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_PortfolioReport_Status");
+
+                    b.HasIndex("PortfolioId", "ReporterUserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PortfolioReport_Portfolio_Reporter");
+
+                    b.ToTable("PortfolioReport", (string)null);
+                });
+
             modelBuilder.Entity("Portfolio.Domain.Entities.Compliment", b =>
                 {
                     b.HasOne("Portfolio.Domain.Entities.Portfolio", "Portfolio")
@@ -553,6 +614,17 @@ namespace Portfolio.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioPreview", b =>
+                {
+                    b.HasOne("Portfolio.Domain.Entities.Portfolio", "Portfolio")
+                        .WithMany()
+                        .HasForeignKey("PortfolioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Portfolio");
+                });
+
+            modelBuilder.Entity("Portfolio.Domain.Entities.PortfolioReport", b =>
                 {
                     b.HasOne("Portfolio.Domain.Entities.Portfolio", "Portfolio")
                         .WithMany()

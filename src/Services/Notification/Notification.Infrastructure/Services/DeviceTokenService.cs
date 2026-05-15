@@ -17,7 +17,7 @@ namespace Notification.Infrastructure.Services
             _logger = logger;
         }
 
-        public async Task<bool> RegisterTokenAsync(string userId, string deviceToken, string deviceType = "Android", string appVersion = null)
+        public async Task<bool> RegisterTokenAsync(string userId, string deviceToken, string deviceType = "Android", string? appVersion = null)
         {
             try
             {
@@ -27,36 +27,66 @@ namespace Notification.Infrastructure.Services
                     return false;
                 }
 
-                // Check if token already exists
-                var existingToken = await _dbContext.DeviceTokens
-                    .FirstOrDefaultAsync(x => x.DeviceToken == deviceToken);
+                var now = DateTime.UtcNow;
+                var normalizedUserId = userId.Trim();
+                var normalizedDeviceToken = deviceToken.Trim();
+                var normalizedDeviceType = string.IsNullOrWhiteSpace(deviceType) ? "Android" : deviceType.Trim();
+                var normalizedAppVersion = string.IsNullOrWhiteSpace(appVersion) ? null : appVersion.Trim();
 
-                if (existingToken != null)
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+                // Keep only one row for this user in code-path even before DB migration is applied.
+                var userTokens = await _dbContext.DeviceTokens
+                    .Where(x => x.UserId == normalizedUserId)
+                    .OrderByDescending(x => x.LastUsedAt ?? x.RegisteredAt)
+                    .ThenByDescending(x => x.RegisteredAt)
+                    .ThenByDescending(x => x.Id)
+                    .ToListAsync();
+
+                var primaryUserToken = userTokens.FirstOrDefault();
+                if (userTokens.Count > 1)
                 {
-                    // Update existing token
-                    existingToken.UserId = userId;
-                    existingToken.DeviceType = deviceType;
-                    existingToken.AppVersion = appVersion;
-                    existingToken.IsActive = true;
-                    existingToken.LastUsedAt = DateTime.UtcNow;
-                    _dbContext.DeviceTokens.Update(existingToken);
+                    _dbContext.DeviceTokens.RemoveRange(userTokens.Skip(1));
+                }
+
+                // Token may already exist under a different user.
+                var existingByToken = await _dbContext.DeviceTokens
+                    .FirstOrDefaultAsync(x => x.DeviceToken == normalizedDeviceToken);
+
+                DeviceTokenEntity targetRow;
+                if (primaryUserToken != null)
+                {
+                    if (existingByToken != null && existingByToken.Id != primaryUserToken.Id)
+                    {
+                        // Remove conflicting token row so unique(DeviceToken) is preserved.
+                        _dbContext.DeviceTokens.Remove(existingByToken);
+                    }
+
+                    targetRow = primaryUserToken;
+                }
+                else if (existingByToken != null)
+                {
+                    // Reuse existing token row and move ownership to this user.
+                    targetRow = existingByToken;
                 }
                 else
                 {
-                    // Create new token
-                    var newToken = new DeviceTokenEntity
+                    targetRow = new DeviceTokenEntity
                     {
-                        UserId = userId,
-                        DeviceToken = deviceToken,
-                        DeviceType = deviceType,
-                        AppVersion = appVersion,
-                        IsActive = true,
-                        RegisteredAt = DateTime.UtcNow
+                        RegisteredAt = now
                     };
-                    await _dbContext.DeviceTokens.AddAsync(newToken);
+                    await _dbContext.DeviceTokens.AddAsync(targetRow);
                 }
 
+                targetRow.UserId = normalizedUserId;
+                targetRow.DeviceToken = normalizedDeviceToken;
+                targetRow.DeviceType = normalizedDeviceType;
+                targetRow.AppVersion = normalizedAppVersion ?? string.Empty;
+                targetRow.IsActive = true;
+                targetRow.LastUsedAt = now;
+
                 await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
                 _logger.LogInformation($"Device token registered for user {userId}");
                 return true;
             }

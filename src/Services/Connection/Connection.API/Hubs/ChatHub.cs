@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Connection.Application.Interfaces;
 using System.Security.Claims;
+using System.Linq;
 
 namespace Connection.API.Hubs;
 
@@ -8,12 +9,14 @@ public class ChatHub : Hub
 {
     private readonly IConnectionService _service;
     private readonly IConnectionEventPublisher _eventPublisher;
+    private readonly IUserProfileResolver _userProfileResolver;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int RoomId, int UserId)> ActiveRoomConnections = new();
 
-    public ChatHub(IConnectionService service, IConnectionEventPublisher eventPublisher)
+    public ChatHub(IConnectionService service, IConnectionEventPublisher eventPublisher, IUserProfileResolver userProfileResolver)
     {
         _service = service;
         _eventPublisher = eventPublisher;
+        _userProfileResolver = userProfileResolver;
     }
 
     public override async Task OnConnectedAsync()
@@ -140,6 +143,25 @@ public class ChatHub : Hub
                         lastAt = dto.CreatedAt,
                         unreadCount
                     });
+
+                // Publish a notification event that Notification service will convert into
+                // realtime + FCM fanout, following the same envelope used by Community.
+                var senderProfile = await _userProfileResolver.ResolveAsync(senderId);
+                _ = _eventPublisher.PublishChatMessageNotificationAsync(new ConnectionNotificationEventPayload
+                {
+                    EventType = "connection.message.created",
+                    UserId = targetUserId.ToString(),
+                    ActorId = senderId.ToString(),
+                    ActorType = "USER",
+                    ObjectId = roomId.ToString(),
+                    Title = senderProfile != null
+                        ? $"Tin nhắn mới từ {senderProfile.Name}"
+                        : "Tin nhắn mới",
+                    Content = dto.Content,
+                    Type = "CHAT_MESSAGE",
+                    Author = senderProfile,
+                    CreatedAt = dto.CreatedAt
+                });
 
                 // Publish to Realtime Service (for users on /hubs/realtime)
                 _ = _eventPublisher.PublishNewMessageNotificationAsync(

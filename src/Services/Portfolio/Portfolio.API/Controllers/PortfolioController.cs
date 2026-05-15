@@ -368,5 +368,44 @@ public class PortfolioController : ControllerBase
 
         return null;
     }
+
+    private int? GetUserId()
+    {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? User.FindFirst("sub")?.Value
+                 ?? User.FindFirst("nameid")?.Value
+                 ?? User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+        if (!string.IsNullOrEmpty(claim) && int.TryParse(claim, out int userId))
+            return userId;
+
+        return null;
+    }
+
+    /// <summary>Report a portfolio</summary>
+    [HttpPost("{portfolioId:int}/report")]
+    [Authorize]
+    public async Task<IActionResult> ReportPortfolio(int portfolioId, [FromBody] CreatePortfolioReportRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized(new { error = "Invalid token" });
+
+        try
+        {
+            var created = await _portfolioService.ReportPortfolioAsync(portfolioId, userId.Value, request);
+            return StatusCode(201, created);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
 

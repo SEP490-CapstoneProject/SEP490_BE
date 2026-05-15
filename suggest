@@ -1,128 +1,285 @@
-Implement the system strictly based on the provided final design. Do NOT reinterpret or simplify any part of the pipeline.
+You are a senior software architect refining the SkillSnap AI Challenge System Production Implementation Plan.
 
-## Enforcement Rules (CRITICAL)
+Your task is to UPDATE and IMPROVE the current implementation plan based on the review feedback below.
 
-1. **Pipeline order must be EXACT**
-   You MUST implement matching in this exact sequence:
+IMPORTANT:
 
-2. Data quality filter
-
-3. Pre-filter (skill overlap ranking, take top 100–150)
-
-4. Cosine similarity (safe)
-
-5. Compute scoring components
-
-6. Weighted scoring
-
-7. Threshold filter (>= 0.3)
-
-8. Deterministic sorting
-
-9. Pagination (max size = 50)
-
-10. Cache result (versioned key)
-
-Any deviation is NOT allowed.
+* Do NOT redesign the system from scratch.
+* Preserve the existing architecture direction.
+* Maintain the current scope and MVP boundaries.
+* Keep the platform as a Portfolio Showcase Platform with an additive AI Skill Verification layer.
+* Keep implementation practical and production-oriented.
+* Avoid overengineering.
 
 ---
 
-2. **Deterministic behavior is mandatory**
+# CURRENT ARCHITECTURE DIRECTION
 
-* Same input MUST always produce identical output
-* Always:
+SkillSnap remains:
 
-  * round finalScore to 4 decimal places
-  * apply stable sorting:
+* a portfolio showcase platform
 
-    * finalScore DESC
-    * UpdatedAt DESC
-    * Id ASC
+The AI Challenge System is:
 
----
+* an additive AI-powered skill validation system
 
-3. **Cosine similarity must be hardened**
+The purpose:
 
-Implement:
+* allow users to validate skills through AI-assessed challenges
+* display AI-verified skills on portfolio
 
-* null vectors → return 0
-* length mismatch → return 0
-* zero norm → return 0
-* never throw exceptions
+Do NOT convert the system into:
+
+* a full coding judge
+* LMS platform
+* recruiter scoring platform
 
 ---
 
-4. **Scoring must follow exact formula**
+# KEEP THESE FEATURES
 
-finalScore = cosine * 0.7 + skillScore * 0.2 + categoryScore * 0.1
+Keep all existing approved features:
 
-* Clamp all values to [0..1]
-* Do not modify weights
-
----
-
-5. **Pre-filter must reduce dataset BEFORE cosine**
-
-* Compute skill overlap count
-* Sort DESC
-* Take top 100–150
-* Only THEN compute cosine
-
----
-
-6. **Strict filtering rules**
-
-Skip any record that:
-
-* has no skills
-* has very short description
-* EmbeddingStatus != Ready
+* Skill normalization
+* SkillAlias
+* PendingSkill
+* EvaluationCriteria
+* CriteriaSkillMapping
+* AI challenge analysis
+* AI grading
+* SkillPointTransaction
+* RabbitMQ events
+* SignalR leaderboard
+* Challenge moderation workflow
+* Submission snapshots
+* Challenge versioning
+* Anti-farming logic
+* SkillRelationship graph foundation
+* Portfolio AI-verified skills
 
 ---
 
-7. **Cache must be version-aware**
+# EXPLICITLY KEEP REMOVED FEATURES OUT OF SCOPE
 
-Use keys:
+DO NOT add:
 
-* portfolio:{id}:{embeddingVersion}:matched-jobs
-* job:{id}:{embeddingVersion}:matched-portfolios
+* plagiarism detection
+* AI-generated content detection
+* skill decay/freshness system
+* recruiter trust score
+* advanced recommendation engine
+* advanced AI confidence architecture
 
-Do NOT use non-versioned cache.
-
----
-
-8. **Cross-service calls must be safe**
-
-* Add timeout (1–2 seconds)
-* On failure → return empty result
-* Never throw exception to caller
+These are future enhancements only.
 
 ---
 
-9. **Code structure requirements**
+# REQUIRED IMPROVEMENTS
 
-* Implement:
+## 1. Improve ChallengeVersion
 
-  * MatchingEngine (full pipeline)
-  * ScoringHelper
-  * CosineSimilaritySafe
-* Shared module MUST be reused by both services
-* No duplicated logic allowed
+Current ChallengeVersion is incomplete.
+
+Expand it so each version fully freezes the evaluation context.
+
+ChallengeVersion should include snapshots for:
+
+* title
+* description
+* expected solution
+* criteria
+* skill mappings
+* difficulty score
+* difficulty label
+
+Purpose:
+
+* reproducible grading
+* leaderboard consistency
+* historical integrity
 
 ---
 
-## Output
+## 2. Replace SkillRelationship.Confidence
 
-Generate full production-ready .NET code:
+The current SkillRelationship entity uses:
 
-* MatchingEngine implementation (end-to-end pipeline)
-* ScoringHelper implementation
-* Safe cosine similarity function
-* DTOs and models
-* Example usage in both Portfolio and Company services
+* Confidence
 
-Ensure:
+This conflicts with the decision to avoid advanced confidence systems.
 
-* clean, readable, maintainable code
-* no hidden assumptions
-* no skipped steps
+Replace:
+
+* Confidence
+
+With:
+
+* Weight
+  OR
+* Strength
+
+Purpose:
+
+* represent relationship strength between skills
+* not AI confidence
+
+Example:
+
+* SignalR -> ASP.NET Core (Strength = 0.9)
+
+---
+
+## 3. Reduce PromptSanitizationLog size
+
+Current logging stores:
+
+* OriginalPrompt
+* SanitizedPrompt
+
+This may create unnecessary storage growth and sensitive data retention.
+
+Refactor PromptSanitizationLog to store lightweight metadata only:
+
+* RiskFlags
+* SanitizationSummary
+* PromptHash
+* CreatedAt
+
+Optionally:
+
+* only create logs for suspicious inputs
+
+Keep implementation lightweight.
+
+---
+
+## 4. Add AI Evaluation Metadata
+
+Even though advanced confidence systems are out of scope, the system still needs AI evaluation traceability.
+
+Add lightweight AI evaluation metadata:
+
+* ModelName
+* PromptVersion
+* EvaluatedAt
+
+Purpose:
+
+* debugging
+* reproducibility
+* future AI model upgrades
+
+Do NOT build a separate AI confidence subsystem.
+
+---
+
+## 5. Clarify Snapshot Trigger Flow
+
+Clarify exactly when snapshots and ChallengeVersion records are created.
+
+Define:
+
+* snapshots are automatically created when a challenge transitions to Published
+* difficulty, criteria, and skill mappings become frozen
+* submissions reference the active ChallengeVersion
+
+Make this explicit in lifecycle and architecture sections.
+
+---
+
+## 6. Define Skill Normalization Flow
+
+The plan currently lacks the actual normalization pipeline.
+
+Add explicit normalization flow:
+
+When AI detects a skill:
+
+1. search canonical Skill table
+2. search SkillAlias
+3. fuzzy match existing skills
+4. if no acceptable match → create PendingSkill
+
+Purpose:
+
+* avoid duplicate skills
+* maintain canonical skill graph
+
+---
+
+## 7. Improve Anti-Farming Explanation
+
+Current anti-farming only tracks attempt count.
+
+Add lightweight diversity logic:
+
+* repeated challenges in same category reduce rewards further
+* encourage users to complete varied challenge types
+
+Keep implementation simple and MVP-friendly.
+
+Do NOT introduce complex behavioral analytics.
+
+---
+
+## 8. Define VerificationLevel Rules
+
+Current VerificationLevel lacks calculation rules.
+
+Add explicit rules such as:
+
+* Beginner
+* Intermediate
+* Advanced
+* Expert
+
+Based on:
+
+* total verified points
+  OR
+* verified challenge count
+
+Keep calculation deterministic and simple.
+
+---
+
+## 9. Clarify Challenge Skill Weight Source
+
+The plan currently uses:
+
+* BaseWeight
+
+But does not clearly define its source.
+
+Clarify:
+
+* AI generates ChallengeSkillWeight during challenge analysis
+* weights are stored and frozen in ChallengeVersion snapshots
+
+Example:
+
+* SignalR = 5
+* ASP.NET Core = 3
+* OOP = 1
+
+These weights are later used in point calculation.
+
+---
+
+# OUTPUT REQUIREMENTS
+
+Update the implementation plan professionally.
+
+Include:
+
+1. revised architecture decisions
+2. updated database schema
+3. improved ChallengeVersion model
+4. updated moderation/versioning flow
+5. updated anti-farming section
+6. AI evaluation metadata section
+7. skill normalization pipeline
+8. verification level rules
+9. clarified point calculation flow
+
+Maintain clean technical writing suitable for a real production architecture document.

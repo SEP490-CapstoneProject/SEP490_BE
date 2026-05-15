@@ -22,89 +22,72 @@ public class SignalRPushService : IRealtimePushService
 
     public Task PushNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
     {
+        if (IsChatMessage(evt))
+        {
+            return Task.CompletedTask;
+        }
+
         var tasks = new List<Task>
         {
-            _hubContext.Clients
-                .Group($"user_{evt.UserId}")
-                .SendAsync("ReceiveNotification", evt, cancellationToken)
+            _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveNotification", evt, cancellationToken)
         };
 
-        if (IsCommunity(evt))
-        {
-            tasks.Add(PushCommunityNotificationAsync(evt, cancellationToken));
-        }
-        else
-        {
-            tasks.Add(PushSystemNotificationAsync(evt, cancellationToken));
-        }
+        tasks.Add(IsCommunity(evt)
+            ? PushCommunityNotificationAsync(evt, cancellationToken)
+            : PushSystemNotificationAsync(evt, cancellationToken));
 
         return Task.WhenAll(tasks);
     }
 
     public Task PushCommunityNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"user_{evt.UserId}")
-            .SendAsync("ReceiveCommunityNotification", evt, cancellationToken);
+    {
+        if (IsChatMessage(evt))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveCommunityNotification", evt, cancellationToken);
+    }
 
     public Task PushSystemNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"user_{evt.UserId}")
-            .SendAsync("ReceiveSystemNotification", evt, cancellationToken);
+    {
+        if (IsChatMessage(evt))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveSystemNotification", evt, cancellationToken);
+    }
 
     public Task PushCommentAsync(CommentCreatedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"post_{evt.PostId}")
-            .SendAsync("ReceiveComment", evt, cancellationToken);
+        => _hubContext.Clients.Group($"post_{evt.PostId}").SendAsync("ReceiveComment", evt, cancellationToken);
 
     public Task PushReplyAsync(ReplyCreatedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"post_{evt.PostId}")
-            .SendAsync("ReceiveReply", evt, cancellationToken);
+        => _hubContext.Clients.Group($"post_{evt.PostId}").SendAsync("ReceiveReply", evt, cancellationToken);
 
     public Task PushPostFavoriteChangedAsync(PostFavoriteChangedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"post_{evt.PostId}")
-            .SendAsync("ReceivePostFavoriteChanged", evt, cancellationToken);
+        => _hubContext.Clients.Group($"post_{evt.PostId}").SendAsync("ReceivePostFavoriteChanged", evt, cancellationToken);
 
-    /// <summary>
-    /// Notify user B (ToUserId) that user A sent a connection request.
-    /// FE listens: connection.on("ConnectionRequested", handler)
-    /// </summary>
     public Task PushConnectionRequestedAsync(ConnectionRequestedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"user_{evt.ToUserId}")
-            .SendAsync("ConnectionRequested", evt, cancellationToken);
+        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ConnectionRequested", evt, cancellationToken);
 
-    /// <summary>
-    /// Notify user A (FromUserId) that user B accepted the connection.
-    /// FE listens: connection.on("ConnectionAccepted", handler)
-    /// </summary>
     public Task PushConnectionAcceptedAsync(ConnectionAcceptedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"user_{evt.FromUserId}")
-            .SendAsync("ConnectionAccepted", evt, cancellationToken);
+        => _hubContext.Clients.Group($"user_{evt.FromUserId}").SendAsync("ConnectionAccepted", evt, cancellationToken);
 
-    /// <summary>
-    /// Push thông báo tin nhắn mới với đầy đủ thông tin người gửi.
-    /// FE listens: connection.on("NewMessageNotification", data => { data.roomId, data.sender.name, data.sender.avatar, ... })
-    /// </summary>
-    public Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients
-            .Group($"user_{evt.ToUserId}")
-            .SendAsync("NewMessageNotification", new
-            {
-                messageId   = evt.MessageId,
-                roomId      = evt.RoomId,
-                content     = evt.Content,
-                sentAt      = evt.SentAt,
-                sender = evt.Author == null ? null : new
-                {
-                    id     = evt.Author.Id,
-                    name   = evt.Author.Name,
-                    avatar = evt.Author.Avatar,
-                    role   = evt.Author.Role
-                }
-            }, cancellationToken);
+    public Task PushSkillPointsAwardedAsync(SkillPointsAwardedEvent evt, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            userId = evt.UserId,
+            challengeId = evt.ChallengeId,
+            skillPoints = evt.SkillPoints,
+            awardedAt = evt.AwardedAt
+        };
+
+        return Task.WhenAll(
+            _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveSkillPointsAwarded", evt, cancellationToken),
+            _hubContext.Clients.All.SendAsync("LeaderboardUpdated", payload, cancellationToken));
+    }
 
     private static bool IsCommunity(NotificationCreatedEvent evt)
     {
@@ -115,4 +98,16 @@ public class SignalRPushService : IRealtimePushService
 
         return CommunityTypes.Contains(evt.Type);
     }
+
+    private static bool IsChatMessage(NotificationCreatedEvent evt)
+        => string.Equals(evt.Type, "CHAT_MESSAGE", StringComparison.OrdinalIgnoreCase);
+
+    // Push new chat message notification (full info) to user's groups using dedicated chat channel
+    public Task PushChatMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
+        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ReceiveChatNotification", evt, cancellationToken);
+
+    // Preserve existing 'new message' push channel and behavior for backward compatibility
+    public Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)
+        => _hubContext.Clients.Group($"user_{evt.ToUserId}").SendAsync("ReceiveNewMessageNotification", evt, cancellationToken);
 }
+

@@ -1,371 +1,455 @@
-You are a senior .NET architect. Update my existing microservices system to add AI-powered moderation and bidirectional matching using embeddings.
+SkillSnap AI Challenge System — Complete Implementation Plan
+Mục tiêu hệ thống
 
----
+Xây dựng một hệ thống:
 
-## Existing System
+tạo challenge đánh giá kỹ năng
+AI chấm bài
+AI đánh giá độ khó
+AI phân tích kỹ năng
+cộng điểm kỹ năng chuẩn hóa
+hiển thị AI-verified skills trên portfolio
 
-* Backend: .NET microservices
-* Services:
+Hệ thống hướng tới:
 
-  * Portfolio Service (user portfolios)
-  * Company Service (job posts)
-* Database: SQL Server
-* Messaging: RabbitMQ (optional)
-* No vector database
-* System already deployed on Azure (low-resource environment)
+AI Validated Talent Platform
 
----
+thay vì:
 
-## Goals
+Portfolio Showcase Platform
+I. Kiến trúc tổng thể
+Recruiter/Admin
+    ↓
+Create Challenge
+    ↓
+AI Analyze Challenge
+    ↓
+Normalize Skills
+    ↓
+Publish Challenge
+    ↓
+User Submit
+    ↓
+AI Grading Service
+    ↓
+Skill Point Engine
+    ↓
+Portfolio Update
+    ↓
+Realtime Notification
+II. Core Features
+1. Challenge Management
+Chức năng
+tạo challenge
+chỉnh sửa challenge
+đóng challenge
+xem challenge
+AI phân tích challenge
+2. AI Challenge Analysis
 
-### 1. AI Moderation
+AI sẽ:
 
-Automatically review portfolios before publishing.
+đánh giá độ khó
+detect skills
+detect evaluation criteria
+map về canonical skills
+3. Submission System
 
-### 2. Embedding-based Matching
+User:
 
-Implement semantic matching using embeddings.
+submit source code
+submit github repo
+submit text answer
+submit zip/file
+4. AI Grading
 
-### 3. Bidirectional Matching
+AI:
 
-* Candidate → Job
-* Company → Candidate
+so sánh expected solution
+chấm theo criteria
+trả feedback
+tính mastery score
+5. Skill Point Engine
 
----
+Hệ thống:
 
-## Core Principles
+convert AI result → skill point
+cộng điểm skill
+lưu history
+6. Portfolio Integration
 
-* DO NOT call AI during matching
-* Embeddings must be precomputed
-* Use cosine similarity
-* Avoid tight coupling between services
-* Keep system lightweight (suitable for Azure Student tier)
+Portfolio hiển thị:
 
----
-
-# =========================
-
-# PART 1 — DATABASE UPDATE
-
-# =========================
-
-Add column:
-
-```sql
-ALTER TABLE Portfolios ADD Embedding NVARCHAR(MAX);
-ALTER TABLE Jobs ADD Embedding NVARCHAR(MAX);
-```
-
-Store embedding as JSON array of floats.
-
----
-
-# =========================
-
-# PART 2 — EMBEDDING SERVICE
-
-# =========================
-
-Create reusable service:
-
-```csharp
-public interface IEmbeddingService
+verified skills
+AI score
+mastery level
+challenge history
+III. Microservice Architecture
+1. Challenge Service
+Responsibility
+challenge CRUD
+submission CRUD
+challenge status
+2. AI Assessment Service
+Responsibility
+AI challenge analysis
+AI grading
+skill extraction
+difficulty evaluation
+AI Provider
+Google AI Studio
+Gemini
+3. Skill Intelligence Service
+Responsibility
+skill normalization
+alias mapping
+skill graph
+skill point engine
+4. Portfolio Service
+Responsibility
+user skills
+verified skills
+ranking
+leaderboard
+5. Notification Service
+Responsibility
+grading notifications
+challenge notifications
+realtime updates
+6. Realtime Service
+Responsibility
+SignalR
+live leaderboard
+realtime notifications
+IV. Database Design
+1. Skill System
+Skill
+public class Skill
 {
-    Task<float[]> CreateEmbeddingAsync(string text);
+    public Guid Id { get; set; }
+
+    public string Name { get; set; }
+
+    public string Slug { get; set; }
+
+    public Guid CategoryId { get; set; }
+
+    public bool IsSystem { get; set; }
+
+    public bool IsApproved { get; set; }
 }
-```
-
-Implementation:
-
-* Use OpenAI API
-* Model: text-embedding-3-small
-
----
-
-# =========================
-
-# PART 3 — TEXT NORMALIZATION
-
-# =========================
-
-Before embedding, build structured text.
-
-## Portfolio:
-
-* Title
-* Description
-* Skills
-* Projects
-* Custom fields
-
-## Job:
-
-* Title
-* Description
-* Requirements
-* Skills
-
-Rules:
-
-* Missing fields → "N/A"
-* Consistent format
-* Remove noise
-
----
-
-# =========================
-
-# PART 4 — EMBEDDING TRIGGER
-
-# =========================
-
-Generate embedding ONLY when:
-
-* Portfolio created/updated
-* Job created/updated
-
-DO NOT generate during search.
-
----
-
-# =========================
-
-# PART 5 — MODERATION SYSTEM
-
-# =========================
-
-## Portfolio Status:
-
-```csharp
-enum PortfolioStatus
+SkillAlias
+public class SkillAlias
 {
-    Draft,
-    PendingReview,
-    Approved,
-    Rejected
+    public Guid Id { get; set; }
+
+    public Guid SkillId { get; set; }
+
+    public string Alias { get; set; }
 }
-```
-
----
-
-## Moderation Service:
-
-```csharp
-public interface IModerationService
+SkillCategory
+public class SkillCategory
 {
-    Task<ModerationResult> CheckAsync(string content);
+    public Guid Id { get; set; }
+
+    public string Name { get; set; }
 }
-```
-
----
-
-## Moderation Logic:
-
-* Rule-based first:
-
-  * Reject if:
-
-    * description too short
-    * no project
-    * spam keywords
-* Optional AI check (OpenAI or local)
-
----
-
-## Flow:
-
-1. User submits portfolio
-2. Status = PendingReview
-3. Run moderation
-4. Update:
-
-   * Approved → public
-   * Rejected → store reason
-
----
-
-# =========================
-
-# PART 6 — MATCHING ENGINE
-
-# =========================
-
-Shared similarity logic:
-
-```csharp
-public interface IMatchingEngine
+PendingSkill
+public class PendingSkill
 {
-    double ComputeSimilarity(float[] v1, float[] v2);
+    public Guid Id { get; set; }
+
+    public string ProposedName { get; set; }
+
+    public Guid ProposedById { get; set; }
+
+    public PendingSkillStatus Status { get; set; }
 }
-```
-
-Implement cosine similarity once.
-
----
-
-# =========================
-
-# PART 7 — MATCHING LOGIC
-
-# =========================
-
-## 1. Candidate → Job
-
-Portfolio Service:
-
-```csharp
-Task<List<JobMatchResult>> MatchJobsForPortfolio(Guid portfolioId);
-```
-
-Steps:
-
-1. Get portfolio embedding
-2. Call Company Service API to get jobs (with embeddings)
-3. Deserialize embeddings
-4. Compute similarity
-5. Sort descending
-6. Return top N
-
----
-
-## 2. Company → Candidate
-
-Company Service:
-
-```csharp
-Task<List<PortfolioMatchResult>> MatchPortfoliosForJob(Guid jobId);
-```
-
-Steps:
-
-1. Get job embedding
-2. Call Portfolio Service API
-3. Compute similarity
-4. Sort
-5. Return top N
-
----
-
-# =========================
-
-# PART 8 — API ENDPOINTS
-
-# =========================
-
-Portfolio Service:
-
-GET /api/portfolios/{id}/match-jobs
-
-Company Service:
-
-GET /api/jobs/{id}/match-portfolios
-
----
-
-# =========================
-
-# PART 9 — DTOs
-
-# =========================
-
-```csharp
-class JobMatchResult
+2. Evaluation Criteria System
+EvaluationCriteria
+public class EvaluationCriteria
 {
-    Guid JobId;
-    string Title;
-    double Score;
-}
+    public Guid Id { get; set; }
 
-class PortfolioMatchResult
+    public string Name { get; set; }
+
+    public string Description { get; set; }
+}
+CriteriaSkillMapping
+public class CriteriaSkillMapping
 {
-    Guid PortfolioId;
-    string Title;
-    double Score;
+    public Guid CriteriaId { get; set; }
+
+    public Guid SkillId { get; set; }
+
+    public decimal Weight { get; set; }
 }
-```
+3. Challenge System
+Challenge
+public class Challenge
+{
+    public Guid Id { get; set; }
 
----
+    public string Title { get; set; }
 
-# =========================
+    public string Description { get; set; }
 
-# PART 10 — PERFORMANCE
+    public string ExpectedSolution { get; set; }
 
-# =========================
+    public decimal DifficultyScore { get; set; }
 
-* Limit records (100–500)
-* Skip null embeddings
-* Pre-filter:
+    public string DifficultyLabel { get; set; }
 
-  * skills
-  * category
-* Optional caching
+    public DateTime Deadline { get; set; }
 
----
+    public ChallengeStatus Status { get; set; }
 
-# =========================
+    public Guid CreatedById { get; set; }
+}
+ChallengeCriteria
+public class ChallengeCriteria
+{
+    public Guid ChallengeId { get; set; }
 
-# PART 11 — ARCHITECTURE
+    public Guid CriteriaId { get; set; }
 
-# =========================
+    public decimal Weight { get; set; }
+}
+4. Submission System
+ChallengeSubmission
+public class ChallengeSubmission
+{
+    public Guid Id { get; set; }
 
-* Place AI logic in:
-  /Application/AI/
+    public Guid ChallengeId { get; set; }
 
-Modules:
+    public Guid UserId { get; set; }
 
-* EmbeddingService
-* ModerationService
-* MatchingEngine
+    public string SubmissionContent { get; set; }
 
----
+    public string GithubUrl { get; set; }
 
-# =========================
+    public decimal OverallScore { get; set; }
 
-# PART 12 — OPTIONAL (RabbitMQ)
+    public string AiFeedback { get; set; }
 
-# =========================
+    public SubmissionStatus Status { get; set; }
+}
+SubmissionCriteriaScore
+public class SubmissionCriteriaScore
+{
+    public Guid SubmissionId { get; set; }
 
-Events:
+    public Guid CriteriaId { get; set; }
 
-* PortfolioCreated
-* JobCreated
+    public decimal Score { get; set; }
 
-Consumers:
+    public string Feedback { get; set; }
+}
+5. Skill Point Engine
+SkillPointTransaction
+public class SkillPointTransaction
+{
+    public Guid Id { get; set; }
 
-* Generate embedding async
+    public Guid UserId { get; set; }
 
----
+    public Guid SkillId { get; set; }
 
-# =========================
+    public decimal Points { get; set; }
 
-# PART 13 — CONSTRAINTS
+    public string SourceType { get; set; }
 
-# =========================
+    public Guid SourceId { get; set; }
+}
+UserSkill
+public class UserSkill
+{
+    public Guid UserId { get; set; }
 
-* MUST use SQL Server
-* DO NOT use PostgreSQL or vector DB
-* DO NOT call OpenAI during matching
-* Keep solution simple and production-ready
+    public Guid SkillId { get; set; }
 
----
+    public decimal TotalPoints { get; set; }
 
-# =========================
+    public decimal MasteryScore { get; set; }
 
-# OUTPUT REQUIRED
+    public bool IsVerified { get; set; }
+}
+V. AI Flow
+1. AI Analyze Challenge
+Recruiter Input
+Title
+Description
+Expected Solution
+AI Output
+{
+  "difficultyScore": 8,
+  "difficultyLabel": "Hard",
+  "criteria": [
+    "OOP",
+    "SignalR",
+    "Concurrency"
+  ],
+  "skills": [
+    {
+      "name": "C#",
+      "weight": 4
+    },
+    {
+      "name": "SignalR",
+      "weight": 5
+    }
+  ]
+}
+2. AI Grading
+Input
+{
+  "challenge": "...",
+  "expectedSolution": "...",
+  "criteria": [],
+  "submission": "..."
+}
+Output
+{
+  "overallScore": 8.7,
+  "criteriaScores": [
+    {
+      "criteria": "SignalR",
+      "score": 9
+    }
+  ],
+  "feedback": "..."
+}
+VI. Skill Point Formula
+Formula
+FinalSkillPoint =
+BaseSkillWeight
+*
+CriteriaScoreMultiplier
+*
+DifficultyMultiplier
+Example
+Challenge
+SignalR Chat App
+AI Skill Weight
+Skill	Weight
+C#	3
+SignalR	5
+OOP	2
+User Score
+Criteria	Score
+SignalR	9
+OOP	7
+Final
+Skill	Result
+SignalR	4.5
+C#	2.7
+OOP	1.4
+VII. Event-Driven Architecture
+Events
+ChallengeCreatedEvent
+ChallengeAnalyzedEvent
+SubmissionCreatedEvent
+SubmissionGradedEvent
+SkillPointAwardedEvent
+Event Bus
 
-# =========================
+Sử dụng:
 
-Generate:
+RabbitMQ
+VIII. API Design
+Challenge APIs
+POST /api/challenges
+GET /api/challenges
+GET /api/challenges/{id}
+PUT /api/challenges/{id}
+DELETE /api/challenges/{id}
+Submission APIs
+POST /api/challenges/{id}/submit
+GET /api/submissions/me
+GET /api/submissions/{id}
+Skill APIs
+GET /api/skills
+GET /api/skills/categories
+GET /api/skills/trending
+Portfolio APIs
+GET /api/portfolio/skills
+GET /api/portfolio/verified-skills
+GET /api/portfolio/skill-history
+IX. Background Jobs
+1. Challenge Expiration Job
+Every 5 minutes
 
-* EmbeddingService (OpenAI integration)
-* ModerationService (rule-based + optional AI)
-* MatchingEngine (cosine similarity)
-* Matching services (both directions)
-* API controllers
-* DTOs
-* SQL migration scripts
-* Sample requests/responses
+Nếu:
 
----
+deadline < now
 
-Deliver clean, maintainable, production-ready .NET code.
+→ status:
+
+Expired
+2. Skill Recalculation Job
+
+Recalculate:
+
+mastery
+ranking
+leaderboard
+X. Frontend UI
+1. Challenge Page
+
+Hiển thị:
+
+title
+difficulty
+detected skills
+deadline
+reward preview
+2. Submission Page
+
+Cho phép:
+
+upload code
+github repo
+markdown answer
+3. Portfolio Skills
+ASP.NET Core
+█████████ 92%
+
+SignalR
+███████ 70%
+4. Skill History
++4.5 SignalR Challenge
++2 OOP Challenge
+XI. Future Expansion
+1. AI Career Path
+Bạn mạnh về backend.
+Nên thử:
+- Redis
+- Kafka
+- Distributed System
+2. Company Sponsored Challenge
+
+Ví dụ:
+
+FPT Backend Challenge
+Shopee Frontend Challenge
+3. Verified Skill Badge
+Verified ASP.NET Core Developer
+4. AI Skill Radar
+Backend ████████
+DevOps ████
+AI ██
+XII. Suggested Tech Stack
+Part	Tech
+Backend	ASP.NET Core
+
+DB	PostgreSQL
+
+Cache	Redis
+
+Queue	RabbitMQ
+AI	Google AI Studio
+
+Realtime	SignalR
+
+Storage	Cloudinary

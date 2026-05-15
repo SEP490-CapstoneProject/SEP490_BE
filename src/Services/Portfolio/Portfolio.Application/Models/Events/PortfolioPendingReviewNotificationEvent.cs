@@ -14,5 +14,6 @@ public sealed class PortfolioPendingReviewNotificationEvent
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = "PORTFOLIO_PENDING_REVIEW";
+    public string[]? TargetRoles { get; set; }
     public DateTime CreatedAt { get; set; } = VietnamTime.Now();
 }

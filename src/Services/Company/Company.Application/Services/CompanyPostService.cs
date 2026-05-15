@@ -202,6 +202,25 @@ public class CompanyPostService : ICompanyPostService
             };
 
             await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
+
+            var triageEvt = new PostPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = string.Empty,
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "Bài đăng tuyển dụng chờ duyệt thủ công",
+                Content = $"Bài đăng #{created.PostId} cần admin/moderator xem xét. Lý do: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Company",
+                TargetRoles = new[] { "ADMIN", "MODERATOR" },
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(triageEvt);
         }
         else
         {
@@ -705,5 +724,93 @@ public class CompanyPostService : ICompanyPostService
 
         return post;
     }
+
+    public async Task<CompanyPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request)
+    {
+        var post = await _repository.GetByIdAsync(postId)
+            ?? throw new KeyNotFoundException($"Post {postId} not found");
+
+        if (post.CompanyId == reporterUserId)
+        {
+            throw new InvalidOperationException("You cannot report your own post.");
+        }
+
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("Reason is required.");
+        }
+
+        if (reason.Length > 100)
+        {
+            throw new ArgumentException("Reason must not exceed 100 characters.");
+        }
+
+        var description = request.Description?.Trim();
+        if (description?.Length > 1000)
+        {
+            throw new ArgumentException("Description must not exceed 1000 characters.");
+        }
+
+        var existing = await _repository.GetPostReportByPostAndReporterAsync(postId, reporterUserId);
+        if (existing != null)
+        {
+            throw new InvalidOperationException("You have already reported this post.");
+        }
+
+        var report = new CompanyPostReport
+        {
+            CompanyPostId = postId,
+            ReporterUserId = reporterUserId,
+            Reason = reason,
+            Description = description,
+            Status = Company.Domain.Enums.PostReportStatus.Pending,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        var created = await _repository.CreatePostReportAsync(report);
+        created.CompanyPost = post;
+
+        var reportCreatedEvent = new PostReportCreatedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.report.created",
+            Version = 1,
+            ActorId = reporterUserId.ToString(),
+            ActorType = "USER",
+            ObjectId = postId.ToString(),
+            Title = "Báo cáo bài đăng mới",
+            Content = $"Bài đăng #{postId} có báo cáo mới cần được kiểm duyệt.",
+            Type = "COMPANY_REPORT_REVIEW",
+            TargetRoles = new[] { "ADMIN", "MODERATOR" },
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        try
+        {
+            await _notificationPublisher.PublishReportCreatedAsync(reportCreatedEvent);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish report notification for post {PostId}", postId);
+        }
+
+        return new CompanyPostReportDto
+        {
+            Id = created.Id,
+            CompanyPostId = created.CompanyPostId,
+            PostOwnerUserId = post.CompanyId,
+            ReporterUserId = created.ReporterUserId,
+            Reason = created.Reason,
+            Description = created.Description,
+            Status = created.Status.ToString(),
+            ReviewedByUserId = created.ReviewedByUserId,
+            ReviewedAt = created.ReviewedAt,
+            ReviewNote = created.ReviewNote,
+            CreatedAt = created.CreatedAt,
+            UpdatedAt = created.UpdatedAt
+        };
+    }
 }
+
 

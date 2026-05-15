@@ -12,9 +12,7 @@ public interface IRealtimePushService
     Task PushPostFavoriteChangedAsync(PostFavoriteChangedEvent evt, CancellationToken cancellationToken = default);
     Task PushConnectionRequestedAsync(ConnectionRequestedEvent evt, CancellationToken cancellationToken = default);
     Task PushConnectionAcceptedAsync(ConnectionAcceptedEvent evt, CancellationToken cancellationToken = default);
-    /// <summary>
-    /// Push thông báo tin nhắn mới kèm đầy đủ thông tin người gửi cho user.
-    /// FE listens: connection.on("NewMessageNotification", handler)
-    /// </summary>
+    Task PushSkillPointsAwardedAsync(SkillPointsAwardedEvent evt, CancellationToken cancellationToken = default);
     Task PushNewMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default);
+    Task PushChatMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default);
 }

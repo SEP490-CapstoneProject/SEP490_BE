@@ -78,6 +78,28 @@ namespace Company.Infrastructure.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("createAt");
 
+                    b.Property<string>("Embedding")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("embedding");
+
+                    b.Property<string>("EmbeddingStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending")
+                        .HasColumnName("embeddingStatus");
+
+                    b.Property<DateTime?>("EmbeddingUpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("embeddingUpdatedAt");
+
+                    b.Property<int>("EmbeddingVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("embeddingVersion");
+
                     b.Property<string>("EmploymentType")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)")
@@ -180,6 +202,73 @@ namespace Company.Infrastructure.Migrations
                     b.ToTable("COMPANY_POST_MEDIA", "companysvc");
                 });
 
+            modelBuilder.Entity("Company.Domain.Entities.CompanyPostReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyPostId")
+                        .HasColumnType("int")
+                        .HasColumnName("companyPostId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("createdAt");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("reason");
+
+                    b.Property<int>("ReporterUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("reporterUserId");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("reviewNote");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("reviewedAt");
+
+                    b.Property<int?>("ReviewedByUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("reviewedByUserId");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updatedAt");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyPostId")
+                        .HasDatabaseName("IX_PostReport_PostId");
+
+                    b.HasIndex("CompanyPostId", "ReporterUserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PostReport_Post_Reporter");
+
+                    b.ToTable("COMPANY_POST_REPORT", "companysvc");
+                });
+
             modelBuilder.Entity("Company.Domain.Entities.CompanyPostSave", b =>
                 {
                     b.Property<int>("Id")
@@ -216,6 +305,18 @@ namespace Company.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("FK_PostMedia_Post");
+
+                    b.Navigation("CompanyPost");
+                });
+
+            modelBuilder.Entity("Company.Domain.Entities.CompanyPostReport", b =>
+                {
+                    b.HasOne("Company.Domain.Entities.CompanyPost", "CompanyPost")
+                        .WithMany()
+                        .HasForeignKey("CompanyPostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_PostReport_Post");
 
                     b.Navigation("CompanyPost");
                 });

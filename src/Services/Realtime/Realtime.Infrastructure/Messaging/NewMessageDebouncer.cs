@@ -21,6 +21,7 @@ public sealed class NewMessageDebouncer : IDisposable
     {
         public int   ToUserId    { get; }
         public int   TotalCount  { get; set; }
+        public NewMessageNotificationEvent? LatestEvent { get; set; }
         public Timer? Timer      { get; set; }
 
         public PendingBatch(int toUserId) => ToUserId = toUserId;
@@ -50,6 +51,7 @@ public sealed class NewMessageDebouncer : IDisposable
         lock (batch)
         {
             batch.TotalCount++;
+            batch.LatestEvent = evt;
 
             if (batch.Timer == null)
             {
@@ -87,9 +89,20 @@ public sealed class NewMessageDebouncer : IDisposable
             batch.TotalCount, toUserId);
 
         // Send FCM push notification for offline delivery
-        if (_notificationClient != null)
+        if (_notificationClient != null && batch.LatestEvent != null)
         {
-            _ = _notificationClient.SendAggregatedMessageNotificationAsync(toUserId, batch.TotalCount)
+            var senderName = batch.LatestEvent.Author?.Name ?? batch.LatestEvent.FromUserId.ToString();
+            var senderAvatar = batch.LatestEvent.Author?.Avatar ?? string.Empty;
+            var preview = batch.LatestEvent.Content;
+
+            _ = _notificationClient.SendAggregatedMessageNotificationAsync(
+                    toUserId,
+                    batch.TotalCount,
+                    senderName,
+                    senderAvatar,
+                    preview,
+                    batch.LatestEvent.MessageId,
+                    batch.LatestEvent.RoomId)
                 .ContinueWith(task =>
                 {
                     if (task.IsFaulted)

@@ -58,7 +58,7 @@ public class NotificationDbContext : DbContext
             e.Property(x => x.RegisteredAt).HasDefaultValueSql("GETUTCDATE()");
 
             e.HasIndex(x => x.DeviceToken).IsUnique();
-            e.HasIndex(x => new { x.UserId, x.IsActive });
+            e.HasIndex(x => x.UserId).IsUnique();
         });
 
         builder.Entity<PushNotificationLogEntity>(e =>

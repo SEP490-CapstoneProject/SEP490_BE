@@ -25,5 +25,9 @@ public interface ICompanyPostRepository
     Task RemovePostMediaAsync(int postId);
     Task SoftDeletePostAsync(int postId);
     Task AddPostMediaAsync(CompanyPostMedia media);
+
+    // Report operations
+    Task<CompanyPostReport> CreatePostReportAsync(CompanyPostReport report);
+    Task<CompanyPostReport?> GetPostReportByPostAndReporterAsync(int postId, int reporterUserId);
 }
 

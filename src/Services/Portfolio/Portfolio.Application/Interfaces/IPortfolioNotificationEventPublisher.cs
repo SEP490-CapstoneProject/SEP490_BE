@@ -1,8 +1,11 @@
+using Portfolio.Application.Models.Events;
+
 namespace Portfolio.Application.Interfaces;
 
 public interface IPortfolioNotificationEventPublisher
 {
     Task PublishComplimentCreatedAsync(PortfolioNotificationEventPayload payload, CancellationToken cancellationToken = default);
+    Task PublishReportCreatedAsync(PortfolioReportCreatedNotificationEvent evt, CancellationToken cancellationToken = default);
 }
 
 public class PortfolioNotificationEventPayload

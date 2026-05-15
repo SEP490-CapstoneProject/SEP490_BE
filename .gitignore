@@ -145,7 +145,16 @@ docker-compose.override.yml
 appsettings.*.json
 !appsettings.json
 !appsettings.Development.json
+firebase-credentials-prod.json
+firebase-credentials-*.json
+*-credentials-prod.json
+google-services.json
 
 ## OS
 .DS_Store
 Thumbs.db
+
+# Ignore build artifacts for Challenge service
+src/Services/Challenge/**/bin/
+src/Services/Challenge/**/obj/
+
