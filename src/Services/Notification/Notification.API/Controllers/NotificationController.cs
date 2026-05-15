@@ -45,6 +45,16 @@ public class NotificationController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Get message-only notifications (chat messages).</summary>
+    [HttpGet("message")]
+    public async Task<IActionResult> GetMessageNotifications([FromQuery] int? cursor, [FromQuery] int limit = 20)
+    {
+        limit = Math.Clamp(limit, 1, 50);
+        var userId = GetUserId();
+        var result = await _service.GetMessageNotificationsAsync(userId, cursor, limit);
+        return Ok(result);
+    }
+
     /// <summary>Get system notifications excluding community-specific types.</summary>
     [HttpGet("system")]
     public async Task<IActionResult> GetSystemNotifications([FromQuery] int? cursor, [FromQuery] int limit = 20)

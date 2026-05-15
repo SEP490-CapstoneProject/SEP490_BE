@@ -35,12 +35,29 @@ public class NotificationService : INotificationService
 
     public async Task<CursorPagedResult<UserNotificationDto>> GetSystemNotificationsAsync(string userId, int? cursor, int limit)
     {
+        // Exclude both community types AND chat messages
+        // System notifications should only contain: auth, subscriptions, payments, etc.
+        var excludeTypes = NotificationTypeGroups.CommunityTypes
+            .Concat(new[] { "CHAT_MESSAGE" })
+            .ToArray();
+        
         var (items, nextCursor) = await _repo.GetNotificationsByTypeFilterAsync(
             userId,
             cursor,
             limit,
-            NotificationTypeGroups.CommunityTypes,
+            excludeTypes,
             includeTypes: false);
+        return await BuildPagedResultAsync(items, nextCursor);
+    }
+
+    public async Task<CursorPagedResult<UserNotificationDto>> GetMessageNotificationsAsync(string userId, int? cursor, int limit)
+    {
+        var (items, nextCursor) = await _repo.GetNotificationsByTypeFilterAsync(
+            userId,
+            cursor,
+            limit,
+            new[] { "CHAT_MESSAGE" },
+            includeTypes: true);
         return await BuildPagedResultAsync(items, nextCursor);
     }
 

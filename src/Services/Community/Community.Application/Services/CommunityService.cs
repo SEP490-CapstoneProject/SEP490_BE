@@ -425,6 +425,25 @@ public class CommunityService : ICommunityService
 
             await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
 
+            var triageEvt = new PostPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = string.Empty,
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.Id.ToString(),
+                Title = "Bài đăng cộng đồng chờ duyệt thủ công",
+                Content = $"Bài đăng #{created.Id} cần admin/moderator xem xét. Lý do: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Community",
+                TargetRoles = new[] { "ADMIN", "MODERATOR" },
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(triageEvt);
+
             // Also publish realtime event
             var realtimeEvt = new PostModerationEvent
             {

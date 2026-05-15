@@ -11,6 +11,9 @@ public class PortfolioDto
     public int EmployeeId { get; set; }
     public string PortfolioName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string ModerationStatus { get; set; } = "PendingReview";
+    public string? ModerationReason { get; set; }
+    public DateTime? ModeratedAt { get; set; }
     public bool IsMain { get; set; }
     public bool IsPublic { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -36,6 +39,16 @@ public class UpdatePortfolioRequest
     public string Status { get; set; } = "active";
     public bool? IsMain { get; set; }
     public bool? IsPublic { get; set; }
+}
+
+public class ApprovePortfolioRequest
+{
+    public string? Notes { get; set; }
+}
+
+public class RejectPortfolioRequest
+{
+    public string Reason { get; set; } = string.Empty;
 }
 
 // ─── Block Response ───────────────────────────────────────────────────────────

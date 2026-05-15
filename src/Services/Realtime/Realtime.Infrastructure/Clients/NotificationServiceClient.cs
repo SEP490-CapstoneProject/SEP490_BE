@@ -31,6 +31,7 @@ public class NotificationServiceClient : INotificationServiceClient
         int messageId,
         int roomId,
         string senderName,
+        string senderAvatar,
         string messagePreview)
     {
         try
@@ -41,6 +42,7 @@ public class NotificationServiceClient : INotificationServiceClient
                 messageId,
                 roomId,
                 senderName,
+                senderAvatar,
                 messagePreview = messagePreview?.Substring(0, Math.Min(100, messagePreview?.Length ?? 0)) ?? "New message"
             };
 
@@ -81,14 +83,26 @@ public class NotificationServiceClient : INotificationServiceClient
     /// <summary>
     /// Send FCM push notification for multiple new messages (aggregated).
     /// </summary>
-    public async Task<bool> SendAggregatedMessageNotificationAsync(int toUserId, int totalMessageCount)
+    public async Task<bool> SendAggregatedMessageNotificationAsync(
+        int toUserId,
+        int totalMessageCount,
+        string senderName,
+        string senderAvatar,
+        string messagePreview,
+        int messageId,
+        int roomId)
     {
         try
         {
             var payload = new
             {
                 toUserId,
-                totalMessageCount
+                totalMessageCount,
+                senderName,
+                senderAvatar,
+                messagePreview = messagePreview?.Substring(0, Math.Min(100, messagePreview?.Length ?? 0)) ?? "New message",
+                messageId,
+                roomId
             };
 
             var json = JsonSerializer.Serialize(payload);

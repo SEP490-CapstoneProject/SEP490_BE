@@ -348,5 +348,18 @@ public class CompanyPostRepository : ICompanyPostRepository
             .Take(pageSize)
             .ToListAsync();
     }
+
+    public async Task<CompanyPostReport> CreatePostReportAsync(CompanyPostReport report)
+    {
+        _context.CompanyPostReports.Add(report);
+        await _context.SaveChangesAsync();
+        return report;
+    }
+
+    public async Task<CompanyPostReport?> GetPostReportByPostAndReporterAsync(int postId, int reporterUserId)
+    {
+        return await _context.CompanyPostReports
+            .FirstOrDefaultAsync(r => r.CompanyPostId == postId && r.ReporterUserId == reporterUserId);
+    }
 }
 

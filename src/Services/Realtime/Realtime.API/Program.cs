@@ -4,11 +4,12 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Realtime.API.Hubs;
 using Realtime.API.Services;
-using Realtime.Application.Clients;
 using Realtime.Application.Interfaces;
+using Realtime.Application.Clients;
 using Realtime.Infrastructure.Azure;
 using Realtime.Infrastructure.Messaging;
 using Realtime.Infrastructure.Services;
+using Realtime.Infrastructure.Clients;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -118,18 +119,15 @@ else
 
 builder.Services.AddSingleton<IRealtimePushService, SignalRPushService>();
 
-// FCM notification client for calling Notification Service
-builder.Services.AddHttpClient<INotificationServiceClient, Realtime.Infrastructure.Clients.NotificationServiceClient>()
+// Chat message notification services (restored)
+builder.Services.AddSingleton<NewMessageDebouncer>();
+builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>()
     .ConfigureHttpClient(client =>
     {
-        var notificationServiceUrl = builder.Configuration["Services:NotificationService:Url"] 
-            ?? "http://notification-service:5001";
-        client.BaseAddress = new Uri(notificationServiceUrl);
-        client.Timeout = TimeSpan.FromSeconds(10);
+        var notificationUrl = builder.Configuration["Services:NotificationService:Url"]
+            ?? "http://notification-service:8080";
+        client.BaseAddress = new Uri(notificationUrl);
     });
-
-// Debouncer: gom tin nhắn trong 2 giây rồi push 1 lần — tránh spam notification
-builder.Services.AddSingleton<Realtime.Infrastructure.Messaging.NewMessageDebouncer>();
 
 builder.Services.AddHostedService<CommentEventConsumer>();
 builder.Services.AddHostedService<ReplyEventConsumer>();
@@ -137,6 +135,7 @@ builder.Services.AddHostedService<NotificationEventConsumer>();
 builder.Services.AddHostedService<PostFavoriteEventConsumer>();
 builder.Services.AddHostedService<ConnectionRequestedEventConsumer>();
 builder.Services.AddHostedService<ConnectionAcceptedEventConsumer>();
+builder.Services.AddHostedService<SkillPointsAwardedEventConsumer>();
 builder.Services.AddHostedService<NewMessageNotificationEventConsumer>();
 
 var app = builder.Build();
@@ -151,3 +150,5 @@ app.MapControllers();
 app.MapHub<RealtimeHub>("/hubs/realtime");
 
 app.Run();
+
+

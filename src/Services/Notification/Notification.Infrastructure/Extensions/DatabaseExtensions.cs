@@ -30,13 +30,7 @@ public static class DatabaseExtensions
             ";
             var existingColumns = (int?)await command.ExecuteScalarAsync() ?? 0;
             
-            if (existingColumns == 3)
-            {
-                Console.WriteLine("✅ All required columns exist - skipping migration");
-                return;
-            }
-
-            Console.WriteLine($"📊 Checking for pending migrations (found {existingColumns}/3 columns)...");
+            Console.WriteLine($"📊 Checking for pending migrations (found {existingColumns}/3 legacy columns)...");
             var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync()).ToList();
             
             if (pendingMigrations.Any())

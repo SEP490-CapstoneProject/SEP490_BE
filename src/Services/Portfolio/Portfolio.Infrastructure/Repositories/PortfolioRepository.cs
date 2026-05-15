@@ -4,6 +4,7 @@ using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
 using Portfolio.Infrastructure.Data;
 using RecruitmentPlatform.AI.Models;
+using RecruitmentPlatform.AI.Models;
 
 namespace Portfolio.Infrastructure.Repositories;
 
@@ -57,6 +58,22 @@ public class PortfolioRepository : IPortfolioRepository
             .ToList();
 
         return (items, total, rankingMap);
+    }
+
+    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total)> GetPendingForModerationAsync(int page, int pageSize)
+    {
+        var query = _context.Portfolios
+            .Where(p => p.ModerationStatus == "PendingReview")
+            .OrderByDescending(p => p.ModeratedAt ?? p.UpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.Id);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, total);
     }
 
     public async Task<bool> ExistsByEmployeeIdAsync(int employeeId)
@@ -377,5 +394,18 @@ WHERE [EmployeeId] = {employeeId}
         portfolio.EmbeddingUpdatedAt = embeddingUpdatedAt;
         portfolio.EmbeddingStatus = embeddingStatus;
         await _context.SaveChangesAsync();
+    }
+
+    public async Task<PortfolioReport> CreatePortfolioReportAsync(PortfolioReport report)
+    {
+        _context.PortfolioReports.Add(report);
+        await _context.SaveChangesAsync();
+        return report;
+    }
+
+    public async Task<PortfolioReport?> GetPortfolioReportByIdAndReporterAsync(int portfolioId, int reporterUserId)
+    {
+        return await _context.PortfolioReports
+            .FirstOrDefaultAsync(r => r.PortfolioId == portfolioId && r.ReporterUserId == reporterUserId);
     }
 }

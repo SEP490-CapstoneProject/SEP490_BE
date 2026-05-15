@@ -15,5 +15,6 @@ public sealed class PostPendingReviewNotificationEvent
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = "POST_PENDING_REVIEW";
     public string PostType { get; set; } = "Community";
+    public string[]? TargetRoles { get; set; }
     public DateTime CreatedAt { get; set; } = DateTimeHelper.GetVietnamTime();
 }

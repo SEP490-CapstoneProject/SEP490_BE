@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using Portfolio.Application.BlockHandlers;
 using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
+using Portfolio.Application.Models.Events;
 using Portfolio.Domain.Entities;
+using Portfolio.Domain.Enums;
 using Microsoft.Extensions.Caching.Memory;
 using RecruitmentPlatform.AI.Abstractions;
 using RecruitmentPlatform.AI.Models;
@@ -25,6 +27,7 @@ public class PortfolioService : IPortfolioService
     private readonly ICompanyMatchingClient _companyMatchingClient;
     private readonly IPortfolioEmbeddingEventPublisher _embeddingEventPublisher;
     private readonly IPortfolioModerationEventPublisher _moderationEventPublisher;
+    private readonly IPortfolioNotificationEventPublisher _notificationEventPublisher;
     private readonly IMatchingEngine _matchingEngine;
     private readonly ITextNormalizer _textNormalizer;
     private readonly IEmbeddingService _embeddingService;
@@ -43,6 +46,7 @@ public class PortfolioService : IPortfolioService
         ICompanyMatchingClient companyMatchingClient,
         IPortfolioEmbeddingEventPublisher embeddingEventPublisher,
         IPortfolioModerationEventPublisher moderationEventPublisher,
+        IPortfolioNotificationEventPublisher notificationEventPublisher,
         IMatchingEngine matchingEngine,
         ITextNormalizer textNormalizer,
         IEmbeddingService embeddingService,
@@ -60,6 +64,7 @@ public class PortfolioService : IPortfolioService
         _companyMatchingClient = companyMatchingClient;
         _embeddingEventPublisher = embeddingEventPublisher;
         _moderationEventPublisher = moderationEventPublisher;
+        _notificationEventPublisher = notificationEventPublisher;
         _matchingEngine = matchingEngine;
         _textNormalizer = textNormalizer;
         _embeddingService = embeddingService;
@@ -219,6 +224,138 @@ public class PortfolioService : IPortfolioService
             Page = page,
             PageSize = pageSize
         };
+    }
+
+    public async Task<PagedResult<PortfolioDto>> GetPendingPortfoliosAsync(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
+        if (pageSize > 100) pageSize = 100;
+
+        var (items, total) = await _repo.GetPendingForModerationAsync(page, pageSize);
+        var mappedItems = items.Select(MapToDto).ToList();
+        await PopulateReviewersAsync(mappedItems, mappedItems.Select(x => x.PortfolioId));
+
+        return new PagedResult<PortfolioDto>
+        {
+            Items = mappedItems,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<PortfolioDto> ApprovePortfolioAsync(int portfolioId, int reviewerId, string actorRole, string? notes)
+    {
+        var portfolio = await _repo.GetByIdAsync(portfolioId)
+            ?? throw new KeyNotFoundException($"Portfolio {portfolioId} not found");
+
+        portfolio.ModerationStatus = "Approved";
+        portfolio.ModerationReason = string.IsNullOrWhiteSpace(notes) ? "Approved by moderator" : notes.Trim();
+        portfolio.ModeratedAt = VietnamTime.Now();
+        portfolio.Status = "active";
+        portfolio.IsPublic = true;
+        portfolio.UpdatedAt = VietnamTime.Now();
+
+        var updated = await _repo.UpdateAsync(portfolio);
+        await TryPublishEmbeddingEventAsync(updated.Id);
+
+        var normalizedActorRole = NormalizeActorRole(actorRole);
+        var userId = updated.EmployeeId.ToString();
+
+        var approveEvt = new Models.Events.PortfolioApprovedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "portfolio.approved",
+            Version = 1,
+            UserId = userId,
+            ActorId = reviewerId.ToString(),
+            ActorType = normalizedActorRole,
+            ObjectId = updated.Id.ToString(),
+            Title = "Your portfolio has been approved",
+            Content = string.IsNullOrWhiteSpace(notes)
+                ? "Your portfolio has been approved and is now live."
+                : $"Your portfolio has been approved. Notes: {notes}",
+            Type = "PORTFOLIO_APPROVED",
+            CreatedAt = VietnamTime.Now()
+        };
+        await _moderationEventPublisher.PublishPortfolioApprovedNotificationAsync(approveEvt);
+
+        var realtimeEvt = new RecruitmentPlatform.Contracts.Realtime.PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "portfolio.moderation",
+            Version = 1,
+            PostId = updated.Id,
+            UserId = userId,
+            Status = "APPROVED",
+            Reason = portfolio.ModerationReason ?? "Approved by moderator",
+            PostType = "Portfolio",
+            Title = "Your portfolio has been approved",
+            Content = approveEvt.Content,
+            ActorId = reviewerId.ToString(),
+            ActorType = normalizedActorRole,
+            CreatedAt = VietnamTime.Now()
+        };
+        await _moderationEventPublisher.PublishPortfolioModerationEventAsync(realtimeEvt);
+
+        return MapToDto(updated);
+    }
+
+    public async Task<PortfolioDto> RejectPortfolioAsync(int portfolioId, int reviewerId, string actorRole, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Reason is required");
+
+        var portfolio = await _repo.GetByIdAsync(portfolioId)
+            ?? throw new KeyNotFoundException($"Portfolio {portfolioId} not found");
+
+        portfolio.ModerationStatus = "Rejected";
+        portfolio.ModerationReason = reason.Trim();
+        portfolio.ModeratedAt = VietnamTime.Now();
+        portfolio.Status = "inactive";
+        portfolio.IsPublic = false;
+        portfolio.UpdatedAt = VietnamTime.Now();
+
+        var updated = await _repo.UpdateAsync(portfolio);
+        var normalizedActorRole = NormalizeActorRole(actorRole);
+        var userId = updated.EmployeeId.ToString();
+
+        var rejectEvt = new Models.Events.PortfolioRejectedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "portfolio.rejected",
+            Version = 1,
+            UserId = userId,
+            ActorId = reviewerId.ToString(),
+            ActorType = normalizedActorRole,
+            ObjectId = updated.Id.ToString(),
+            Title = "Your portfolio was rejected",
+            Content = $"Your portfolio was rejected. Reason: {reason}",
+            Type = "PORTFOLIO_REJECTED",
+            CreatedAt = VietnamTime.Now()
+        };
+        await _moderationEventPublisher.PublishPortfolioRejectedNotificationAsync(rejectEvt);
+
+        var realtimeEvt = new RecruitmentPlatform.Contracts.Realtime.PostModerationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "portfolio.moderation",
+            Version = 1,
+            PostId = updated.Id,
+            UserId = userId,
+            Status = "REJECTED",
+            Reason = reason,
+            PostType = "Portfolio",
+            Title = "Your portfolio was rejected",
+            Content = rejectEvt.Content,
+            ActorId = reviewerId.ToString(),
+            ActorType = normalizedActorRole,
+            CreatedAt = VietnamTime.Now()
+        };
+        await _moderationEventPublisher.PublishPortfolioModerationEventAsync(realtimeEvt);
+
+        return MapToDto(updated);
     }
 
     public async Task<CreatePortfolioResponse> UpdateFullPortfolioAsync(
@@ -412,6 +549,24 @@ public class PortfolioService : IPortfolioService
 
             await _moderationEventPublisher.PublishPortfolioPendingReviewNotificationAsync(pendingEvt);
 
+            var triageEvt = new Models.Events.PortfolioPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "portfolio.pending.review",
+                Version = 1,
+                UserId = string.Empty,
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = portfolio.Id.ToString(),
+                Title = "Portfolio chờ duyệt thủ công",
+                Content = $"Portfolio #{portfolio.Id} cần admin/moderator xem xét. Lý do: {portfolio.ModerationReason}",
+                Type = "PORTFOLIO_PENDING_REVIEW",
+                TargetRoles = new[] { "ADMIN", "MODERATOR" },
+                CreatedAt = VietnamTime.Now()
+            };
+
+            await _moderationEventPublisher.PublishPortfolioPendingReviewNotificationAsync(triageEvt);
+
             // Publish realtime event
             var realtimeEvt = new RecruitmentPlatform.Contracts.Realtime.PostModerationEvent
             {
@@ -513,6 +668,9 @@ public class PortfolioService : IPortfolioService
         EmployeeId = p.EmployeeId,
         PortfolioName = p.Name,
         Status = p.Status,
+        ModerationStatus = p.ModerationStatus,
+        ModerationReason = p.ModerationReason,
+        ModeratedAt = p.ModeratedAt,
         IsMain = p.IsMain,
         IsPublic = p.IsPublic,
         CreatedAt = p.CreatedAt,
@@ -886,6 +1044,16 @@ public class PortfolioService : IPortfolioService
         return (safePage, safePageSize);
     }
 
+    private static string NormalizeActorRole(string actorRole)
+    {
+        if (string.Equals(actorRole, "MODERATOR", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MODERATOR";
+        }
+
+        return "ADMIN";
+    }
+
     private async Task TryPublishEmbeddingEventAsync(int portfolioId)
     {
         try
@@ -896,5 +1064,74 @@ public class PortfolioService : IPortfolioService
         {
             _logger.LogWarning(ex, "Failed to publish embedding event for portfolio {PortfolioId}", portfolioId);
         }
+    }
+
+    public async Task<PortfolioReportDto> ReportPortfolioAsync(int portfolioId, int reporterUserId, CreatePortfolioReportRequest request)
+    {
+        if (reporterUserId <= 0) throw new ArgumentException("Invalid reporter user ID");
+        
+        var portfolio = await _repo.GetByIdAsync(portfolioId);
+        if (portfolio == null) throw new KeyNotFoundException($"Portfolio {portfolioId} not found");
+
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 100)
+            throw new ArgumentException("Reason is required and must not exceed 100 characters");
+
+        if (!string.IsNullOrEmpty(request.Description) && request.Description.Length > 1000)
+            throw new ArgumentException("Description must not exceed 1000 characters");
+
+        var existingReport = await _repo.GetPortfolioReportByIdAndReporterAsync(portfolioId, reporterUserId);
+        if (existingReport != null)
+            throw new InvalidOperationException("You have already reported this portfolio");
+
+        var report = new PortfolioReport
+        {
+            PortfolioId = portfolioId,
+            ReporterUserId = reporterUserId,
+            Reason = request.Reason,
+            Description = request.Description,
+            Status = PortfolioReportStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var created = await _repo.CreatePortfolioReportAsync(report);
+
+        var @event = new PortfolioReportCreatedNotificationEvent
+        {
+            PortfolioId = portfolioId,
+            ReporterUserId = reporterUserId,
+            Reason = request.Reason,
+            Description = request.Description,
+            Title = $"Portfolio {portfolioId} has been reported",
+            Content = $"Portfolio has been reported for: {request.Reason}"
+        };
+
+        try
+        {
+            await _notificationEventPublisher.PublishReportCreatedAsync(@event);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish report created event for portfolio {PortfolioId}", portfolioId);
+        }
+
+        return MapToDto(created);
+    }
+
+    private PortfolioReportDto MapToDto(PortfolioReport report)
+    {
+        return new PortfolioReportDto
+        {
+            Id = report.Id,
+            PortfolioId = report.PortfolioId,
+            ReporterUserId = report.ReporterUserId,
+            Reason = report.Reason,
+            Description = report.Description,
+            Status = (int)report.Status,
+            ReviewedByUserId = report.ReviewedByUserId,
+            ReviewedAt = report.ReviewedAt,
+            ReviewNote = report.ReviewNote,
+            CreatedAt = report.CreatedAt,
+            UpdatedAt = report.UpdatedAt
+        };
     }
 }
