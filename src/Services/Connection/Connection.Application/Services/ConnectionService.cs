@@ -180,4 +180,18 @@ public class ConnectionService : IConnectionService
 
         return status;
     }
+
+    public async Task<Connection.Domain.Entities.Connection?> GetConnectionByRoomIdAsync(int roomId)
+    {
+        var conn = await _repo.GetConnectionByRoomIdAsync(roomId);
+        if (conn == null) return null;
+
+        if (conn.Status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString(),
+                System.StringComparison.OrdinalIgnoreCase))
+        {
+            conn.Status = "0";
+        }
+
+        return conn;
+    }
 }

@@ -19,7 +19,7 @@ public sealed class CompanyMatchingClient : ICompanyMatchingClient
 
     public async Task<IReadOnlyList<MatchingCandidate>> GetJobCandidatesAsync(CancellationToken cancellationToken = default)
     {
-        const string endpoint = "/api/company-posts/internal/matching-candidates?limit=150";
+        const string endpoint = "/api/company-posts/internal/matching-candidates?limit=500";
         try
         {
             var response = await _httpClient.GetAsync(endpoint, cancellationToken);
