@@ -4,6 +4,7 @@ using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
 using Portfolio.Infrastructure.Data;
 using RecruitmentPlatform.AI.Models;
+using RecruitmentPlatform.AI.Models;
 
 namespace Portfolio.Infrastructure.Repositories;
 

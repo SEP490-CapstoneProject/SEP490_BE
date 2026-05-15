@@ -19,7 +19,7 @@ public sealed class PortfolioMatchingClient : IPortfolioMatchingClient
 
     public async Task<IReadOnlyList<MatchingCandidate>> GetPortfolioCandidatesAsync(CancellationToken cancellationToken = default)
     {
-        const string endpoint = "/api/portfolio/internal/matching-candidates?limit=150";
+        const string endpoint = "/api/portfolio/internal/matching-candidates?limit=500";
         try
         {
             var response = await _httpClient.GetAsync(endpoint, cancellationToken);

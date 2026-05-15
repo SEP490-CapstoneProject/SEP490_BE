@@ -894,7 +894,7 @@ public class PortfolioService : IPortfolioService
         }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
         var candidates = await _companyMatchingClient.GetJobCandidatesAsync(cts.Token);
 
         var sourceSkills = ExtractPortfolioSkills(portfolio);

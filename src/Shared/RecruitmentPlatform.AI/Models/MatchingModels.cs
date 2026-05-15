@@ -45,8 +45,8 @@ public sealed class PagedMatchResult
 
 public sealed class MatchingOptions
 {
-    public int MinimumDescriptionLength { get; set; } = 20;
-    public int PreFilterTake { get; set; } = 150;
+    public int MinimumDescriptionLength { get; set; } = 50;
+    public int PreFilterTake { get; set; } = 500;
     public double MinimumFinalScore { get; set; } = 0.3;
     public int MaxPageSize { get; set; } = 50;
 }
