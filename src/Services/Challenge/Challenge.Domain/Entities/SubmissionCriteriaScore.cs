@@ -12,8 +12,5 @@ public class SubmissionCriteriaScore
 
     public string Feedback { get; set; }
 
-    // AI metadata for traceability
-    public string ModelName { get; set; }
-
-    public DateTime GradedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

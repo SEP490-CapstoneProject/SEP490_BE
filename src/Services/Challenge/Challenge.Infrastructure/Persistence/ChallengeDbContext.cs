@@ -31,6 +31,38 @@ public class ChallengeDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<Skill>().ToTable("SKILLS");
+        modelBuilder.Entity<SkillAlias>().ToTable("SKILL_ALIASES");
+        modelBuilder.Entity<SkillCategory>().ToTable("SKILL_CATEGORIES");
+        modelBuilder.Entity<PendingSkill>().ToTable("PENDING_SKILLS");
+        modelBuilder.Entity<EvaluationCriteria>().ToTable("EVALUATION_CRITERIA");
+        modelBuilder.Entity<CriteriaSkillMapping>().ToTable("CRITERIA_SKILL_MAPPINGS");
+        modelBuilder.Entity<ChallengeEntity>().ToTable("CHALLENGES");
+        modelBuilder.Entity<ChallengeVersion>().ToTable("CHALLENGE_VERSIONS");
+        modelBuilder.Entity<ChallengeCriteria>().ToTable("CHALLENGE_CRITERIA");
+        modelBuilder.Entity<ChallengeSubmission>().ToTable("CHALLENGE_SUBMISSIONS");
+        modelBuilder.Entity<SubmissionCriteriaScore>().ToTable("SUBMISSION_CRITERIA_SCORES");
+        modelBuilder.Entity<SkillPointTransaction>().ToTable("SKILL_POINT_TRANSACTIONS");
+        modelBuilder.Entity<UserSkill>().ToTable("USER_SKILLS");
+        modelBuilder.Entity<SkillRelationship>().ToTable("SKILL_RELATIONSHIPS");
+        modelBuilder.Entity<PromptSanitizationLog>().ToTable("PROMPT_SANITIZATION_LOGS");
+
+        modelBuilder.Entity<Skill>()
+            .Property(skill => skill.CategoryId)
+            .IsRequired(false);
+
+        modelBuilder.Entity<PendingSkill>()
+            .Property(skill => skill.Status)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<UserSkill>()
+            .Property(skill => skill.VerificationLevel)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<SkillRelationship>()
+            .Property(relationship => relationship.RelationType)
+            .HasConversion<string>();
+
         modelBuilder.Entity<ChallengeEntity>()
             .HasMany<ChallengeVersion>()
             .WithOne(version => version.Challenge)
@@ -41,6 +73,13 @@ public class ChallengeDbContext : DbContext
             .HasOne(challenge => challenge.CurrentVersion)
             .WithOne()
             .HasForeignKey<ChallengeEntity>(challenge => challenge.CurrentVersionId)
+            .HasConstraintName("FK_CHALLENGES_CHALLENGE_VERSIONS_CurrentVersionId")
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ChallengeEntity>()
+            .HasIndex(challenge => challenge.CurrentVersionId)
+            .IsUnique()
+            .HasFilter("[CurrentVersionId] IS NOT NULL");
     }
 }

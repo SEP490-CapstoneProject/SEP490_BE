@@ -22,6 +22,11 @@ public class SignalRPushService : IRealtimePushService
 
     public Task PushNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
     {
+        if (IsChatMessage(evt))
+        {
+            return Task.CompletedTask;
+        }
+
         var tasks = new List<Task>
         {
             _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveNotification", evt, cancellationToken)
@@ -35,10 +40,24 @@ public class SignalRPushService : IRealtimePushService
     }
 
     public Task PushCommunityNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveCommunityNotification", evt, cancellationToken);
+    {
+        if (IsChatMessage(evt))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveCommunityNotification", evt, cancellationToken);
+    }
 
     public Task PushSystemNotificationAsync(NotificationCreatedEvent evt, CancellationToken cancellationToken = default)
-        => _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveSystemNotification", evt, cancellationToken);
+    {
+        if (IsChatMessage(evt))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _hubContext.Clients.Group($"user_{evt.UserId}").SendAsync("ReceiveSystemNotification", evt, cancellationToken);
+    }
 
     public Task PushCommentAsync(CommentCreatedEvent evt, CancellationToken cancellationToken = default)
         => _hubContext.Clients.Group($"post_{evt.PostId}").SendAsync("ReceiveComment", evt, cancellationToken);
@@ -79,6 +98,9 @@ public class SignalRPushService : IRealtimePushService
 
         return CommunityTypes.Contains(evt.Type);
     }
+
+    private static bool IsChatMessage(NotificationCreatedEvent evt)
+        => string.Equals(evt.Type, "CHAT_MESSAGE", StringComparison.OrdinalIgnoreCase);
 
     // Push new chat message notification (full info) to user's groups using dedicated chat channel
     public Task PushChatMessageNotificationAsync(NewMessageNotificationEvent evt, CancellationToken cancellationToken = default)

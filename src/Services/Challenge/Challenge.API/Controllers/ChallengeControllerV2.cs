@@ -54,9 +54,9 @@ public class ChallengeControllerV2 : ControllerBase
     /// <summary>
     /// Get challenge by ID
     /// </summary>
-    [HttpGet("{id:int}")]
+    [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ChallengeDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetChallenge(int id)
+    public async Task<IActionResult> GetChallenge(Guid id)
     {
         var userId = GetCurrentUserId();
         var challenge = await _challengeService.GetChallengeByIdAsync(id, userId);
@@ -92,9 +92,9 @@ public class ChallengeControllerV2 : ControllerBase
     /// <summary>
     /// Update challenge
     /// </summary>
-    [HttpPut("{id:int}")]
+    [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(ChallengeDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> UpdateChallenge(int id, [FromBody] UpdateChallengeDto request)
+    public async Task<IActionResult> UpdateChallenge(Guid id, [FromBody] UpdateChallengeDto request)
     {
         var userId = GetCurrentUserId();
         if (!userId.HasValue)
@@ -123,8 +123,8 @@ public class ChallengeControllerV2 : ControllerBase
     /// <summary>
     /// Delete challenge
     /// </summary>
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> DeleteChallenge(int id)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteChallenge(Guid id)
     {
         var userId = GetCurrentUserId();
         if (!userId.HasValue)
@@ -148,9 +148,9 @@ public class ChallengeControllerV2 : ControllerBase
     /// <summary>
     /// Submit challenge for review
     /// </summary>
-    [HttpPost("{id:int}/submit-review")]
+    [HttpPost("{id:guid}/submit-review")]
     [ProducesResponseType(typeof(ChallengeDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SubmitForReview(int id)
+    public async Task<IActionResult> SubmitForReview(Guid id)
     {
         var userId = GetCurrentUserId();
         if (!userId.HasValue)
@@ -174,10 +174,10 @@ public class ChallengeControllerV2 : ControllerBase
     /// <summary>
     /// [Admin] Approve challenge
     /// </summary>
-    [HttpPost("{id:int}/approve")]
+    [HttpPost("{id:guid}/approve")]
     [Authorize(Roles = "Admin,ADMIN")]
     [ProducesResponseType(typeof(ChallengeDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ApproveChallenge(int id)
+    public async Task<IActionResult> ApproveChallenge(Guid id)
     {
         var adminId = GetCurrentUserId();
         if (!adminId.HasValue || !IsAdmin())
@@ -197,10 +197,10 @@ public class ChallengeControllerV2 : ControllerBase
     /// <summary>
     /// [Admin] Reject challenge
     /// </summary>
-    [HttpPost("{id:int}/reject")]
+    [HttpPost("{id:guid}/reject")]
     [Authorize(Roles = "Admin,ADMIN")]
     [ProducesResponseType(typeof(ChallengeDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> RejectChallenge(int id, [FromBody] RejectChallengeDto request)
+    public async Task<IActionResult> RejectChallenge(Guid id, [FromBody] RejectChallengeDto request)
     {
         var adminId = GetCurrentUserId();
         if (!adminId.HasValue || !IsAdmin())

@@ -7,11 +7,11 @@ public class PendingSkill
 
     public string ProposedName { get; set; }
 
-    public Guid ProposedById { get; set; }
+    public string? Description { get; set; }
 
     public SkillApprovalStatus Status { get; set; }
 
-    public string RejectionReason { get; set; }
+    public Guid? ReviewedById { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

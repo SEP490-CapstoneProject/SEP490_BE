@@ -36,6 +36,11 @@ public class RabbitMqCompanyNotificationEventPublisher : ICompanyNotificationEve
         await PublishAsync("post.pending.review", evt, cancellationToken);
     }
 
+    public async Task PublishReportCreatedAsync(PostReportCreatedNotificationEvent evt, CancellationToken cancellationToken = default)
+    {
+        await PublishAsync("post.reported", evt, cancellationToken);
+    }
+
     private async Task PublishAsync<T>(string routingKey, T evt, CancellationToken cancellationToken)
     {
         try

@@ -11,8 +11,7 @@ public class SkillRelationship
 
     public SkillRelationType RelationType { get; set; }
 
-    // Strength (0-1): relationship strength, not AI confidence
-    public decimal Strength { get; set; }
+    public decimal Weight { get; set; }
 
     public DateTime CreatedAt { get; set; }
 }

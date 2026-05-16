@@ -394,4 +394,17 @@ WHERE [EmployeeId] = {employeeId}
         portfolio.EmbeddingStatus = embeddingStatus;
         await _context.SaveChangesAsync();
     }
+
+    public async Task<PortfolioReport> CreatePortfolioReportAsync(PortfolioReport report)
+    {
+        _context.PortfolioReports.Add(report);
+        await _context.SaveChangesAsync();
+        return report;
+    }
+
+    public async Task<PortfolioReport?> GetPortfolioReportByIdAndReporterAsync(int portfolioId, int reporterUserId)
+    {
+        return await _context.PortfolioReports
+            .FirstOrDefaultAsync(r => r.PortfolioId == portfolioId && r.ReporterUserId == reporterUserId);
+    }
 }

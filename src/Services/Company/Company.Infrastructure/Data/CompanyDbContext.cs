@@ -1,4 +1,5 @@
 using Company.Domain.Entities;
+using Company.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Company.Infrastructure.Data;
@@ -10,6 +11,7 @@ public class CompanyDbContext : DbContext
     public DbSet<CompanyPost> CompanyPosts { get; set; }
     public DbSet<CompanyPostMedia> CompanyPostMedia { get; set; }
     public DbSet<CompanyPostSave> CompanyPostSaves { get; set; }
+    public DbSet<CompanyPostReport> CompanyPostReports { get; set; }
     public DbSet<CompanyEntity> Companies { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -103,6 +105,36 @@ public class CompanyDbContext : DbContext
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
             entity.Property(e => e.AvatarUrl).HasColumnName("avatarUrl").HasMaxLength(500);
             entity.Ignore(e => e.Posts);
+        });
+
+        modelBuilder.Entity<CompanyPostReport>(entity =>
+        {
+            entity.ToTable("COMPANY_POST_REPORT", "companysvc");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(e => e.CompanyPostId).HasColumnName("companyPostId").IsRequired();
+            entity.Property(e => e.ReporterUserId).HasColumnName("reporterUserId").IsRequired();
+            entity.Property(e => e.Reason).HasColumnName("reason").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.Status).HasColumnName("status").HasConversion<int>().HasDefaultValue(PostReportStatus.Pending);
+            entity.Property(e => e.ReviewedByUserId).HasColumnName("reviewedByUserId");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewedAt");
+            entity.Property(e => e.ReviewNote).HasColumnName("reviewNote").HasMaxLength(500);
+            entity.Property(e => e.CreatedAt).HasColumnName("createdAt");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updatedAt");
+
+            entity.HasOne(e => e.CompanyPost)
+                .WithMany()
+                .HasForeignKey(e => e.CompanyPostId)
+                .HasConstraintName("FK_PostReport_Post")
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.CompanyPostId)
+                .HasDatabaseName("IX_PostReport_PostId");
+
+            entity.HasIndex(e => new { e.CompanyPostId, e.ReporterUserId })
+                .IsUnique()
+                .HasDatabaseName("IX_PostReport_Post_Reporter");
         });
     }
 }
