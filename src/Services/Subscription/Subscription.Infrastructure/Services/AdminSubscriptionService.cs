@@ -33,6 +33,7 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             Price = request.Price,
             BillingCycle = (Domain.Enums.BillingCycle)request.BillingCycle,
             IsActive = true,
+            AllowedRole = string.IsNullOrWhiteSpace(request.AllowedRole) ? null : request.AllowedRole.Trim(),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -64,6 +65,14 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         
         if (request.BillingCycle.HasValue)
             plan.BillingCycle = (Domain.Enums.BillingCycle)request.BillingCycle.Value;
+
+        // ClearAllowedRole = true -> set về null (tất cả role)
+        // AllowedRole có giá trị -> cập nhật role
+        // Cả hai đều mặc định -> không thay đổi
+        if (request.ClearAllowedRole)
+            plan.AllowedRole = null;
+        else if (request.AllowedRole != null)
+            plan.AllowedRole = string.IsNullOrWhiteSpace(request.AllowedRole) ? null : request.AllowedRole.Trim();
 
         plan.UpdatedAt = DateTime.UtcNow;
 
@@ -125,7 +134,14 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             Description = plan.Description,
             Price = plan.Price,
             BillingCycle = plan.BillingCycle.ToString(),
-            Features = new List<Subscription.Application.DTOs.PlanFeatureDto>()
+            AllowedRole = plan.AllowedRole,
+            Features = plan.Features?.Where(f => f.IsActive).Select(f => new Subscription.Application.DTOs.PlanFeatureDto
+            {
+                FeatureKey = f.FeatureKey,
+                FeatureName = f.FeatureName,
+                Value = f.Value,
+                Type = f.Type.ToString()
+            }).ToList() ?? new List<Subscription.Application.DTOs.PlanFeatureDto>()
         };
     }
 

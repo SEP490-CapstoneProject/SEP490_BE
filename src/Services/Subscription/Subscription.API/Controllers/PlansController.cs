@@ -16,10 +16,22 @@ public class PlansController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>Lấy tất cả plans đang active.</summary>
     [HttpGet]
     public async Task<IActionResult> GetAllPlans()
     {
         var plans = await _subscriptionService.GetAllPlansAsync();
+        return Ok(plans);
+    }
+
+    /// <summary>
+    /// Lấy danh sách plans theo role.
+    /// Trả về plans có AllowedRole = role HOẶC AllowedRole = null (tất cả role đều dùng được).
+    /// </summary>
+    [HttpGet("by-role/{role}")]
+    public async Task<IActionResult> GetPlansByRole(string role)
+    {
+        var plans = await _subscriptionService.GetPlansByRoleAsync(role);
         return Ok(plans);
     }
 

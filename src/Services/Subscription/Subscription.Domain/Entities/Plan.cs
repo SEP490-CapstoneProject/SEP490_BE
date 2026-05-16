@@ -10,6 +10,11 @@ public class Plan
     public decimal Price { get; set; }
     public BillingCycle BillingCycle { get; set; }
     public bool IsActive { get; set; }
+    /// <summary>
+    /// Role được phép mua plan này. Null = tất cả role đều mua được.
+    /// Ví dụ: "JobSeeker", "Employer", null (all roles)
+    /// </summary>
+    public string? AllowedRole { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
