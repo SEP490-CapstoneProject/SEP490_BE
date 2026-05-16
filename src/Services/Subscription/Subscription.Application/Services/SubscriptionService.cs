@@ -38,6 +38,12 @@ public class SubscriptionService : ISubscriptionService
         return plans.Select(MapToPlanDto);
     }
 
+    public async Task<IEnumerable<PlanDto>> GetPlansByRoleAsync(string role)
+    {
+        var plans = await _planRepository.GetActiveByRoleAsync(role);
+        return plans.Select(MapToPlanDto);
+    }
+
     public async Task<PlanDto?> GetPlanByIdAsync(int planId)
     {
         var plan = await _planRepository.GetByIdWithFeaturesAsync(planId);
@@ -318,6 +324,7 @@ public class SubscriptionService : ISubscriptionService
             Description = plan.Description,
             Price = plan.Price,
             BillingCycle = plan.BillingCycle.ToString(),
+            AllowedRole = plan.AllowedRole,
             Features = plan.Features.Where(f => f.IsActive).Select(f => new PlanFeatureDto
             {
                 FeatureKey = f.FeatureKey,

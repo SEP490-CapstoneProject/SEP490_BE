@@ -162,6 +162,11 @@ public class ChatHub : Hub
                     Author = senderProfile,
                     CreatedAt = dto.CreatedAt
                 });
+
+                // Publish to Realtime Service (for users on /hubs/realtime)
+                _ = _eventPublisher.PublishNewMessageNotificationAsync(
+                    created.Id, roomId, senderId, targetUserId,
+                    dto.Content, dto.CreatedAt);
             }
         }
     }
