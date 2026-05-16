@@ -198,4 +198,13 @@ public class ConnectionRepository : IConnectionRepository
 
         return status;
     }
+
+    public async Task<Connection.Domain.Entities.Connection?> GetConnectionByRoomIdAsync(int roomId)
+    {
+        return await _context.Rooms
+            .Where(r => r.Id == roomId)
+            .Include(r => r.Connection)
+            .Select(r => r.Connection)
+            .FirstOrDefaultAsync();
+    }
 }
