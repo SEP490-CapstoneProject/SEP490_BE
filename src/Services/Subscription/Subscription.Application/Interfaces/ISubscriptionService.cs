@@ -5,6 +5,7 @@ namespace Subscription.Application.Interfaces;
 public interface ISubscriptionService
 {
     Task<IEnumerable<PlanDto>> GetAllPlansAsync();
+    Task<IEnumerable<PlanDto>> GetPlansByRoleAsync(string role);
     Task<PlanDto?> GetPlanByIdAsync(int planId);
     Task<SubscriptionDto> SubscribeAsync(int userId, SubscribeRequest request);
     Task<SubscriptionDto> UpgradeAsync(int userId, UpgradeRequest request);
