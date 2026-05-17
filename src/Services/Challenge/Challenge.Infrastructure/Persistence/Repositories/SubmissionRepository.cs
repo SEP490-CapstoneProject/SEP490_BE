@@ -17,6 +17,9 @@ public class SubmissionRepository : ISubmissionRepository
     public async Task<ChallengeSubmission> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => await _context.ChallengeSubmissions.Include(cs => cs.Version).FirstOrDefaultAsync(cs => cs.Id == id, cancellationToken);
 
+    public async Task<IEnumerable<ChallengeSubmission>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.ChallengeSubmissions.Include(cs => cs.Version).OrderByDescending(cs => cs.CreatedAt).ToListAsync(cancellationToken);
+
     public async Task<IEnumerable<ChallengeSubmission>> GetByChallengeAsync(Guid challengeId, CancellationToken cancellationToken = default)
         => await _context.ChallengeSubmissions.Include(cs => cs.Version).Where(cs => cs.ChallengeId == challengeId).OrderByDescending(cs => cs.CreatedAt).ToListAsync(cancellationToken);
 
@@ -24,7 +27,11 @@ public class SubmissionRepository : ISubmissionRepository
         => await _context.ChallengeSubmissions.Include(cs => cs.Version).Where(cs => cs.UserId == userId).OrderByDescending(cs => cs.CreatedAt).ToListAsync(cancellationToken);
 
     public Task<IEnumerable<ChallengeSubmission>> GetByUserAndChallengeAsync(Guid userId, Guid challengeId, CancellationToken cancellationToken = default)
-        => Task.FromResult<IEnumerable<ChallengeSubmission>>(new List<ChallengeSubmission>());
+        => Task.FromResult<IEnumerable<ChallengeSubmission>>(_context.ChallengeSubmissions
+            .Include(cs => cs.Version)
+            .Where(cs => cs.UserId == userId && cs.ChallengeId == challengeId)
+            .OrderByDescending(cs => cs.CreatedAt)
+            .ToList());
 
     public async Task<int> GetAttemptCountAsync(Guid userId, Guid challengeId, CancellationToken cancellationToken = default)
         => await _context.ChallengeSubmissions.CountAsync(cs => cs.UserId == userId && cs.ChallengeId == challengeId, cancellationToken);

@@ -22,6 +22,8 @@ public class ChallengeSubmission
     // Reference to immutable snapshot
     public Guid VersionSnapshotId { get; set; }
 
+    public Guid VersionId { get; set; }
+
     // Track attempts for anti-farming
     public int AttemptCount { get; set; }
 

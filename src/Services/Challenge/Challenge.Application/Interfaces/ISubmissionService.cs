@@ -8,13 +8,13 @@ namespace Challenge.Application.Interfaces;
 public interface ISubmissionService
 {
     // Submit and retrieve
-    Task<SubmissionDto> SubmitSolutionAsync(int challengeId, SubmitSolutionDto request, int userId);
-    Task<SubmissionDto?> GetSubmissionByIdAsync(int id, int? currentUserId);
-    Task<List<SubmissionDto>> GetUserSubmissionsAsync(int userId, int? challengeId = null);
-    Task<List<SubmissionDto>> GetChallengeSubmissionsAsync(int challengeId);
+    Task<SubmissionDto> SubmitSolutionAsync(Guid challengeId, SubmitSolutionDto request, int userId);
+    Task<SubmissionDto?> GetSubmissionByIdAsync(Guid id, int? currentUserId);
+    Task<List<SubmissionDto>> GetUserSubmissionsAsync(int userId, Guid? challengeId = null);
+    Task<List<SubmissionDto>> GetChallengeSubmissionsAsync(Guid challengeId);
 
     // Grading
-    Task<SubmissionDto> GradeSubmissionAsync(int id);
+    Task<SubmissionDto> GradeSubmissionAsync(Guid id);
     Task<(List<SubmissionDto> items, int totalCount)> GetSubmissionsPagedAsync(
         int skip,
         int take,
