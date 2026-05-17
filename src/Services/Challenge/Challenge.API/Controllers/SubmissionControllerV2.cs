@@ -33,7 +33,7 @@ public class SubmissionControllerV2 : ControllerBase
     [HttpPost]
     [ProducesResponseType(typeof(SubmissionDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> SubmitSolution(
-        [FromQuery] int challengeId,
+        [FromQuery] Guid challengeId,
         [FromBody] SubmitSolutionDto request)
     {
         var userId = GetCurrentUserId();
@@ -59,9 +59,9 @@ public class SubmissionControllerV2 : ControllerBase
     /// <summary>
     /// Get submission by ID
     /// </summary>
-    [HttpGet("{id:int}")]
+    [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(SubmissionDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSubmission(int id)
+    public async Task<IActionResult> GetSubmission(Guid id)
     {
         var userId = GetCurrentUserId();
         var submission = await _submissionService.GetSubmissionByIdAsync(id, userId);
@@ -77,7 +77,7 @@ public class SubmissionControllerV2 : ControllerBase
     /// </summary>
     [HttpGet("user/{userId:int}")]
     [ProducesResponseType(typeof(List<SubmissionDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetUserSubmissions(int userId, [FromQuery] int? challengeId = null)
+    public async Task<IActionResult> GetUserSubmissions(int userId, [FromQuery] Guid? challengeId = null)
     {
         var currentUserId = GetCurrentUserId();
         
@@ -92,10 +92,10 @@ public class SubmissionControllerV2 : ControllerBase
     /// <summary>
     /// Get all submissions for a challenge
     /// </summary>
-    [HttpGet("challenge/{challengeId:int}")]
+    [HttpGet("challenge/{challengeId:guid}")]
     [Authorize(Roles = "Admin,ADMIN")]
     [ProducesResponseType(typeof(List<SubmissionDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetChallengeSubmissions(int challengeId)
+    public async Task<IActionResult> GetChallengeSubmissions(Guid challengeId)
     {
         var submissions = await _submissionService.GetChallengeSubmissionsAsync(challengeId);
         return Ok(submissions);
@@ -104,10 +104,10 @@ public class SubmissionControllerV2 : ControllerBase
     /// <summary>
     /// Grade a submission (AI grading)
     /// </summary>
-    [HttpPost("{id:int}/grade")]
+    [HttpPost("{id:guid}/grade")]
     [Authorize(Roles = "Admin,ADMIN")]
     [ProducesResponseType(typeof(SubmissionDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GradeSubmission(int id)
+    public async Task<IActionResult> GradeSubmission(Guid id)
     {
         try
         {
