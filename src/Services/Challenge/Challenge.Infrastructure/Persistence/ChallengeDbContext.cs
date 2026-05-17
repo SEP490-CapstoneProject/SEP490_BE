@@ -77,6 +77,21 @@ public class ChallengeDbContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<ChallengeSubmission>()
+            .Property(submission => submission.VersionSnapshotId)
+            .HasColumnName("VersionSnapshotId");
+
+        modelBuilder.Entity<ChallengeSubmission>()
+            .Property(submission => submission.VersionId)
+            .HasColumnName("VersionId");
+
+        modelBuilder.Entity<ChallengeSubmission>()
+            .HasOne(submission => submission.Version)
+            .WithMany()
+            .HasForeignKey(submission => submission.VersionSnapshotId)
+            .HasConstraintName("FK_CHALLENGE_SUBMISSIONS_CHALLENGE_VERSIONS_VersionSnapshotId")
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<ChallengeEntity>()
             .HasIndex(challenge => challenge.CurrentVersionId)
             .IsUnique()

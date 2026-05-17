@@ -19,8 +19,8 @@ public class UpdateSkillDto
 
 public class UserSkillDto
 {
-    public int UserId { get; set; }
-    public int SkillId { get; set; }
+    public Guid UserId { get; set; }
+    public Guid SkillId { get; set; }
     public decimal TotalPoints { get; set; }
     public decimal MasteryScore { get; set; }
     public string VerificationLevel { get; set; } = "Beginner";
@@ -30,9 +30,9 @@ public class UserSkillDto
 
 public class SubmissionDto
 {
-    public int Id { get; set; }
-    public int ChallengeId { get; set; }
-    public int UserId { get; set; }
+    public Guid Id { get; set; }
+    public Guid ChallengeId { get; set; }
+    public Guid UserId { get; set; }
     public string Status { get; set; } = string.Empty;
     public decimal OverallScore { get; set; }
     public DateTime CreatedAt { get; set; }
