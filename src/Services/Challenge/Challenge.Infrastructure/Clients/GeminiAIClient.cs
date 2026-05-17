@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Challenge.Application.Clients;
 
 namespace Challenge.Infrastructure.Clients;
@@ -130,7 +131,8 @@ Respond in this exact JSON format:
                 temperature = 0.7,
                 topP = 0.9,
                 topK = 40,
-                maxOutputTokens = 2048
+                maxOutputTokens = 2048,
+                responseMimeType = "application/json"
             },
             safetySettings = new[]
             {
@@ -167,34 +169,42 @@ Respond in this exact JSON format:
     {
         using var doc = JsonDocument.Parse(response);
         var root = doc.RootElement;
+        var textContent = ExtractTextContent(root);
+        var parsedJson = ExtractJsonObject(textContent);
 
-        var textContent = root
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString();
-
-        var jsonMatch = System.Text.RegularExpressions.Regex.Match(textContent, @"\{[\s\S]*\}");
-        if (!jsonMatch.Success)
-            throw new InvalidOperationException("No JSON found in Gemini response");
-
-        using var doc2 = JsonDocument.Parse(jsonMatch.Value);
-        var data = doc2.RootElement;
-
-        var difficultyLevel = data.GetProperty("difficultyLevel").GetInt32();
-        var difficultyLabel = data.GetProperty("difficultyLabel").GetString();
-        
-        var skillWeights = new Dictionary<string, double>();
-        foreach (var prop in data.GetProperty("skills").EnumerateObject())
-        {
-            skillWeights[prop.Name] = prop.Value.GetDouble();
-        }
-
+        double difficultyLevel;
+        string? difficultyLabel;
+        var skillWeights = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         var criteria = new List<string>();
-        foreach (var item in data.GetProperty("criteria").EnumerateArray())
+
+        if (!string.IsNullOrWhiteSpace(parsedJson))
         {
-            criteria.Add(item.GetString() ?? "");
+            using var doc2 = JsonDocument.Parse(parsedJson);
+            var data = doc2.RootElement;
+
+            difficultyLevel = data.GetProperty("difficultyLevel").GetDouble();
+            difficultyLabel = data.GetProperty("difficultyLabel").GetString();
+
+            foreach (var prop in data.GetProperty("skills").EnumerateObject())
+            {
+                skillWeights[prop.Name] = prop.Value.GetDouble();
+            }
+
+            foreach (var item in data.GetProperty("criteria").EnumerateArray())
+            {
+                criteria.Add(item.GetString() ?? "");
+            }
+        }
+        else
+        {
+            difficultyLevel = ExtractNumber(textContent, @"(?im)(?:difficulty\s*level|difficulty)\s*[:=]\s*(\d+(?:\.\d+)?)", 5d);
+            difficultyLabel = ExtractTextValue(textContent, @"(?im)(?:difficulty\s*label|label)\s*[:=]\s*([A-Za-z]+)") ?? "Medium";
+            criteria = ExtractListItems(textContent, @"(?im)^(?:criteria|skills?)\s*[:=]\s*(.+)$");
+
+            foreach (var item in criteria)
+            {
+                skillWeights[item] = 1d;
+            }
         }
 
         return new ChallengeAnalysisResult
@@ -213,54 +223,181 @@ Respond in this exact JSON format:
     {
         using var doc = JsonDocument.Parse(response);
         var root = doc.RootElement;
+        var textContent = ExtractTextContent(root);
+        var parsedJson = ExtractJsonObject(textContent);
 
-        var textContent = root
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString();
-
-        var jsonMatch = System.Text.RegularExpressions.Regex.Match(textContent, @"\{[\s\S]*\}");
-        if (!jsonMatch.Success)
-            throw new InvalidOperationException("No JSON found in Gemini response");
-
-        using var doc2 = JsonDocument.Parse(jsonMatch.Value);
-        var data = doc2.RootElement;
-
-        var criteriaScores = new Dictionary<string, double>();
-        foreach (var prop in data.GetProperty("criteriaScores").EnumerateObject())
+        if (!string.IsNullOrWhiteSpace(parsedJson))
         {
-            criteriaScores[prop.Name] = prop.Value.GetDouble();
-        }
+            using var doc2 = JsonDocument.Parse(parsedJson);
+            var data = doc2.RootElement;
 
-        var strengths = new List<string>();
-        if (data.TryGetProperty("strengths", out var strengthsElement))
-        {
-            foreach (var item in strengthsElement.EnumerateArray())
+            var criteriaScores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var prop in data.GetProperty("criteriaScores").EnumerateObject())
             {
-                strengths.Add(item.GetString() ?? "");
+                criteriaScores[prop.Name] = prop.Value.GetDouble();
             }
+
+            var strengths = ExtractStringArray(data, "strengths");
+            var improvements = ExtractStringArray(data, "improvements");
+
+            return new SubmissionGradingResult
+            {
+                OverallScore = data.GetProperty("overallScore").GetDouble(),
+                CriteriaScores = criteriaScores,
+                Feedback = data.GetProperty("feedback").GetString() ?? "",
+                Strengths = strengths,
+                Improvements = improvements,
+                ModelName = _model,
+                GradedAt = DateTime.UtcNow
+            };
         }
 
-        var improvements = new List<string>();
-        if (data.TryGetProperty("improvements", out var improvementsElement))
-        {
-            foreach (var item in improvementsElement.EnumerateArray())
-            {
-                improvements.Add(item.GetString() ?? "");
-            }
-        }
+        var fallbackCriteriaScores = ExtractCriteriaScores(textContent);
+        var fallbackOverall = ExtractNumber(textContent, @"(?im)(?:overall\s*score|overall|score)\s*[:=]\s*(\d+(?:\.\d+)?)", 0d);
+        var fallbackFeedback = ExtractFeedback(textContent);
 
         return new SubmissionGradingResult
         {
-            OverallScore = data.GetProperty("overallScore").GetInt32(),
-            CriteriaScores = criteriaScores,
-            Feedback = data.GetProperty("feedback").GetString() ?? "",
-            Strengths = strengths,
-            Improvements = improvements,
+            OverallScore = fallbackOverall,
+            CriteriaScores = fallbackCriteriaScores,
+            Feedback = fallbackFeedback,
+            Strengths = new List<string>(),
+            Improvements = new List<string>(),
             ModelName = _model,
             GradedAt = DateTime.UtcNow
         };
+    }
+
+    private static string ExtractTextContent(JsonElement root)
+    {
+        if (root.TryGetProperty("candidates", out var candidates) && candidates.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var candidate in candidates.EnumerateArray())
+            {
+                if (!candidate.TryGetProperty("content", out var content))
+                {
+                    continue;
+                }
+
+                if (!content.TryGetProperty("parts", out var parts) || parts.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var part in parts.EnumerateArray())
+                {
+                    if (part.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String)
+                    {
+                        var value = text.GetString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            return value;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (root.TryGetProperty("text", out var rootText) && rootText.ValueKind == JsonValueKind.String)
+        {
+            return rootText.GetString() ?? string.Empty;
+        }
+
+        return string.Empty;
+    }
+
+    private static string? ExtractJsonObject(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var start = text.IndexOf('{');
+        var end = text.LastIndexOf('}');
+        if (start < 0 || end <= start)
+        {
+            return null;
+        }
+
+        return text.Substring(start, end - start + 1);
+    }
+
+    private static double ExtractNumber(string text, string pattern, double fallback)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(text ?? string.Empty, pattern);
+        if (match.Success && double.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        return fallback;
+    }
+
+    private static string? ExtractTextValue(string text, string pattern)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(text ?? string.Empty, pattern);
+        return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
+
+    private static List<string> ExtractListItems(string text, string pattern)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(text ?? string.Empty, pattern);
+        if (!match.Success)
+        {
+            return new List<string>();
+        }
+
+        return match.Groups[1].Value
+            .Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToList();
+    }
+
+    private static Dictionary<string, double> ExtractCriteriaScores(string text)
+    {
+        var scores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in System.Text.RegularExpressions.Regex.Matches(
+                     text ?? string.Empty,
+                     @"(?im)^\s*[-*]?\s*([A-Za-z0-9 &/().,+-]+?)\s*[:=]\s*(\d+(?:\.\d+)?)\s*$"))
+        {
+            if (double.TryParse(match.Groups[2].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var score))
+            {
+                scores[match.Groups[1].Value.Trim()] = score;
+            }
+        }
+
+        return scores;
+    }
+
+    private static string ExtractFeedback(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var match = System.Text.RegularExpressions.Regex.Match(text, @"(?is)(?:feedback|commentary)\s*[:=]\s*(.+)$");
+        return match.Success ? match.Groups[1].Value.Trim() : text.Trim();
+    }
+
+    private static List<string> ExtractStringArray(JsonElement data, string propertyName)
+    {
+        var values = new List<string>();
+        if (!data.TryGetProperty(propertyName, out var element) || element.ValueKind != JsonValueKind.Array)
+        {
+            return values;
+        }
+
+        foreach (var item in element.EnumerateArray())
+        {
+            var value = item.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                values.Add(value);
+            }
+        }
+
+        return values;
     }
 }

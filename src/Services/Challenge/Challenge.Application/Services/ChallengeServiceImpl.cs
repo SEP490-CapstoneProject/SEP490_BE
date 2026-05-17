@@ -72,13 +72,43 @@ public class ChallengeService : IChallengeService
     public async Task<ChallengeDto?> GetChallengeByIdAsync(Guid id, int? currentUserId)
     {
         var challenge = await _challengeRepository.GetByIdAsync(id);
-        return challenge is null ? null : MapToDto(challenge);
+        if (challenge is null)
+        {
+            return null;
+        }
+
+        // Validate ownership: only creator can view own challenges in Draft/Rejected status
+        // Published challenges are visible to all
+        if (challenge.Status != ChallengeStatus.Published && currentUserId.HasValue)
+        {
+            var actorGuid = ResolveActorGuid(currentUserId.Value);
+            if (challenge.CreatedById != actorGuid)
+            {
+                throw new UnauthorizedAccessException("You do not have permission to view this challenge.");
+            }
+        }
+
+        return MapToDto(challenge);
     }
 
-    public async Task<List<ChallengeDto>> ListChallengesAsync(int pageSize = 20, int? cursor = null)
+    public async Task<List<ChallengeDto>> ListChallengesAsync(int pageSize = 20, int? cursor = null, int? currentUserId = null)
     {
         var challenges = await _challengeRepository.GetAllAsync();
-        return challenges
+        
+        // Filter: only show published challenges to other users, or all challenges to the creator
+        var filtered = challenges.Where(c =>
+        {
+            if (currentUserId.HasValue)
+            {
+                var actorGuid = ResolveActorGuid(currentUserId.Value);
+                // Show: published challenges to everyone, or own challenges to creator
+                return c.Status == ChallengeStatus.Published || c.CreatedById == actorGuid;
+            }
+            // Unauthenticated users see only published challenges
+            return c.Status == ChallengeStatus.Published;
+        });
+
+        return filtered
             .OrderByDescending(c => c.CreatedAt)
             .Take(pageSize)
             .Select(MapToDto)

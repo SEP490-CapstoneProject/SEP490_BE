@@ -1,10 +1,15 @@
+using System.Text;
 using Challenge.Application.DTOs;
 using Challenge.Application.Interfaces;
+using Challenge.Domain.Entities;
+using Challenge.Domain.Repositories;
 
 namespace Challenge.Application.Services;
 
 public class SkillService : ISkillService
 {
+    private readonly ISkillRepository _skillRepository;
+    private readonly IUserSkillRepository _userSkillRepository;
     private readonly ILogger<SkillService> _logger;
 
     public SkillService(
@@ -12,31 +17,154 @@ public class SkillService : ISkillService
         IUserSkillRepository userSkillRepository,
         ILogger<SkillService> logger)
     {
+        _skillRepository = skillRepository;
+        _userSkillRepository = userSkillRepository;
         _logger = logger;
     }
 
-    public Task<SkillDto> CreateSkillAsync(CreateSkillDto request)
-        => Task.FromResult(new SkillDto { Id = Guid.NewGuid(), Name = request.Name, Slug = request.Name.ToLowerInvariant().Replace(" ", "-"), IsSystem = false, IsApproved = false });
+    public async Task<SkillDto> CreateSkillAsync(CreateSkillDto request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
 
-    public Task<SkillDto?> GetSkillByIdAsync(int id) => Task.FromResult<SkillDto?>(null);
+        var skill = new Skill
+        {
+            Id = Guid.NewGuid(),
+            Name = request.Name,
+            Slug = NormalizeSlug(request.Name),
+            Description = string.Empty,
+            CategoryId = request.CategoryId == Guid.Empty ? null : request.CategoryId,
+            IsApproved = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
 
-    public Task<List<SkillDto>> ListSkillsAsync() => Task.FromResult(new List<SkillDto>());
+        await _skillRepository.AddAsync(skill);
+        _logger.LogInformation("Created skill {SkillId} ({Slug})", skill.Id, skill.Slug);
+        return Map(skill);
+    }
 
-    public Task<SkillDto> UpdateSkillAsync(int id, UpdateSkillDto request)
-        => Task.FromResult(new SkillDto { Id = Guid.NewGuid(), Name = request.Name ?? string.Empty });
+    public async Task<SkillDto?> GetSkillByIdAsync(int id)
+    {
+        var skills = await _skillRepository.GetAllAsync();
+        var skill = skills.ElementAtOrDefault(id <= 0 ? -1 : id - 1);
+        return skill is null ? null : Map(skill);
+    }
 
-    public Task DeleteSkillAsync(int id) => Task.CompletedTask;
+    public async Task<List<SkillDto>> ListSkillsAsync()
+    {
+        var skills = await _skillRepository.GetAllAsync();
+        return skills.Select(Map).ToList();
+    }
 
-    public Task<List<SkillDto>> SearchSkillsAsync(string query) => Task.FromResult(new List<SkillDto>());
+    public async Task<SkillDto> UpdateSkillAsync(int id, UpdateSkillDto request)
+    {
+        var skills = await _skillRepository.GetAllAsync();
+        var skill = skills.ElementAtOrDefault(id <= 0 ? -1 : id - 1);
+        if (skill is null)
+        {
+            throw new KeyNotFoundException($"Skill {id} not found");
+        }
 
-    public Task<SkillDto?> GetSkillBySlugAsync(string slug) => Task.FromResult<SkillDto?>(null);
+        if (!string.IsNullOrWhiteSpace(request.Name))
+        {
+            skill.Name = request.Name;
+            skill.Slug = NormalizeSlug(request.Name);
+        }
 
-    public Task<UserSkillDto> GetUserSkillAsync(int userId, int skillId)
-        => Task.FromResult(new UserSkillDto { UserId = userId, SkillId = skillId });
+        if (request.Description is not null)
+        {
+            skill.Description = request.Description;
+        }
 
-    public Task<List<UserSkillDto>> GetUserSkillsAsync(int userId) => Task.FromResult(new List<UserSkillDto>());
+        skill.UpdatedAt = DateTime.UtcNow;
+        await _skillRepository.UpdateAsync(skill);
+        return Map(skill);
+    }
 
-    public Task<List<UserSkillDto>> GetVerifiedSkillsAsync(int userId) => Task.FromResult(new List<UserSkillDto>());
+    public async Task DeleteSkillAsync(int id)
+    {
+        var skills = await _skillRepository.GetAllAsync();
+        var skill = skills.ElementAtOrDefault(id <= 0 ? -1 : id - 1);
+        if (skill is null)
+        {
+            return;
+        }
 
-    public Task<List<UserSkillDto>> GetSkillsByVerificationLevelAsync(int userId, string level) => Task.FromResult(new List<UserSkillDto>());
+        await _skillRepository.DeleteAsync(skill.Id);
+    }
+
+    public async Task<List<SkillDto>> SearchSkillsAsync(string query)
+    {
+        var skills = await _skillRepository.FuzzySearchAsync(query);
+        return skills.Select(Map).ToList();
+    }
+
+    public async Task<SkillDto?> GetSkillBySlugAsync(string slug)
+    {
+        var skill = await _skillRepository.GetBySlugAsync(slug);
+        return skill is null ? null : Map(skill);
+    }
+
+    public async Task<UserSkillDto> GetUserSkillAsync(int userId, int skillId)
+    {
+        var actorGuid = ResolveActorGuid(userId);
+        return new UserSkillDto { UserId = actorGuid, SkillId = Guid.Empty };
+    }
+
+    public async Task<List<UserSkillDto>> GetUserSkillsAsync(int userId)
+    {
+        var actorGuid = ResolveActorGuid(userId);
+        var userSkills = await _userSkillRepository.GetByUserAsync(actorGuid);
+        return userSkills.Select(Map).ToList();
+    }
+
+    public async Task<List<UserSkillDto>> GetVerifiedSkillsAsync(int userId)
+    {
+        var actorGuid = ResolveActorGuid(userId);
+        var userSkills = await _userSkillRepository.GetVerifiedByUserAsync(actorGuid);
+        return userSkills.Select(Map).ToList();
+    }
+
+    public async Task<List<UserSkillDto>> GetSkillsByVerificationLevelAsync(int userId, string level)
+    {
+        var actorGuid = ResolveActorGuid(userId);
+        var userSkills = await _userSkillRepository.GetByUserAsync(actorGuid);
+        return userSkills
+            .Where(s => string.Equals(s.VerificationLevel.ToString(), level, StringComparison.OrdinalIgnoreCase))
+            .Select(Map)
+            .ToList();
+    }
+
+    private static SkillDto Map(Skill skill) => new()
+    {
+        Id = skill.Id,
+        Name = skill.Name,
+        Slug = skill.Slug,
+        IsSystem = false,
+        IsApproved = skill.IsApproved
+    };
+
+    private static UserSkillDto Map(UserSkill userSkill) => new()
+    {
+        UserId = userSkill.UserId,
+        SkillId = userSkill.SkillId,
+        TotalPoints = userSkill.TotalPoints,
+        MasteryScore = userSkill.MasteryScore,
+        VerificationLevel = userSkill.VerificationLevel.ToString(),
+        ChallengeCount = userSkill.VerifiedChallengeCount,
+        LastVerifiedAt = userSkill.LastVerifiedAt
+    };
+
+    private static string NormalizeSlug(string value)
+        => string.Join(
+            "-",
+            value.Trim().ToLowerInvariant().Split(new[] { ' ', '\t', '\r', '\n', '/', '\\', '+', '.', ',', ':', ';', '(', ')' }, StringSplitOptions.RemoveEmptyEntries));
+
+    private static Guid ResolveActorGuid(int userId)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(userId.ToString()));
+        Span<byte> guidBytes = stackalloc byte[16];
+        bytes.AsSpan(0, 16).CopyTo(guidBytes);
+        return new Guid(guidBytes);
+    }
 }
