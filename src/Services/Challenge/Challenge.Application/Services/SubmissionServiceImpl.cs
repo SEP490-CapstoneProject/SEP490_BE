@@ -79,7 +79,12 @@ public class SubmissionService : ISubmissionService
         };
 
         await _submissionRepository.AddAsync(submission);
-        await GradeAndPersistAsync(submission, version);
+
+        var grading = await GradeAndPersistAsync(submission, version);
+
+        // Calculate and award skill points using caller's userId
+        var skillPoints = await _skillPointService.CalculateSkillPointsAsync(submission, version, grading.criteriaScores);
+        await _skillPointService.AwardPointsAsync(userId, skillPoints, (int)challengeId.GetHashCode(), "Challenge completion");
 
         _logger.LogInformation("Submission {SubmissionId} created for challenge {ChallengeId}", submission.Id, challengeId);
         return Map(submission);
@@ -155,7 +160,7 @@ public class SubmissionService : ISubmissionService
         return (items, totalCount);
     }
 
-    private async Task GradeAndPersistAsync(ChallengeSubmission submission, ChallengeVersion version)
+    private async Task<(double overallScore, Dictionary<int, double> criteriaScores, string feedback)> GradeAndPersistAsync(ChallengeSubmission submission, ChallengeVersion version)
     {
         var grading = await _gradingService.GradeSubmissionAsync(submission, version);
 
@@ -166,6 +171,8 @@ public class SubmissionService : ISubmissionService
         submission.UpdatedAt = DateTime.UtcNow;
 
         await _submissionRepository.UpdateAsync(submission);
+
+        return grading;
     }
 
     private static SubmissionDto Map(ChallengeSubmission submission)
