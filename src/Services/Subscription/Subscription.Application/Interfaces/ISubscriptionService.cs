@@ -11,7 +11,7 @@ public interface ISubscriptionService
     Task<SubscriptionDto> UpgradeAsync(int userId, UpgradeRequest request);
     Task CancelSubscriptionAsync(int userId, CancelRequest request);
     Task<SubscriptionDto?> GetActiveSubscriptionAsync(int userId);
-    Task<EntitlementsDto?> GetEntitlementsAsync(int userId);
+    Task<EntitlementsDto?> GetEntitlementsAsync(int userId, string? role = null);
     Task ActivateSubscriptionAsync(int subscriptionId, string eventId);
     Task ExpireSubscriptionAsync(int subscriptionId);
 }

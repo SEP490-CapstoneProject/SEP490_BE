@@ -36,7 +36,8 @@ public class PaymentRepository : IPaymentRepository
             .FirstOrDefaultAsync(p => 
                 p.UserId == userId && 
                 p.PlanId == planId && 
-                p.Status == PaymentStatus.Pending);
+                p.Status == PaymentStatus.Pending &&
+                (p.ExpiresAt == null || p.ExpiresAt > DateTime.UtcNow));
     }
 
     public async Task<List<PaymentEntity>> GetByUserIdAsync(int userId, int page = 1, int pageSize = 10)
