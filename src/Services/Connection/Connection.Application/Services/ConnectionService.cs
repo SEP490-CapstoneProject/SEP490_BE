@@ -41,6 +41,7 @@ public class ConnectionService : IConnectionService
 
     public async Task<Connection.Domain.Entities.Room> CreateRoomAsync(Connection.Domain.Entities.Room room)
     {
+        room.Id = room.ConnectionId;
         return await _repo.CreateRoomAsync(room);
     }
 
@@ -123,6 +124,7 @@ public class ConnectionService : IConnectionService
             {
                 var room = new Connection.Domain.Entities.Room
                 {
+                    Id = conn.Id,
                     ConnectionId = conn.Id,
                     CreatedAt = VietnamTime.Now(),
                     LastMessAt = null
@@ -166,7 +168,7 @@ public class ConnectionService : IConnectionService
 
     /// <summary>
     /// Lấy status của connection theo connectionId.
-    /// STORED trả về "0", các status khác trả về tên string (PENDING/MATCHED/BLOCK).
+    /// STORED và DENY trả về "0", các status khác trả về tên string (PENDING/MATCHED/BLOCK).
     /// Trả về null nếu không tìm thấy connection.
     /// </summary>
     public async Task<string?> GetConnectionStatusByIdAsync(int connectionId)
@@ -175,6 +177,8 @@ public class ConnectionService : IConnectionService
         if (status == null) return null;
 
         if (status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString(),
+                System.StringComparison.OrdinalIgnoreCase) ||
+            status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.DENY.ToString(),
                 System.StringComparison.OrdinalIgnoreCase))
             return "0";
 
@@ -187,6 +191,8 @@ public class ConnectionService : IConnectionService
         if (conn == null) return null;
 
         if (conn.Status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString(),
+                System.StringComparison.OrdinalIgnoreCase) ||
+            conn.Status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.DENY.ToString(),
                 System.StringComparison.OrdinalIgnoreCase))
         {
             conn.Status = "0";

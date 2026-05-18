@@ -8,6 +8,7 @@ public interface IPlanRepository
     Task<Plan?> GetByIdWithFeaturesAsync(int id);
     Task<IEnumerable<Plan>> GetAllActiveAsync();
     Task<IEnumerable<Plan>> GetActiveByRoleAsync(string role);
+    Task<Plan?> GetFreePlanByRoleAsync(string role);
     Task<Plan> CreateAsync(Plan plan);
     Task UpdateAsync(Plan plan);
 }

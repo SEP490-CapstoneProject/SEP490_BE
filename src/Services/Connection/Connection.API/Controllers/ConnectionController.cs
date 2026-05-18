@@ -170,7 +170,7 @@ public class ConnectionController : ControllerBase
     // Room creation is handled automatically when a Connection is matched; manual room endpoints removed
 
     /// <summary>
-    /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED).
+    /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED và DENY).
     /// Trả về: { connectionId, status } — connectionId = 0 nếu không tìm thấy connection.
     /// </summary>
     [HttpGet("status/by-users")]
@@ -292,7 +292,7 @@ public class ConnectionController : ControllerBase
 
     /// <summary>
     /// Lấy trạng thái connection theo roomId.
-    /// STORED trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
+    /// STORED và DENY trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
     /// Trả về 404 nếu không tìm thấy connection.
     /// </summary>
     [HttpGet("rooms/{roomId}/status")]
