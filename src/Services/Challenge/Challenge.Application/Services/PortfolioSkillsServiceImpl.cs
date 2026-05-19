@@ -25,7 +25,7 @@ public class PortfolioSkillsService : IPortfolioSkillsService
         _logger = logger;
     }
 
-    public async Task<PortfolioSkillsDisplayDto> GetVerifiedSkillsForPortfolioAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<PortfolioSkillsDisplayDto> GetVerifiedSkillsForPortfolioAsync(int userId, CancellationToken cancellationToken = default)
     {
         var userSkills = (await _userSkillRepository.GetVerifiedByUserAsync(userId, cancellationToken)).ToList();
         var skillNames = await LoadSkillNamesAsync(cancellationToken);
@@ -60,7 +60,7 @@ public class PortfolioSkillsService : IPortfolioSkillsService
         };
     }
 
-    public async Task<List<UserSkillWithHistoryDto>> GetSkillHistoryAsync(Guid userId, Guid? skillId = null, CancellationToken cancellationToken = default)
+    public async Task<List<UserSkillWithHistoryDto>> GetSkillHistoryAsync(int userId, Guid? skillId = null, CancellationToken cancellationToken = default)
     {
         var userSkills = (await _userSkillRepository.GetByUserAsync(userId, cancellationToken)).ToList();
         if (skillId.HasValue)
@@ -136,7 +136,7 @@ public class PortfolioSkillsService : IPortfolioSkillsService
         };
     }
 
-    public async Task<UserSkillStatsDto> GetUserSkillStatisticsAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<UserSkillStatsDto> GetUserSkillStatisticsAsync(int userId, CancellationToken cancellationToken = default)
     {
         var userSkills = (await _userSkillRepository.GetByUserAsync(userId, cancellationToken)).ToList();
         var verifiedSkills = userSkills.Where(s => s.TotalPoints > 0).ToList();
@@ -168,6 +168,6 @@ public class PortfolioSkillsService : IPortfolioSkillsService
         return skills.ToDictionary(s => s.Id, s => s.Name);
     }
 
-    private static string BuildDisplayName(Guid userId)
-        => $"User-{userId.ToString("N")[..8]}";
+    private static string BuildDisplayName(int userId)
+        => $"User-{userId}";
 }

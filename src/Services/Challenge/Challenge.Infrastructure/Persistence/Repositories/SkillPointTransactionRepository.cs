@@ -21,7 +21,7 @@ public class SkillPointTransactionRepository : ISkillPointTransactionRepository
     }
 
     public async Task<IEnumerable<SkillPointTransaction>> GetByUserAsync(
-        Guid userId, CancellationToken cancellationToken = default)
+        int userId, CancellationToken cancellationToken = default)
     {
         return await _context.SkillPointTransactions
             .Where(t => t.UserId == userId)
@@ -30,7 +30,7 @@ public class SkillPointTransactionRepository : ISkillPointTransactionRepository
     }
 
     public async Task<IEnumerable<SkillPointTransaction>> GetByUserAndSkillAsync(
-        Guid userId, Guid skillId, CancellationToken cancellationToken = default)
+        int userId, Guid skillId, CancellationToken cancellationToken = default)
     {
         return await _context.SkillPointTransactions
             .Where(t => t.UserId == userId && t.SkillId == skillId)
@@ -39,7 +39,7 @@ public class SkillPointTransactionRepository : ISkillPointTransactionRepository
     }
 
     public async Task<decimal> GetTotalPointsByUserAndSkillAsync(
-        Guid userId, Guid skillId, CancellationToken cancellationToken = default)
+        int userId, Guid skillId, CancellationToken cancellationToken = default)
     {
         return await _context.SkillPointTransactions
             .Where(t => t.UserId == userId && t.SkillId == skillId)

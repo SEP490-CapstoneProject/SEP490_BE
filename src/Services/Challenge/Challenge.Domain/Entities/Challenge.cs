@@ -19,9 +19,9 @@ public class Challenge
 
     public Guid? CurrentVersionId { get; set; }
 
-    public Guid CreatedById { get; set; }
+    public int CreatedById { get; set; }
 
-    public Guid? ReviewedById { get; set; }
+    public int? ReviewedById { get; set; }
 
     public string RejectionReason { get; set; }
 

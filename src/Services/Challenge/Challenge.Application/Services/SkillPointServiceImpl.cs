@@ -29,10 +29,10 @@ public class SkillPointService : ISkillPointService
         _logger = logger;
     }
 
-    public async Task<Dictionary<int, double>> CalculateSkillPointsAsync(
+    public async Task<Dictionary<Guid, double>> CalculateSkillPointsAsync(
         ChallengeSubmission submission,
         ChallengeVersion version,
-        Dictionary<int, double> criteriaScores)
+        Dictionary<string, double> criteriaScores)
     {
         // Extract score from submission (0-100)
         var submissionScore = Math.Min(100, Math.Max(0, (double)submission.OverallScore));
@@ -52,13 +52,19 @@ public class SkillPointService : ISkillPointService
         var skillWeights = ParseSkillWeights(version.SkillWeightMapping);
         
         // Calculate points for each skill
-        var points = new Dictionary<int, double>();
-        int skillIndex = 1;
-        foreach (var skillWeight in skillWeights.Values)
+        var points = new Dictionary<Guid, double>();
+        foreach (var skillWeight in skillWeights)
         {
-            var basePoints = (submissionScore / 100.0) * skillWeight;
+            var skill = await _skillRepository.GetBySlugAsync(NormalizeSlug(skillWeight.Key));
+            if (skill is null)
+            {
+                _logger.LogWarning("Skill '{SkillName}' not found while calculating points for submission {SubmissionId}", skillWeight.Key, submission.Id);
+                continue;
+            }
+
+            var basePoints = (submissionScore / 100.0) * skillWeight.Value;
             var finalPoints = Math.Round(basePoints * difficultyMultiplier * attemptMultiplier, 2);
-            points[skillIndex++] = Math.Max(0, finalPoints);
+            points[skill.Id] = Math.Max(0, finalPoints);
         }
 
         _logger.LogInformation(
@@ -74,44 +80,39 @@ public class SkillPointService : ISkillPointService
 
     public async Task AwardPointsAsync(
         int userId,
-        Dictionary<int, double> skillPoints,
-        int challengeId,
+        Dictionary<Guid, double> skillPoints,
+        Guid sourceId,
         string reason)
     {
         ArgumentNullException.ThrowIfNull(skillPoints);
         
-        var userIdGuid = ResolveActorGuid(userId);
         var now = DateTime.UtcNow;
         
         try
         {
-            // Get all skills for this challenge version
-            var skills = await _skillRepository.GetAllAsync();
-            var skillList = skills.ToList();
-            
-            int skillIndex = 1;
-            foreach (var (_, points) in skillPoints.OrderBy(kvp => kvp.Key))
+            foreach (var (skillId, points) in skillPoints.OrderBy(kvp => kvp.Key))
             {
-                if (skillIndex > skillList.Count)
-                    break;
-                    
-                var skill = skillList[skillIndex - 1];
-                
                 if (points <= 0)
                 {
-                    skillIndex++;
+                    continue;
+                }
+
+                var skill = await _skillRepository.GetByIdAsync(skillId);
+                if (skill is null)
+                {
+                    _logger.LogWarning("Skipping awarding points because skill {SkillId} was not found", skillId);
                     continue;
                 }
 
                 // Get or create UserSkill
-                var existingUserSkill = await _userSkillRepository.GetByUserAndSkillAsync(userIdGuid, skill.Id);
+                var existingUserSkill = await _userSkillRepository.GetByUserAndSkillAsync(userId, skill.Id);
                 UserSkill userSkill;
                 if (existingUserSkill == null)
                 {
                     userSkill = new UserSkill
                     {
                         Id = Guid.NewGuid(),
-                        UserId = userIdGuid,
+                        UserId = userId,
                         SkillId = skill.Id,
                         TotalPoints = 0,
                         MasteryScore = 0,
@@ -153,11 +154,11 @@ public class SkillPointService : ISkillPointService
                 var transaction = new SkillPointTransaction
                 {
                     Id = Guid.NewGuid(),
-                    UserId = userIdGuid,
+                    UserId = userId,
                     SkillId = skill.Id,
                     Points = (decimal)points,
                     SourceType = "ChallengeSubmission",
-                    SourceId = Guid.Empty,
+                    SourceId = sourceId,
                     CreatedAt = now
                 };
 
@@ -171,7 +172,6 @@ public class SkillPointService : ISkillPointService
                     userSkill.TotalPoints,
                     userSkill.VerificationLevel);
 
-                skillIndex++;
             }
 
             _logger.LogInformation(
@@ -191,8 +191,7 @@ public class SkillPointService : ISkillPointService
 
     public async Task<List<SkillPointTransaction>> GetUserPointTransactionsAsync(int userId)
     {
-        var userIdGuid = ResolveActorGuid(userId);
-        var transactions = await _transactionRepository.GetByUserAsync(userIdGuid);
+        var transactions = await _transactionRepository.GetByUserAsync(userId);
         return transactions.ToList();
     }
 
@@ -244,12 +243,13 @@ public class SkillPointService : ISkillPointService
         };
     }
 
-    private static Guid ResolveActorGuid(int userId)
+    private static string NormalizeSlug(string value)
     {
-        var bytes = System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(userId.ToString()));
-        Span<byte> guidBytes = stackalloc byte[16];
-        bytes.AsSpan(0, 16).CopyTo(guidBytes);
-        return new Guid(guidBytes);
+        return string.Join(
+            "-",
+            value
+                .Trim()
+                .ToLowerInvariant()
+                .Split(new[] { ' ', '\t', '\r', '\n', '/', '\\', '+', '.', ',', ':', ';', '(', ')' }, StringSplitOptions.RemoveEmptyEntries));
     }
 }

@@ -26,4 +26,26 @@ public interface IChallengeService
         int take, 
         string? status = null,
         int? userId = null);
+
+    // Creator-specific APIs
+    Task<(List<CreatorChallengeDto> items, int totalCount)> GetCreatorChallengesAsync(
+        int userId,
+        int skip,
+        int take);
+
+    Task<List<ChallengeVersionDto>> GetChallengeVersionsAsync(Guid challengeId, int creatorUserId);
+
+    Task<ChallengeVersionDto> SetActiveVersionAsync(Guid challengeId, Guid versionId, int creatorUserId);
+
+    // Public APIs (participant view)
+    Task<(List<PublicChallengeDto> items, int totalCount)> GetPublishedChallengesAsync(
+        int skip,
+        int take,
+        string? searchTerm = null,
+        string? skillFilter = null);
+
+    Task<PublicChallengeDto?> GetPublicChallengeByIdAsync(Guid id);
+
+    // Creator self-approval
+    Task<CreatorChallengeDto> ApproveAndPublishAsync(Guid challengeId, int creatorUserId);
 }

@@ -7,15 +7,15 @@ namespace Challenge.Application.Interfaces;
 /// </summary>
 public interface ISkillPointService
 {
-    Task<Dictionary<int, double>> CalculateSkillPointsAsync(
+    Task<Dictionary<Guid, double>> CalculateSkillPointsAsync(
         ChallengeSubmission submission,
         ChallengeVersion version,
-        Dictionary<int, double> criteriaScores);
+        Dictionary<string, double> criteriaScores);
 
     Task AwardPointsAsync(
         int userId,
-        Dictionary<int, double> skillPoints,
-        int challengeId,
+        Dictionary<Guid, double> skillPoints,
+        Guid sourceId,
         string reason);
 
     Task<List<SkillPointTransaction>> GetUserPointTransactionsAsync(int userId);

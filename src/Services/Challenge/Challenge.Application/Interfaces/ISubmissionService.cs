@@ -20,4 +20,16 @@ public interface ISubmissionService
         int take,
         string? status = null,
         int? userId = null);
+
+    // Submission management APIs
+    Task<SubmissionListResponseDto> GetChallengeSubmissionsWithUserInfoAsync(
+        Guid challengeId,
+        int skip,
+        int take);
+
+    Task<ParticipantSubmissionListResponseDto> GetUserSubmissionsForChallengeAsync(
+        Guid challengeId,
+        int userId,
+        int skip,
+        int take);
 }
