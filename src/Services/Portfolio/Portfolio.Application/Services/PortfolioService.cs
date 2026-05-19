@@ -1117,6 +1117,22 @@ public class PortfolioService : IPortfolioService
         return MapToDto(created);
     }
 
+    public async Task<PagedResult<PortfolioReportDto>> GetPortfolioReportsAsync(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        var (items, total) = await _repo.GetPortfolioReportsAsync(page, pageSize);
+        return new PagedResult<PortfolioReportDto>
+        {
+            Items = items.Select(MapToDto).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
     private PortfolioReportDto MapToDto(PortfolioReport report)
     {
         return new PortfolioReportDto
@@ -1133,5 +1149,79 @@ public class PortfolioService : IPortfolioService
             CreatedAt = report.CreatedAt,
             UpdatedAt = report.UpdatedAt
         };
+    }
+
+    public async Task<PortfolioReportDto> ReviewPortfolioReportAsync(int reportId, int reviewerUserId, ReviewPortfolioReportRequest request)
+    {
+        var report = await _repo.GetPortfolioReportByIdAsync(reportId)
+            ?? throw new KeyNotFoundException($"Report {reportId} not found");
+
+        if (report.Status != PortfolioReportStatus.Pending)
+        {
+            throw new InvalidOperationException("This report has already been reviewed.");
+        }
+
+        var action = request.Action?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            throw new ArgumentException("Action is required.");
+        }
+
+        var now = VietnamTime.Now();
+        report.ReviewedByUserId = reviewerUserId;
+        report.ReviewedAt = now;
+        report.ReviewNote = request.ReviewNote?.Trim();
+        report.UpdatedAt = now;
+
+        if (action == "approve_violation")
+        {
+            report.Status = PortfolioReportStatus.Approved;
+
+            if (report.Portfolio != null && string.Equals(report.Portfolio.Status, "active", StringComparison.OrdinalIgnoreCase))
+            {
+                report.Portfolio.Status = "inactive";
+                report.Portfolio.IsPublic = false;
+                report.Portfolio.ModerationStatus = "RemovedByModeration";
+                report.Portfolio.ModeratedAt = now;
+                report.Portfolio.UpdatedAt = now;
+                await _repo.UpdateAsync(report.Portfolio);
+                try
+                {
+                    await _embeddingEventPublisher.PublishPortfolioChangedAsync(report.Portfolio.Id);
+                }
+                catch { /* swallow embedding publish errors */ }
+
+                var realtimeEvt = new RecruitmentPlatform.Contracts.Realtime.PostModerationEvent
+                {
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "portfolio.moderation",
+                    Version = 1,
+                    PostId = report.PortfolioId,
+                    UserId = report.Portfolio.EmployeeId.ToString(),
+                    Status = "REMOVED",
+                    Reason = report.ReviewNote ?? "Removed by moderation",
+                    PostType = "Portfolio",
+                    Title = "Your portfolio was removed due to violation",
+                    Content = "Your portfolio has been removed due to violation of policies.",
+                    ActorId = reviewerUserId.ToString(),
+                    ActorType = "ADMIN",
+                    CreatedAt = now
+                };
+
+                await _moderationEventPublisher.PublishPortfolioModerationEventAsync(realtimeEvt);
+            }
+        }
+        else if (action == "reject")
+        {
+            report.Status = PortfolioReportStatus.Rejected;
+        }
+        else
+        {
+            throw new ArgumentException("Action must be one of: approve_violation, reject.");
+        }
+
+        await _repo.UpdatePortfolioReportAsync(report);
+
+        return MapToDto(report);
     }
 }

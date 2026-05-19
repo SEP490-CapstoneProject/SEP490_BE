@@ -1,455 +1,283 @@
-SkillSnap AI Challenge System — Complete Implementation Plan
-Mục tiêu hệ thống
-
-Xây dựng một hệ thống:
-
-tạo challenge đánh giá kỹ năng
-AI chấm bài
-AI đánh giá độ khó
-AI phân tích kỹ năng
-cộng điểm kỹ năng chuẩn hóa
-hiển thị AI-verified skills trên portfolio
-
-Hệ thống hướng tới:
-
-AI Validated Talent Platform
-
-thay vì:
-
-Portfolio Showcase Platform
-I. Kiến trúc tổng thể
-Recruiter/Admin
-    ↓
-Create Challenge
-    ↓
-AI Analyze Challenge
-    ↓
-Normalize Skills
-    ↓
-Publish Challenge
-    ↓
-User Submit
-    ↓
-AI Grading Service
-    ↓
-Skill Point Engine
-    ↓
-Portfolio Update
-    ↓
-Realtime Notification
-II. Core Features
-1. Challenge Management
-Chức năng
-tạo challenge
-chỉnh sửa challenge
-đóng challenge
-xem challenge
-AI phân tích challenge
-2. AI Challenge Analysis
-
-AI sẽ:
-
-đánh giá độ khó
-detect skills
-detect evaluation criteria
-map về canonical skills
-3. Submission System
-
-User:
-
-submit source code
-submit github repo
-submit text answer
-submit zip/file
-4. AI Grading
-
-AI:
-
-so sánh expected solution
-chấm theo criteria
-trả feedback
-tính mastery score
-5. Skill Point Engine
-
-Hệ thống:
-
-convert AI result → skill point
-cộng điểm skill
-lưu history
-6. Portfolio Integration
-
-Portfolio hiển thị:
-
-verified skills
-AI score
-mastery level
-challenge history
-III. Microservice Architecture
-1. Challenge Service
-Responsibility
-challenge CRUD
-submission CRUD
-challenge status
-2. AI Assessment Service
-Responsibility
-AI challenge analysis
-AI grading
-skill extraction
-difficulty evaluation
-AI Provider
-Google AI Studio
-Gemini
-3. Skill Intelligence Service
-Responsibility
-skill normalization
-alias mapping
-skill graph
-skill point engine
-4. Portfolio Service
-Responsibility
-user skills
-verified skills
-ranking
-leaderboard
-5. Notification Service
-Responsibility
-grading notifications
-challenge notifications
-realtime updates
-6. Realtime Service
-Responsibility
-SignalR
-live leaderboard
-realtime notifications
-IV. Database Design
-1. Skill System
-Skill
-public class Skill
-{
-    public Guid Id { get; set; }
-
-    public string Name { get; set; }
-
-    public string Slug { get; set; }
-
-    public Guid CategoryId { get; set; }
-
-    public bool IsSystem { get; set; }
-
-    public bool IsApproved { get; set; }
-}
-SkillAlias
-public class SkillAlias
-{
-    public Guid Id { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public string Alias { get; set; }
-}
-SkillCategory
-public class SkillCategory
-{
-    public Guid Id { get; set; }
-
-    public string Name { get; set; }
-}
-PendingSkill
-public class PendingSkill
-{
-    public Guid Id { get; set; }
-
-    public string ProposedName { get; set; }
-
-    public Guid ProposedById { get; set; }
-
-    public PendingSkillStatus Status { get; set; }
-}
-2. Evaluation Criteria System
-EvaluationCriteria
-public class EvaluationCriteria
-{
-    public Guid Id { get; set; }
-
-    public string Name { get; set; }
-
-    public string Description { get; set; }
-}
-CriteriaSkillMapping
-public class CriteriaSkillMapping
-{
-    public Guid CriteriaId { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public decimal Weight { get; set; }
-}
-3. Challenge System
-Challenge
-public class Challenge
-{
-    public Guid Id { get; set; }
-
-    public string Title { get; set; }
-
-    public string Description { get; set; }
-
-    public string ExpectedSolution { get; set; }
-
-    public decimal DifficultyScore { get; set; }
-
-    public string DifficultyLabel { get; set; }
-
-    public DateTime Deadline { get; set; }
-
-    public ChallengeStatus Status { get; set; }
-
-    public Guid CreatedById { get; set; }
-}
-ChallengeCriteria
-public class ChallengeCriteria
-{
-    public Guid ChallengeId { get; set; }
-
-    public Guid CriteriaId { get; set; }
-
-    public decimal Weight { get; set; }
-}
-4. Submission System
-ChallengeSubmission
-public class ChallengeSubmission
-{
-    public Guid Id { get; set; }
-
-    public Guid ChallengeId { get; set; }
-
-    public Guid UserId { get; set; }
-
-    public string SubmissionContent { get; set; }
-
-    public string GithubUrl { get; set; }
-
-    public decimal OverallScore { get; set; }
-
-    public string AiFeedback { get; set; }
-
-    public SubmissionStatus Status { get; set; }
-}
-SubmissionCriteriaScore
-public class SubmissionCriteriaScore
-{
-    public Guid SubmissionId { get; set; }
-
-    public Guid CriteriaId { get; set; }
-
-    public decimal Score { get; set; }
-
-    public string Feedback { get; set; }
-}
-5. Skill Point Engine
-SkillPointTransaction
-public class SkillPointTransaction
-{
-    public Guid Id { get; set; }
-
-    public Guid UserId { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public decimal Points { get; set; }
-
-    public string SourceType { get; set; }
-
-    public Guid SourceId { get; set; }
-}
-UserSkill
-public class UserSkill
-{
-    public Guid UserId { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public decimal TotalPoints { get; set; }
-
-    public decimal MasteryScore { get; set; }
-
-    public bool IsVerified { get; set; }
-}
-V. AI Flow
-1. AI Analyze Challenge
-Recruiter Input
-Title
-Description
-Expected Solution
-AI Output
-{
-  "difficultyScore": 8,
-  "difficultyLabel": "Hard",
-  "criteria": [
-    "OOP",
-    "SignalR",
-    "Concurrency"
-  ],
-  "skills": [
-    {
-      "name": "C#",
-      "weight": 4
-    },
-    {
-      "name": "SignalR",
-      "weight": 5
-    }
-  ]
-}
-2. AI Grading
-Input
-{
-  "challenge": "...",
-  "expectedSolution": "...",
-  "criteria": [],
-  "submission": "..."
-}
-Output
-{
-  "overallScore": 8.7,
-  "criteriaScores": [
-    {
-      "criteria": "SignalR",
-      "score": 9
-    }
-  ],
-  "feedback": "..."
-}
-VI. Skill Point Formula
-Formula
-FinalSkillPoint =
-BaseSkillWeight
-*
-CriteriaScoreMultiplier
-*
-DifficultyMultiplier
-Example
-Challenge
-SignalR Chat App
-AI Skill Weight
-Skill	Weight
-C#	3
-SignalR	5
-OOP	2
-User Score
-Criteria	Score
-SignalR	9
-OOP	7
-Final
-Skill	Result
-SignalR	4.5
-C#	2.7
-OOP	1.4
-VII. Event-Driven Architecture
-Events
-ChallengeCreatedEvent
-ChallengeAnalyzedEvent
-SubmissionCreatedEvent
-SubmissionGradedEvent
-SkillPointAwardedEvent
-Event Bus
-
-Sử dụng:
-
-RabbitMQ
-VIII. API Design
-Challenge APIs
-POST /api/challenges
-GET /api/challenges
-GET /api/challenges/{id}
-PUT /api/challenges/{id}
-DELETE /api/challenges/{id}
-Submission APIs
-POST /api/challenges/{id}/submit
-GET /api/submissions/me
-GET /api/submissions/{id}
-Skill APIs
-GET /api/skills
-GET /api/skills/categories
-GET /api/skills/trending
-Portfolio APIs
-GET /api/portfolio/skills
-GET /api/portfolio/verified-skills
-GET /api/portfolio/skill-history
-IX. Background Jobs
-1. Challenge Expiration Job
-Every 5 minutes
-
-Nếu:
-
-deadline < now
-
-→ status:
-
-Expired
-2. Skill Recalculation Job
-
-Recalculate:
-
-mastery
-ranking
-leaderboard
-X. Frontend UI
-1. Challenge Page
-
-Hiển thị:
-
-title
-difficulty
-detected skills
-deadline
-reward preview
-2. Submission Page
-
-Cho phép:
-
-upload code
-github repo
-markdown answer
-3. Portfolio Skills
-ASP.NET Core
-█████████ 92%
-
-SignalR
-███████ 70%
-4. Skill History
-+4.5 SignalR Challenge
-+2 OOP Challenge
-XI. Future Expansion
-1. AI Career Path
-Bạn mạnh về backend.
-Nên thử:
-- Redis
-- Kafka
-- Distributed System
-2. Company Sponsored Challenge
-
-Ví dụ:
-
-FPT Backend Challenge
-Shopee Frontend Challenge
-3. Verified Skill Badge
-Verified ASP.NET Core Developer
-4. AI Skill Radar
-Backend ████████
-DevOps ████
-AI ██
-XII. Suggested Tech Stack
-Part	Tech
-Backend	ASP.NET Core
-
-DB	PostgreSQL
-
-Cache	Redis
-
-Queue	RabbitMQ
-AI	Google AI Studio
-
-Realtime	SignalR
-
-Storage	Cloudinary
+You are responsible for generating and normalizing skills for the SkillSnap AI Challenge System.
+
+IMPORTANT:
+This platform is NOT only for programming/software engineering.
+The challenge system supports MULTIPLE domains including:
+- Software Engineering
+- UI/UX Design
+- Data Science
+- Cybersecurity
+- Marketing
+- Business Analysis
+- Finance
+- Content Creation
+- Project Management
+- Mathematics
+- Education
+- Engineering
+- Communication
+- Research
+- And other professional/technical domains
+
+Your task is NOT to extract random phrases from challenge descriptions.
+
+Your task is to generate:
+CANONICAL, REUSABLE, MEASURABLE PROFESSIONAL COMPETENCIES.
+
+The generated skills will be:
+- used for user scoring
+- leaderboard ranking
+- portfolio verification
+- AI skill mastery
+- recruiter filtering/search
+- long-term analytics
+
+Therefore skill quality and normalization are CRITICAL.
+
+==================================================
+SKILL GENERATION RULES
+==================================================
+
+A valid skill MUST be:
+
+1. REUSABLE
+- Must make sense across many challenges
+- Must represent a long-term competency
+- Must not depend on one specific challenge
+
+GOOD:
+- Authentication
+- Financial Analysis
+- UX Research
+- SQL Server
+- Public Speaking
+
+BAD:
+- Factorial Understanding
+- Login Form Building
+- Instagram Campaign Challenge
+- Button Alignment Logic
+
+--------------------------------------------------
+
+2. MEASURABLE
+- AI must realistically evaluate proficiency in it
+- Should represent a competency level
+
+GOOD:
+- REST API Design
+- Data Visualization
+- Negotiation
+- Statistical Analysis
+
+BAD:
+- Good Coding
+- Smart Thinking
+- Creativity Boost
+- Nice UI
+
+--------------------------------------------------
+
+3. CANONICAL
+- Use standard industry/professional naming
+- Use official technology/framework/tool names when possible
+
+GOOD:
+- ASP.NET Core
+- Figma
+- TensorFlow
+- SEO Optimization
+- Financial Modeling
+
+BAD:
+- Asp Net
+- Design Tool Usage
+- AI Math Library
+
+--------------------------------------------------
+
+4. MID-LEVEL GRANULARITY
+Skills should NOT be:
+- too broad
+- too microscopic
+
+GOOD:
+- Authentication
+- User Research
+- Risk Assessment
+- Docker
+- Data Analysis
+
+TOO BROAD:
+- Programming
+- Business
+- Design
+- Marketing
+
+TOO SMALL:
+- If Statement
+- Button Padding
+- Variable Declaration
+- Excel SUM Formula
+
+--------------------------------------------------
+
+5. DOMAIN-AGNOSTIC
+The system supports many industries.
+
+Examples of GOOD skills by domain:
+
+SOFTWARE:
+- ASP.NET Core
+- SignalR
+- Docker
+- REST API Design
+- Microservices
+
+DESIGN:
+- UX Research
+- Wireframing
+- Visual Hierarchy
+- Prototyping
+- Typography
+
+DATA:
+- Machine Learning
+- Data Cleaning
+- Statistical Analysis
+- Data Visualization
+
+BUSINESS:
+- Financial Modeling
+- Market Research
+- Business Strategy
+- Project Planning
+
+MARKETING:
+- SEO Optimization
+- Content Marketing
+- Brand Strategy
+- Campaign Analysis
+
+CYBERSECURITY:
+- Cryptography
+- Threat Modeling
+- Network Security
+- Identity Management
+
+--------------------------------------------------
+
+6. NO CHALLENGE-SPECIFIC WORDING
+
+NEVER generate:
+- challenge names
+- challenge descriptions
+- scenario-specific labels
+- explanatory phrases
+
+BAD:
+- Mathematical Understanding (Factorial)
+- Chat App Logic
+- Authentication Screen Building
+- Login Security Challenge
+
+GOOD:
+- Recursion
+- Authentication
+- Secure Authentication
+- Web Security
+
+--------------------------------------------------
+
+7. NO SENTENCES OR EXPLANATIONS
+
+Skills must be SHORT competency names.
+
+BAD:
+- Persistence Mechanisms (File I/O, Database, ORM)
+- Language/Framework Specifics (e.g., C#/.NET)
+
+GOOD:
+- File I/O
+- Database Design
+- Entity Framework Core
+- C#
+
+--------------------------------------------------
+
+8. NO SOFT/ABSTRACT LABELS
+
+Avoid vague non-measurable concepts.
+
+BAD:
+- Good Communication
+- Smart Thinking
+- Creativity
+- Team Spirit
+
+GOOD:
+- Technical Writing
+- Public Speaking
+- Stakeholder Communication
+- Presentation Design
+
+==================================================
+SKILL NORMALIZATION RULES
+==================================================
+
+Before creating a new skill:
+
+STEP 1 — Exact Match
+Search existing canonical skills.
+
+STEP 2 — Alias Match
+Search SkillAlias table.
+
+STEP 3 — Fuzzy Match
+Use similarity matching.
+
+STEP 4 — Pending Review
+If uncertain:
+- create PendingSkill
+- DO NOT auto-create canonical skill immediately
+
+==================================================
+FORMAT RULES
+==================================================
+
+Skill names should:
+- use spaces properly
+- avoid PascalCase concatenation
+- avoid symbols unless official
+- avoid parentheses unless industry standard
+- use title casing
+
+GOOD:
+- Security Engineering
+- Data Analysis
+- ASP.NET Core
+- UX Research
+
+BAD:
+- SecurityEngineering
+- dataanalysis
+- DataAnalysisSkill
+- Analysis (Advanced)
+
+==================================================
+FINAL OBJECTIVE
+==================================================
+
+The SKILLS table is NOT a keyword dump.
+
+It is a PROFESSIONAL COMPETENCY TAXONOMY.
+
+Every generated skill must:
+- remain useful long-term
+- support fair scoring
+- support leaderboard aggregation
+- support recruiter filtering
+- support portfolio verification
+- remain reusable across many challenge types
+
+Generate ONLY stable, reusable, measurable competencies.
