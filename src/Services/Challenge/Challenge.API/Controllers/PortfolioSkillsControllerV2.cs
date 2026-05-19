@@ -20,17 +20,17 @@ public class PortfolioSkillsControllerV2 : ControllerBase
         _logger = logger;
     }
 
-    [HttpGet("{userId:guid}")]
+    [HttpGet("{userId:int}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetVerifiedSkills(Guid userId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetVerifiedSkills(int userId, CancellationToken cancellationToken)
     {
         var result = await _portfolioSkillsService.GetVerifiedSkillsForPortfolioAsync(userId, cancellationToken);
         return Ok(result);
     }
 
-    [HttpGet("{userId:guid}/history")]
+    [HttpGet("{userId:int}/history")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSkillHistory(Guid userId, [FromQuery] Guid? skillId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetSkillHistory(int userId, [FromQuery] Guid? skillId, CancellationToken cancellationToken)
     {
         var result = await _portfolioSkillsService.GetSkillHistoryAsync(userId, skillId, cancellationToken);
         return Ok(result);
@@ -45,9 +45,9 @@ public class PortfolioSkillsControllerV2 : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("{userId:guid}/statistics")]
+    [HttpGet("{userId:int}/statistics")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSkillStatistics(Guid userId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetSkillStatistics(int userId, CancellationToken cancellationToken)
     {
         var result = await _portfolioSkillsService.GetUserSkillStatisticsAsync(userId, cancellationToken);
         return Ok(result);

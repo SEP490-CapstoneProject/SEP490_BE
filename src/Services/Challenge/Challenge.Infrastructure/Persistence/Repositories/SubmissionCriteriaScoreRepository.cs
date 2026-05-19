@@ -18,4 +18,16 @@ public class SubmissionCriteriaScoreRepository : ISubmissionCriteriaScoreReposit
         _context.SubmissionCriteriaScores.Add(score);
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task AddRangeAsync(IEnumerable<SubmissionCriteriaScore> scores, CancellationToken cancellationToken = default)
+    {
+        var scoreList = scores?.ToList() ?? new List<SubmissionCriteriaScore>();
+        if (!scoreList.Any())
+        {
+            return;
+        }
+
+        _context.SubmissionCriteriaScores.AddRange(scoreList);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
 }

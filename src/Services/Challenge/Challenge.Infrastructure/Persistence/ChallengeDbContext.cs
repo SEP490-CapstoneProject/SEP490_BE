@@ -64,12 +64,6 @@ public class ChallengeDbContext : DbContext
             .HasConversion<string>();
 
         modelBuilder.Entity<ChallengeEntity>()
-            .HasMany<ChallengeVersion>()
-            .WithOne(version => version.Challenge)
-            .HasForeignKey(version => version.ChallengeId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<ChallengeEntity>()
             .HasOne(challenge => challenge.CurrentVersion)
             .WithOne()
             .HasForeignKey<ChallengeEntity>(challenge => challenge.CurrentVersionId)
@@ -96,5 +90,13 @@ public class ChallengeDbContext : DbContext
             .HasIndex(challenge => challenge.CurrentVersionId)
             .IsUnique()
             .HasFilter("[CurrentVersionId] IS NOT NULL");
+
+        // ChallengeCriteria relationship with EvaluationCriteria
+        modelBuilder.Entity<ChallengeCriteria>()
+            .HasOne(cc => cc.Criteria)
+            .WithMany()
+            .HasForeignKey(cc => cc.CriteriaId)
+            .HasConstraintName("FK_CHALLENGE_CRITERIA_EVALUATION_CRITERIA")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -107,28 +107,24 @@ public class SkillService : ISkillService
 
     public async Task<UserSkillDto> GetUserSkillAsync(int userId, int skillId)
     {
-        var actorGuid = ResolveActorGuid(userId);
-        return new UserSkillDto { UserId = actorGuid, SkillId = Guid.Empty };
+        return new UserSkillDto { UserId = userId, SkillId = Guid.Empty };
     }
 
     public async Task<List<UserSkillDto>> GetUserSkillsAsync(int userId)
     {
-        var actorGuid = ResolveActorGuid(userId);
-        var userSkills = await _userSkillRepository.GetByUserAsync(actorGuid);
+        var userSkills = await _userSkillRepository.GetByUserAsync(userId);
         return userSkills.Select(Map).ToList();
     }
 
     public async Task<List<UserSkillDto>> GetVerifiedSkillsAsync(int userId)
     {
-        var actorGuid = ResolveActorGuid(userId);
-        var userSkills = await _userSkillRepository.GetVerifiedByUserAsync(actorGuid);
+        var userSkills = await _userSkillRepository.GetVerifiedByUserAsync(userId);
         return userSkills.Select(Map).ToList();
     }
 
     public async Task<List<UserSkillDto>> GetSkillsByVerificationLevelAsync(int userId, string level)
     {
-        var actorGuid = ResolveActorGuid(userId);
-        var userSkills = await _userSkillRepository.GetByUserAsync(actorGuid);
+        var userSkills = await _userSkillRepository.GetByUserAsync(userId);
         return userSkills
             .Where(s => string.Equals(s.VerificationLevel.ToString(), level, StringComparison.OrdinalIgnoreCase))
             .Select(Map)
@@ -159,12 +155,4 @@ public class SkillService : ISkillService
         => string.Join(
             "-",
             value.Trim().ToLowerInvariant().Split(new[] { ' ', '\t', '\r', '\n', '/', '\\', '+', '.', ',', ':', ';', '(', ')' }, StringSplitOptions.RemoveEmptyEntries));
-
-    private static Guid ResolveActorGuid(int userId)
-    {
-        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(userId.ToString()));
-        Span<byte> guidBytes = stackalloc byte[16];
-        bytes.AsSpan(0, 16).CopyTo(guidBytes);
-        return new Guid(guidBytes);
-    }
 }

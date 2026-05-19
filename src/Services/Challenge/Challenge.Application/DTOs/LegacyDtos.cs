@@ -7,6 +7,8 @@ public class ChallengeDto
     public string Description { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public int CreatedById { get; set; }
+    public int? ReviewedById { get; set; }
     public DateTime Deadline { get; set; }
     public DateTime? PublishedAt { get; set; }
 }
@@ -19,7 +21,7 @@ public class UpdateSkillDto
 
 public class UserSkillDto
 {
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
     public Guid SkillId { get; set; }
     public decimal TotalPoints { get; set; }
     public decimal MasteryScore { get; set; }
@@ -32,9 +34,10 @@ public class SubmissionDto
 {
     public Guid Id { get; set; }
     public Guid ChallengeId { get; set; }
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
     public string Status { get; set; } = string.Empty;
     public decimal OverallScore { get; set; }
+    public string AiFeedback { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? GradedAt { get; set; }
 }

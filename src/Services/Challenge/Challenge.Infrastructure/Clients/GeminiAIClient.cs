@@ -20,7 +20,7 @@ public class GeminiAIClient : IGeminiAIClient
         _httpClient = httpClient;
         _logger = logger;
         _apiKey = configuration["GoogleAI:ApiKey"] ?? throw new InvalidOperationException("GoogleAI:ApiKey not configured");
-        _model = configuration["GoogleAI:Model"] ?? "gemini-2.5-flash";
+        _model = configuration["GoogleAI:Model"] ?? "gemini-3.1-flash-lite";
         _timeoutSeconds = int.TryParse(configuration["GoogleAI:TimeoutSeconds"], out var timeout) ? timeout : 30;
         _httpClient.Timeout = TimeSpan.FromSeconds(_timeoutSeconds);
     }
@@ -31,10 +31,42 @@ public class GeminiAIClient : IGeminiAIClient
         {
             _logger.LogInformation("Starting Gemini challenge analysis with model {Model}", _model);
 
-            var prompt = $@"Analyze this programming challenge and provide:
+            var prompt = $@"Analyze this challenge and provide:
 1. Difficulty level (1-10)
-2. Required skills with weights (as JSON object)
-3. Evaluation criteria (as JSON array)
+2. Required PROFESSIONAL COMPETENCIES (reusable skills) with weights
+3. Evaluation criteria (measurable, specific to this challenge version)
+
+=== CRITICAL SKILL GENERATION RULES ===
+Generate ONLY canonical, reusable, measurable professional competencies.
+
+A valid skill MUST be:
+1. REUSABLE - works across many challenges (NOT challenge-specific)
+2. MEASURABLE - can realistically be evaluated by AI
+3. CANONICAL - use standard industry/professional naming
+4. MID-LEVEL - not too broad (Programming) or too narrow (If Statement)
+5. NO CHALLENGE-SPECIFIC WORDING - avoid scenario labels
+6. SHORT NAMES - competency names, not sentences/explanations
+7. NO SOFT LABELS - avoid vague non-measurable concepts
+
+GOOD SKILLS (examples):
+- C#
+- ASP.NET Core
+- SignalR
+- Database Design
+- REST API Design
+- Authentication
+- Cryptography
+- Unit Testing
+- Entity Framework Core
+
+BAD SKILLS (DO NOT GENERATE):
+- SecurityEngineering (use ""Web Security"")
+- PasswordHashing (use ""Cryptography"")
+- Persistence Mechanisms (use ""Database Design"")
+- Factorial Understanding (use ""Recursion"")
+- Chat App Logic (use ""SignalR"" or ""Real-time Communication"")
+- Asp Net (use ""ASP.NET Core"")
+- Good Coding (vague, non-measurable)
 
 Challenge Description:
 {description}
