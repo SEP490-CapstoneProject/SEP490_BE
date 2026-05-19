@@ -11,5 +11,6 @@
   "auth-service": "auth-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io",
   "portfolio-service": "portfolio-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io",
   "interview-service": "interview-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io",
-  "notification-service": "notification-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io"
+  "notification-service": "notification-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io",
+  "challenge-service": "challenge-service.internal.redmushroom-1d023c6a.southeastasia.azurecontainerapps.io"
 }

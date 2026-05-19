@@ -11,6 +11,7 @@ using RecruitmentPlatform.AI.Abstractions;
 using RecruitmentPlatform.AI.Models;
 using RecruitmentPlatform.AI.Services;
 using RecruitmentPlatform.Contracts.Realtime;
+using Company.Domain.Enums;
 using System.Text.Json;
 
 namespace Company.Application.Services;
@@ -809,6 +810,145 @@ public class CompanyPostService : ICompanyPostService
             ReviewNote = created.ReviewNote,
             CreatedAt = created.CreatedAt,
             UpdatedAt = created.UpdatedAt
+        };
+    }
+
+    public async Task<PagedResult<CompanyPostReportDto>> GetPostReportsAsync(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        var (items, total) = await _repository.GetPostReportsAsync(page, pageSize);
+        return new PagedResult<CompanyPostReportDto>
+        {
+            Items = items.Select(report => new CompanyPostReportDto
+            {
+                Id = report.Id,
+                CompanyPostId = report.CompanyPostId,
+                PostOwnerUserId = report.CompanyPost?.CompanyId ?? 0,
+                ReporterUserId = report.ReporterUserId,
+                Reason = report.Reason,
+                Description = report.Description,
+                Status = report.Status.ToString(),
+                ReviewedByUserId = report.ReviewedByUserId,
+                ReviewedAt = report.ReviewedAt,
+                ReviewNote = report.ReviewNote,
+                CreatedAt = report.CreatedAt,
+                UpdatedAt = report.UpdatedAt
+            }).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<CompanyPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request)
+    {
+        var report = await _repository.GetPostReportByIdAsync(reportId)
+            ?? throw new KeyNotFoundException($"Report {reportId} not found");
+
+        if (report.Status != PostReportStatus.Pending)
+        {
+            throw new InvalidOperationException("This report has already been reviewed.");
+        }
+
+        var action = request.Action?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            throw new ArgumentException("Action is required.");
+        }
+
+        var now = DateTimeHelper.GetVietnamTime();
+        report.ReviewedByUserId = reviewerUserId;
+        report.ReviewedAt = now;
+        report.ReviewNote = request.ReviewNote?.Trim();
+        report.UpdatedAt = now;
+
+        if (action == "approve_violation")
+        {
+            report.Status = PostReportStatus.Approved;
+
+            if (report.CompanyPost != null && report.CompanyPost.Status == CompanyPost.StatusActive)
+            {
+                // Soft delete the post
+                await _repository.SoftDeletePostAsync(report.CompanyPostId);
+
+                // Notify owner using PostRejectedNotificationEvent structure
+                var evt = new PostRejectedNotificationEvent
+                {
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "post.removed",
+                    Version = 1,
+                    UserId = report.CompanyPost.CompanyId.ToString(),
+                    ActorId = reviewerUserId.ToString(),
+                    ActorType = "ADMIN",
+                    ObjectId = report.CompanyPostId.ToString(),
+                    Title = "Your job post was removed",
+                    Content = "Your company job post has been removed due to violation of policies.",
+                    Type = "POST_REMOVED",
+                    PostType = "Company",
+                    CreatedAt = now
+                };
+
+                try
+                {
+                    await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to publish post removed notification for post {PostId}", report.CompanyPostId);
+                }
+
+                var realtimeEvt = new PostModerationEvent
+                {
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "post.moderation",
+                    Version = 1,
+                    PostId = report.CompanyPostId,
+                    UserId = report.CompanyPost.CompanyId.ToString(),
+                    Status = "REMOVED",
+                    Reason = report.ReviewNote ?? "Removed by moderation",
+                    PostType = "Company",
+                    Title = "Your job post was removed",
+                    Content = "Your company job post has been removed due to violation of policies.",
+                    ActorId = reviewerUserId.ToString(),
+                    ActorType = "ADMIN",
+                    CreatedAt = now
+                };
+
+                try
+                {
+                    await _embeddingEventPublisher.PublishCompanyPostChangedAsync(report.CompanyPostId);
+                }
+                catch { /* swallow */ }
+            }
+        }
+        else if (action == "reject")
+        {
+            report.Status = PostReportStatus.Rejected;
+        }
+        else
+        {
+            throw new ArgumentException("Action must be one of: approve_violation, reject.");
+        }
+
+        await _repository.UpdatePostReportAsync(report);
+
+        return new CompanyPostReportDto
+        {
+            Id = report.Id,
+            CompanyPostId = report.CompanyPostId,
+            PostOwnerUserId = report.CompanyPost?.CompanyId ?? 0,
+            ReporterUserId = report.ReporterUserId,
+            Reason = report.Reason,
+            Description = report.Description,
+            Status = report.Status.ToString(),
+            ReviewedByUserId = report.ReviewedByUserId,
+            ReviewedAt = report.ReviewedAt,
+            ReviewNote = report.ReviewNote,
+            CreatedAt = report.CreatedAt,
+            UpdatedAt = report.UpdatedAt
         };
     }
 }

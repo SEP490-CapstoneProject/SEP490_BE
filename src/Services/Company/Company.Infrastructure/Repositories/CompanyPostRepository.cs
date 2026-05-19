@@ -361,5 +361,38 @@ public class CompanyPostRepository : ICompanyPostRepository
         return await _context.CompanyPostReports
             .FirstOrDefaultAsync(r => r.CompanyPostId == postId && r.ReporterUserId == reporterUserId);
     }
+
+    public async Task<(List<CompanyPostReport> Items, int Total)> GetPostReportsAsync(int page, int pageSize)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _context.CompanyPostReports
+            .AsNoTracking()
+            .Include(r => r.CompanyPost)
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((safePage - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
+    public async Task<CompanyPostReport?> GetPostReportByIdAsync(int reportId)
+    {
+        return await _context.CompanyPostReports
+            .Include(r => r.CompanyPost)
+            .FirstOrDefaultAsync(r => r.Id == reportId);
+    }
+
+    public async Task UpdatePostReportAsync(CompanyPostReport report)
+    {
+        _context.CompanyPostReports.Update(report);
+        await _context.SaveChangesAsync();
+    }
 }
 

@@ -14,14 +14,14 @@ public class UserSkillRepository : IUserSkillRepository
     }
 
     public async Task<UserSkill> GetByUserAndSkillAsync(
-        Guid userId, Guid skillId, CancellationToken cancellationToken = default)
+        int userId, Guid skillId, CancellationToken cancellationToken = default)
     {
         return await _context.UserSkills
             .FirstOrDefaultAsync(u => u.UserId == userId && u.SkillId == skillId, cancellationToken);
     }
 
     public async Task<IEnumerable<UserSkill>> GetByUserAsync(
-        Guid userId, CancellationToken cancellationToken = default)
+        int userId, CancellationToken cancellationToken = default)
     {
         return await _context.UserSkills
             .Where(u => u.UserId == userId)
@@ -30,7 +30,7 @@ public class UserSkillRepository : IUserSkillRepository
     }
 
     public async Task<IEnumerable<UserSkill>> GetVerifiedByUserAsync(
-        Guid userId, CancellationToken cancellationToken = default)
+        int userId, CancellationToken cancellationToken = default)
     {
         return await _context.UserSkills
             .Where(u => u.UserId == userId && u.IsVerified)
@@ -46,7 +46,7 @@ public class UserSkillRepository : IUserSkillRepository
     }
 
     public async Task<decimal> GetTotalPointsByUserAsync(
-        Guid userId, CancellationToken cancellationToken = default)
+        int userId, CancellationToken cancellationToken = default)
     {
         return await _context.UserSkills
             .Where(u => u.UserId == userId)
@@ -65,7 +65,7 @@ public class UserSkillRepository : IUserSkillRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<bool> ExistsAsync(Guid userId, Guid skillId, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsAsync(int userId, Guid skillId, CancellationToken cancellationToken = default)
     {
         return await _context.UserSkills
             .AnyAsync(u => u.UserId == userId && u.SkillId == skillId, cancellationToken);

@@ -13,5 +13,7 @@ public class ChallengeDtoResponse
     public DateTime Deadline { get; set; }
     public DateTime? PublishedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public int CreatedById { get; set; }
+    public int? ReviewedById { get; set; }
     public string RejectionReason { get; set; }
 }

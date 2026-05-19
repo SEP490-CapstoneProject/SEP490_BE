@@ -29,5 +29,8 @@ public interface ICompanyPostRepository
     // Report operations
     Task<CompanyPostReport> CreatePostReportAsync(CompanyPostReport report);
     Task<CompanyPostReport?> GetPostReportByPostAndReporterAsync(int postId, int reporterUserId);
+    Task<(List<CompanyPostReport> Items, int Total)> GetPostReportsAsync(int page, int pageSize);
+    Task<CompanyPostReport?> GetPostReportByIdAsync(int reportId);
+    Task UpdatePostReportAsync(CompanyPostReport report);
 }
 

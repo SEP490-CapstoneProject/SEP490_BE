@@ -64,12 +64,6 @@ public class ChallengeDbContext : DbContext
             .HasConversion<string>();
 
         modelBuilder.Entity<ChallengeEntity>()
-            .HasMany<ChallengeVersion>()
-            .WithOne(version => version.Challenge)
-            .HasForeignKey(version => version.ChallengeId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<ChallengeEntity>()
             .HasOne(challenge => challenge.CurrentVersion)
             .WithOne()
             .HasForeignKey<ChallengeEntity>(challenge => challenge.CurrentVersionId)
@@ -77,9 +71,32 @@ public class ChallengeDbContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<ChallengeSubmission>()
+            .Property(submission => submission.VersionSnapshotId)
+            .HasColumnName("VersionSnapshotId");
+
+        modelBuilder.Entity<ChallengeSubmission>()
+            .Property(submission => submission.VersionId)
+            .HasColumnName("VersionId");
+
+        modelBuilder.Entity<ChallengeSubmission>()
+            .HasOne(submission => submission.Version)
+            .WithMany()
+            .HasForeignKey(submission => submission.VersionSnapshotId)
+            .HasConstraintName("FK_CHALLENGE_SUBMISSIONS_CHALLENGE_VERSIONS_VersionSnapshotId")
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<ChallengeEntity>()
             .HasIndex(challenge => challenge.CurrentVersionId)
             .IsUnique()
             .HasFilter("[CurrentVersionId] IS NOT NULL");
+
+        // ChallengeCriteria relationship with EvaluationCriteria
+        modelBuilder.Entity<ChallengeCriteria>()
+            .HasOne(cc => cc.Criteria)
+            .WithMany()
+            .HasForeignKey(cc => cc.CriteriaId)
+            .HasConstraintName("FK_CHALLENGE_CRITERIA_EVALUATION_CRITERIA")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

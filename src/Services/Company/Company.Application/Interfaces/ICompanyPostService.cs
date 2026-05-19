@@ -27,5 +27,7 @@ public interface ICompanyPostService
 
     // Report operations
     Task<CompanyPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request);
+    Task<PagedResult<CompanyPostReportDto>> GetPostReportsAsync(int page, int pageSize);
+    Task<CompanyPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request);
 }
 
