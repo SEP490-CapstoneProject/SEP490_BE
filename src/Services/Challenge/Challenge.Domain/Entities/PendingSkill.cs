@@ -11,7 +11,9 @@ public class PendingSkill
 
     public SkillApprovalStatus Status { get; set; }
 
-    public Guid? ReviewedById { get; set; }
+    public int? ProposedById { get; set; }
+
+    public int? ReviewedById { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

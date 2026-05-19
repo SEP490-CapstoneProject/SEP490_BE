@@ -408,4 +408,33 @@ WHERE [EmployeeId] = {employeeId}
         return await _context.PortfolioReports
             .FirstOrDefaultAsync(r => r.PortfolioId == portfolioId && r.ReporterUserId == reporterUserId);
     }
+
+    public async Task<(List<PortfolioReport> Items, int Total)> GetPortfolioReportsAsync(int page, int pageSize)
+    {
+        var query = _context.PortfolioReports
+            .AsNoTracking()
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100))
+            .Take(Math.Clamp(pageSize, 1, 100))
+            .ToListAsync();
+
+        return (items, total);
+    }
+
+    public async Task<PortfolioReport?> GetPortfolioReportByIdAsync(int reportId)
+    {
+        return await _context.PortfolioReports
+            .Include(r => r.Portfolio)
+            .FirstOrDefaultAsync(r => r.Id == reportId);
+    }
+
+    public async Task UpdatePortfolioReportAsync(PortfolioReport report)
+    {
+        _context.PortfolioReports.Update(report);
+        await _context.SaveChangesAsync();
+    }
 }

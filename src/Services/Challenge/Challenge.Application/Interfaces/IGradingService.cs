@@ -7,7 +7,7 @@ namespace Challenge.Application.Interfaces;
 /// </summary>
 public interface IGradingService
 {
-    Task<(double overallScore, Dictionary<int, double> criteriaScores, string feedback)> GradeSubmissionAsync(
+    Task<(double overallScore, Dictionary<string, double> criteriaScores, string feedback)> GradeSubmissionAsync(
         ChallengeSubmission submission,
         ChallengeVersion version);
 }

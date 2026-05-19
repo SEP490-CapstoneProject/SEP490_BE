@@ -4,15 +4,15 @@ namespace Challenge.Application.Interfaces;
 
 public interface IPortfolioSkillsService
 {
-    Task<PortfolioSkillsDisplayDto> GetVerifiedSkillsForPortfolioAsync(Guid userId, CancellationToken cancellationToken = default);
-    Task<List<UserSkillWithHistoryDto>> GetSkillHistoryAsync(Guid userId, Guid? skillId = null, CancellationToken cancellationToken = default);
+    Task<PortfolioSkillsDisplayDto> GetVerifiedSkillsForPortfolioAsync(int userId, CancellationToken cancellationToken = default);
+    Task<List<UserSkillWithHistoryDto>> GetSkillHistoryAsync(int userId, Guid? skillId = null, CancellationToken cancellationToken = default);
     Task<LeaderboardDto> GetSkillLeaderboardAsync(int limit = 10, string verificationLevel = "Expert", CancellationToken cancellationToken = default);
-    Task<UserSkillStatsDto> GetUserSkillStatisticsAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<UserSkillStatsDto> GetUserSkillStatisticsAsync(int userId, CancellationToken cancellationToken = default);
 }
 
 public class PortfolioSkillsDisplayDto
 {
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
     public int TotalVerifiedSkills { get; set; }
     public decimal TotalPoints { get; set; }
     public decimal AverageMasteryScore { get; set; }
@@ -66,7 +66,7 @@ public class LeaderboardDto
 public class LeaderboardEntryDto
 {
     public int Rank { get; set; }
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
     public string UserName { get; set; } = string.Empty;
     public decimal TotalPoints { get; set; }
     public int SkillCount { get; set; }
@@ -75,7 +75,7 @@ public class LeaderboardEntryDto
 
 public class UserSkillStatsDto
 {
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
     public int TotalSkills { get; set; }
     public int VerifiedSkills { get; set; }
     public decimal TotalPoints { get; set; }

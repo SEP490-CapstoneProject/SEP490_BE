@@ -23,7 +23,7 @@ public class SkillHistoryItemDto
 
 public class LeaderboardEntryDto
 {
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
     public string UserName { get; set; }
     public decimal TotalPoints { get; set; }
     public int VerifiedChallengeCount { get; set; }
