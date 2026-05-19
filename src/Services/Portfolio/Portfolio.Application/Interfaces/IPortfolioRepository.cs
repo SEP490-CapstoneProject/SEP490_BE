@@ -25,4 +25,7 @@ public interface IPortfolioRepository
     Task UpdateEmbeddingAsync(int portfolioId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus);
     Task<PortfolioReport> CreatePortfolioReportAsync(PortfolioReport report);
     Task<PortfolioReport?> GetPortfolioReportByIdAndReporterAsync(int portfolioId, int reporterUserId);
+    Task<(List<PortfolioReport> Items, int Total)> GetPortfolioReportsAsync(int page, int pageSize);
+    Task<PortfolioReport?> GetPortfolioReportByIdAsync(int reportId);
+    Task UpdatePortfolioReportAsync(PortfolioReport report);
 }

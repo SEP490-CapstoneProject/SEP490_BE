@@ -26,6 +26,41 @@ public class AdminPortfolioModerationController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("reports")]
+    public async Task<IActionResult> GetReports([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        var result = await _portfolioService.GetPortfolioReportsAsync(page, pageSize);
+        return Ok(result);
+    }
+
+    [HttpPost("reports/{reportId:int}/review")]
+    public async Task<IActionResult> ReviewReport(int reportId, [FromBody] ReviewPortfolioReportRequest request)
+    {
+        var reviewerId = GetReviewerId();
+        if (reviewerId == null)
+        {
+            return Unauthorized(new { error = "UserId claim not found" });
+        }
+
+        try
+        {
+            var reviewed = await _portfolioService.ReviewPortfolioReportAsync(reportId, reviewerId.Value, request);
+            return Ok(reviewed);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     [HttpPost("{id:int}/approve")]
     public async Task<IActionResult> Approve(int id, [FromBody] ApprovePortfolioRequest? request)
     {

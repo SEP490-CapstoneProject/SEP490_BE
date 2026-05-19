@@ -89,4 +89,50 @@ public class AdminCompanyPostController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpGet("reports")]
+    public async Task<IActionResult> GetPostReports([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        if (!IsAdminOrModerator())
+            return StatusCode(403, new { error = "Only admin/moderator can review reports." });
+
+        try
+        {
+            var reports = await _service.GetPostReportsAsync(page, pageSize);
+            return Ok(reports);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("reports/{reportId:int}/review")]
+    public async Task<IActionResult> ReviewPostReport(int reportId, [FromBody] ReviewPostReportRequest request)
+    {
+        if (!IsAdminOrModerator())
+            return StatusCode(403, new { error = "Only admin/moderator can review reports." });
+
+        var reviewerUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+        if (!int.TryParse(reviewerUserIdClaim, out var reviewerUserId))
+            return Unauthorized(new { error = "Invalid token" });
+
+        try
+        {
+            var reviewed = await _service.ReviewPostReportAsync(reportId, reviewerUserId, request);
+            return Ok(reviewed);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }

@@ -6,6 +6,12 @@ public class CreatePortfolioReportRequest
     public string? Description { get; set; }
 }
 
+public class ReviewPortfolioReportRequest
+{
+    public string Action { get; set; } = string.Empty; // approve_violation | reject
+    public string? ReviewNote { get; set; }
+}
+
 public class PortfolioReportDto
 {
     public int Id { get; set; }
