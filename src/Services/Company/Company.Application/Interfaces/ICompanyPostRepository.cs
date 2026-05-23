@@ -16,6 +16,10 @@ public interface ICompanyPostRepository
     Task<List<CompanyPost>> GetActivePostsForMatchingAsync(int limit);
     Task<List<CompanyPost>> GetPostsForEmbeddingBackfillAsync(int limit);
     Task<List<CompanyPost>> GetPendingPostsAsync(int pageNumber, int pageSize);
+    Task<PagedResult<CompanyPostFeedDto>> SearchPostsAsync(
+        string? q, string? position, string? salary, string? location, string? employmentType, string? level,
+        string? q_position, string? q_description, string? q_requirements,
+        int skip, int take, int? userId);
     Task UpdateEmbeddingAsync(int postId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus);
     Task<bool> CheckPostSavedAsync(int userId, int postId);
     Task SavePostAsync(int userId, int postId);

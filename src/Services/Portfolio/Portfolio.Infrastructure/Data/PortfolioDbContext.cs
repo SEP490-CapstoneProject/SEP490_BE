@@ -211,6 +211,7 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.IsActive).HasDefaultValue(true);
             e.Property(x => x.GenerationModel).HasMaxLength(50).HasDefaultValue("gemini-1.5-pro");
             e.Property(x => x.TokensUsed).IsRequired(false);
+            e.Property(x => x.ImageId).HasMaxLength(200).IsRequired(false);
 
             e.HasIndex(x => x.PortfolioId)
                 .IsUnique()

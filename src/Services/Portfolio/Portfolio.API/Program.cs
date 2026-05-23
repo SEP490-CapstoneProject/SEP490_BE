@@ -112,6 +112,8 @@ builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCategoryService>();
 builder.Services.AddScoped<IPortfolioPreviewService, PortfolioPreviewService>();
 builder.Services.AddScoped<GoogleAiPreviewGenerator>();
+builder.Services.AddScoped<VisualPromptService>();
+builder.Services.AddScoped<ImageGenerationService>();
 builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
 builder.Services.AddScoped<IPortfolioNotificationEventPublisher, PortfolioNotificationEventPublisher>();
 builder.Services.AddScoped<IPortfolioModerationEventPublisher, PortfolioModerationEventPublisher>();
@@ -171,6 +173,19 @@ builder.Services.AddHttpClient<GoogleAiPreviewGenerator>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
+builder.Services.AddHttpClient<VisualPromptService>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+builder.Services.AddHttpClient<ImageGenerationService>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
+    client.Timeout = TimeSpan.FromSeconds(60); // Image generation takes longer
+});
+
+
 // CORS
 builder.Services.AddCors(options =>
 {
@@ -209,7 +224,23 @@ IF COL_LENGTH('Portfolio', 'ModerationStatus') IS NULL
 IF COL_LENGTH('Portfolio', 'ModerationReason') IS NULL
     ALTER TABLE [Portfolio] ADD [ModerationReason] NVARCHAR(500) NULL;
 IF COL_LENGTH('Portfolio', 'ModeratedAt') IS NULL
-    ALTER TABLE [Portfolio] ADD [ModeratedAt] DATETIME2 NULL;");
+    ALTER TABLE [Portfolio] ADD [ModeratedAt] DATETIME2 NULL;
+IF COL_LENGTH('PortfolioPreview', 'VisualPrompt') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [VisualPrompt] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImageUrl') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImageUrl] NVARCHAR(500) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImageId') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImageId] NVARCHAR(200) NULL;
+IF COL_LENGTH('PortfolioPreview', 'RecruiterSummary') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [RecruiterSummary] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('PortfolioPreview', 'SelectedTheme') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [SelectedTheme] NVARCHAR(50) NULL;
+IF COL_LENGTH('PortfolioPreview', 'SocialCaption') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [SocialCaption] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImagegenModel') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImagegenModel] NVARCHAR(100) NULL;
+IF COL_LENGTH('PortfolioPreview', 'CacheKey') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [CacheKey] NVARCHAR(200) NULL;");
 }
 
 // Pipeline - Enable Swagger in all environments

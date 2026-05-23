@@ -348,6 +348,16 @@ public class CompanyPostService : ICompanyPostService
     public Task UnsavePostAsync(int postId, int userId)
         => _repository.UnsavePostAsync(userId, postId);
 
+    public async Task<PagedResult<CompanyPostFeedDto>> SearchPostsAsync(
+        string? q, string? position, string? salary, string? location, string? employmentType, string? level,
+        string? q_position, string? q_description, string? q_requirements,
+        int skip, int take, int? userId)
+    {
+        var result = await _repository.SearchPostsAsync(q, position, salary, location, employmentType, level, q_position, q_description, q_requirements, skip, take, userId);
+        await EnrichCompanyCacheAsync(result.Items);
+        return result;
+    }
+
     public async Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
