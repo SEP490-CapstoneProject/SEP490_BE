@@ -26,4 +26,6 @@ public interface IPortfolioService
     Task<PortfolioReportDto> ReportPortfolioAsync(int portfolioId, int reporterUserId, CreatePortfolioReportRequest request);
     Task<List<PortfolioSummaryDto>> GetPortfoliosByIdsAsync(IEnumerable<int> ids);
 
+    Task<PagedResult<PortfolioReportDto>> GetPortfolioReportsAsync(int page, int pageSize);
+    Task<PortfolioReportDto> ReviewPortfolioReportAsync(int reportId, int reviewerUserId, ReviewPortfolioReportRequest request);
 }

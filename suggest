@@ -1,285 +1,299 @@
-You are a senior software architect refining the SkillSnap AI Challenge System Production Implementation Plan.
-
-Your task is to UPDATE and IMPROVE the current implementation plan based on the review feedback below.
-
-IMPORTANT:
-
-* Do NOT redesign the system from scratch.
-* Preserve the existing architecture direction.
-* Maintain the current scope and MVP boundaries.
-* Keep the platform as a Portfolio Showcase Platform with an additive AI Skill Verification layer.
-* Keep implementation practical and production-oriented.
-* Avoid overengineering.
-
----
-
-# CURRENT ARCHITECTURE DIRECTION
-
-SkillSnap remains:
-
-* a portfolio showcase platform
-
-The AI Challenge System is:
-
-* an additive AI-powered skill validation system
-
-The purpose:
-
-* allow users to validate skills through AI-assessed challenges
-* display AI-verified skills on portfolio
-
-Do NOT convert the system into:
-
-* a full coding judge
-* LMS platform
-* recruiter scoring platform
-
----
-
-# KEEP THESE FEATURES
-
-Keep all existing approved features:
-
-* Skill normalization
-* SkillAlias
-* PendingSkill
-* EvaluationCriteria
-* CriteriaSkillMapping
-* AI challenge analysis
-* AI grading
-* SkillPointTransaction
-* RabbitMQ events
-* SignalR leaderboard
-* Challenge moderation workflow
-* Submission snapshots
-* Challenge versioning
-* Anti-farming logic
-* SkillRelationship graph foundation
-* Portfolio AI-verified skills
-
----
-
-# EXPLICITLY KEEP REMOVED FEATURES OUT OF SCOPE
-
-DO NOT add:
-
-* plagiarism detection
-* AI-generated content detection
-* skill decay/freshness system
-* recruiter trust score
-* advanced recommendation engine
-* advanced AI confidence architecture
-
-These are future enhancements only.
-
----
-
-# REQUIRED IMPROVEMENTS
-
-## 1. Improve ChallengeVersion
-
-Current ChallengeVersion is incomplete.
-
-Expand it so each version fully freezes the evaluation context.
-
-ChallengeVersion should include snapshots for:
-
-* title
-* description
-* expected solution
-* criteria
-* skill mappings
-* difficulty score
-* difficulty label
-
-Purpose:
-
-* reproducible grading
-* leaderboard consistency
-* historical integrity
-
----
-
-## 2. Replace SkillRelationship.Confidence
-
-The current SkillRelationship entity uses:
-
-* Confidence
-
-This conflicts with the decision to avoid advanced confidence systems.
-
-Replace:
-
-* Confidence
-
-With:
-
-* Weight
-  OR
-* Strength
-
-Purpose:
-
-* represent relationship strength between skills
-* not AI confidence
-
-Example:
-
-* SignalR -> ASP.NET Core (Strength = 0.9)
-
----
-
-## 3. Reduce PromptSanitizationLog size
-
-Current logging stores:
-
-* OriginalPrompt
-* SanitizedPrompt
-
-This may create unnecessary storage growth and sensitive data retention.
-
-Refactor PromptSanitizationLog to store lightweight metadata only:
-
-* RiskFlags
-* SanitizationSummary
-* PromptHash
-* CreatedAt
-
-Optionally:
-
-* only create logs for suspicious inputs
-
-Keep implementation lightweight.
-
----
-
-## 4. Add AI Evaluation Metadata
-
-Even though advanced confidence systems are out of scope, the system still needs AI evaluation traceability.
-
-Add lightweight AI evaluation metadata:
-
-* ModelName
-* PromptVersion
-* EvaluatedAt
-
-Purpose:
-
-* debugging
-* reproducibility
-* future AI model upgrades
-
-Do NOT build a separate AI confidence subsystem.
-
----
-
-## 5. Clarify Snapshot Trigger Flow
-
-Clarify exactly when snapshots and ChallengeVersion records are created.
-
-Define:
-
-* snapshots are automatically created when a challenge transitions to Published
-* difficulty, criteria, and skill mappings become frozen
-* submissions reference the active ChallengeVersion
-
-Make this explicit in lifecycle and architecture sections.
-
----
-
-## 6. Define Skill Normalization Flow
-
-The plan currently lacks the actual normalization pipeline.
-
-Add explicit normalization flow:
-
-When AI detects a skill:
-
-1. search canonical Skill table
-2. search SkillAlias
-3. fuzzy match existing skills
-4. if no acceptable match → create PendingSkill
-
-Purpose:
-
-* avoid duplicate skills
-* maintain canonical skill graph
-
----
-
-## 7. Improve Anti-Farming Explanation
-
-Current anti-farming only tracks attempt count.
-
-Add lightweight diversity logic:
-
-* repeated challenges in same category reduce rewards further
-* encourage users to complete varied challenge types
-
-Keep implementation simple and MVP-friendly.
-
-Do NOT introduce complex behavioral analytics.
-
----
-
-## 8. Define VerificationLevel Rules
-
-Current VerificationLevel lacks calculation rules.
-
-Add explicit rules such as:
-
-* Beginner
-* Intermediate
-* Advanced
-* Expert
-
-Based on:
-
-* total verified points
-  OR
-* verified challenge count
-
-Keep calculation deterministic and simple.
-
----
-
-## 9. Clarify Challenge Skill Weight Source
-
-The plan currently uses:
-
-* BaseWeight
-
-But does not clearly define its source.
-
-Clarify:
-
-* AI generates ChallengeSkillWeight during challenge analysis
-* weights are stored and frozen in ChallengeVersion snapshots
-
-Example:
-
-* SignalR = 5
-* ASP.NET Core = 3
-* OOP = 1
-
-These weights are later used in point calculation.
-
----
-
-# OUTPUT REQUIREMENTS
-
-Update the implementation plan professionally.
-
-Include:
-
-1. revised architecture decisions
-2. updated database schema
-3. improved ChallengeVersion model
-4. updated moderation/versioning flow
-5. updated anti-farming section
-6. AI evaluation metadata section
-7. skill normalization pipeline
-8. verification level rules
-9. clarified point calculation flow
-
-Maintain clean technical writing suitable for a real production architecture document.
+Strategy đúng cho system này
+
+Bạn nên chia test thành:
+
+Layer	Purpose
+Unit Tests	business logic
+Integration Tests	DB + services
+Workflow Tests	full business flow
+AI Contract Tests	Gemini response consistency
+Projection Tests	aggregate correctness
+Concurrency Tests	race conditions
+Event Tests	RabbitMQ correctness
+Security Tests	sanitization/injection
+QUAN TRỌNG NHẤT
+
+Bạn cần test:
+
+data consistency across tables
+Vì system bạn có:
+immutable snapshots
+→ scoring
+→ transactions
+→ projections
+→ leaderboard
+1. TEST DOMAIN 1 — Skill Management
+Tables
+SKILLS
+SKILL_ALIASES
+SKILL_RELATIONSHIPS
+PENDING_SKILLS
+Test Cases
+Skill Normalization Test
+Scenario
+
+AI detect:
+
+ASP Net Core
+Expect
+mapped to ASP.NET Core
+Verify
+Table	Verify
+SKILLS	no duplicate created
+SKILL_ALIASES	alias matched
+PENDING_SKILLS	not created
+Fuzzy Match Threshold Test
+Scenario
+
+AI detect:
+
+AspNetCore
+Expect
+
+Above threshold:
+
+existing skill reused
+
+Below threshold:
+
+PendingSkill created
+PendingSkill Approval Test
+Scenario
+
+Admin approves:
+
+Semantic Kernel
+Verify
+Table	Expected
+PENDING_SKILLS	status=Approved
+SKILLS	new canonical skill created
+SKILL_ALIASES	alias inserted
+2. TEST DOMAIN 2 — Challenge Management
+Tables
+CHALLENGES
+CHALLENGE_VERSIONS
+CHALLENGE_SUBMISSIONS
+CHALLENGE_CRITERIA
+MOST IMPORTANT TESTS
+Immutable Snapshot Test
+Scenario
+Publish Challenge v1
+User submits
+Edit challenge
+Publish v2
+Verify
+
+Submission cũ:
+
+still references v1
+Validate
+Table	Verify
+CHALLENGE_SUBMISSIONS	VersionId unchanged
+CHALLENGE_VERSIONS	v1 immutable
+Scores	unchanged
+Challenge Lifecycle Test
+Scenario
+Draft
+→ PendingReview
+→ Published
+→ Expired
+Verify
+State	Allowed Actions
+Draft	edit allowed
+Published	edit forbidden
+Expired	submissions blocked
+Anti-Farming Submission Test
+Scenario
+
+User submits:
+
+1st attempt
+2nd attempt
+3rd attempt
+Verify
+Attempt	Multiplier
+1	1.0
+2	0.5
+3	0.25
+3. TEST DOMAIN 3 — Evaluation & Scoring
+Tables
+EVALUATION_CRITERIA
+CRITERIA_SKILL_MAPPINGS
+SUBMISSION_CRITERIA_SCORES
+USER_SKILLS
+CRITICAL TESTS
+Criteria-to-Skill Mapping Test
+Scenario
+
+Criteria:
+
+SignalR Usage
+
+maps to:
+
+SignalR
+ASP.NET Core
+Verify
+
+AI score:
+
+9/10
+
+correctly distributes points.
+
+Point Aggregation Test
+Scenario
+
+User completes:
+
+Challenge A
+Challenge B
+Verify
+Table	Verify
+SKILL_POINT_TRANSACTIONS	all transactions inserted
+USER_SKILLS	aggregated total correct
+Recalculation Integrity Test
+Scenario
+
+Delete transaction.
+
+Rebuild aggregate.
+
+Verify
+USER_SKILLS recalculated correctly
+Mastery Level Test
+Scenario
+
+TotalPoints:
+
+55
+Verify
+ADVANCED
+4. TEST DOMAIN 4 — Audit & Security
+Tables
+SKILL_POINT_TRANSACTIONS
+PENDING_SKILLS
+PROMPT_SANITIZATION_LOG
+Prompt Injection Test
+Scenario
+
+Challenge contains:
+
+ignore previous instructions
+Verify
+Table	Verify
+PROMPT_SANITIZATION_LOG	risk flag inserted
+Sanitized prompt	cleaned
+AI request	safe
+Audit Trail Integrity Test
+Scenario
+
+Submission graded.
+
+Verify
+Table	Verify
+SKILL_POINT_TRANSACTIONS	transaction created
+USER_SKILLS	updated
+history	traceable
+5. EVENT-DRIVEN TESTS
+IMPORTANT
+
+Bạn đang dùng:
+
+RabbitMQ
+projections
+aggregates
+Test Event Ordering
+Scenario
+SubmissionGradedEvent
+→ SkillPointsAwardedEvent
+→ UserSkillUpdatedEvent
+Verify
+
+Order đúng.
+
+Test Idempotency
+Scenario
+
+RabbitMQ redelivers:
+
+SubmissionGradedEvent
+
+2 lần.
+
+Verify
+points NOT duplicated
+6. CONCURRENCY TESTS
+VERY IMPORTANT
+Concurrent Submission Test
+Scenario
+
+User spam submit 10 requests.
+
+Verify
+Table	Verify
+CHALLENGE_SUBMISSIONS	no corruption
+transactions	no duplicates
+USER_SKILLS	consistent
+Concurrent Leaderboard Update Test
+Scenario
+
+100 submissions graded simultaneously.
+
+Verify
+
+Leaderboard:
+
+consistent
+7. PERFORMANCE TESTS
+High Volume Submission Test
+Scenario
+100K submissions
+Verify
+Query	Target
+leaderboard	< 200ms
+portfolio load	< 100ms
+skill aggregation	scalable
+8. AI CONTRACT TESTS
+IMPORTANT
+
+AI responses KHÔNG deterministic.
+
+Bạn cần mock Gemini responses.
+Test Cases
+Test	Verify
+malformed JSON	parser safe
+missing fields	fallback works
+invalid score	validation works
+timeout	retry works
+empty response	graceful fail
+9. FULL END-TO-END TEST (MOST IMPORTANT)
+Đây là test QUAN TRỌNG NHẤT
+Scenario
+Create Challenge
+→ AI Analyze
+→ Publish
+→ Submit Solution
+→ AI Grade
+→ Award Points
+→ Update UserSkill
+→ Update Leaderboard
+→ Portfolio Displays Verified Skill
+Verify EVERY table
+Table	Verify
+CHALLENGES	created
+CHALLENGE_VERSIONS	snapshot created
+CHALLENGE_SUBMISSIONS	submission inserted
+SUBMISSION_CRITERIA_SCORES	scores inserted
+SKILL_POINT_TRANSACTIONS	points inserted
+USER_SKILLS	aggregate updated
+
+MOST IMPORTANT PRINCIPLE
+
+Bạn KHÔNG nên chỉ test:
+
+API returns 200
+
+Bạn phải test:
+
+entire workflow integrity

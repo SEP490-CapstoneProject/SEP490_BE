@@ -15,17 +15,20 @@ public class PortfolioController : ControllerBase
 {
     private const string ActiveStatus = "active";
     private readonly IPortfolioService _portfolioService;
+    private readonly IPortfolioPreviewService _portfolioPreviewService;
     private readonly IBlockRepository _blockRepo;
     private readonly BlockService _blockService;
     private readonly ILogger<PortfolioController> _logger;
 
     public PortfolioController(
         IPortfolioService portfolioService,
+        IPortfolioPreviewService portfolioPreviewService,
         IBlockRepository blockRepo,
         BlockService blockService,
         ILogger<PortfolioController> logger)
     {
         _portfolioService = portfolioService;
+        _portfolioPreviewService = portfolioPreviewService;
         _blockRepo = blockRepo;
         _blockService = blockService;
         _logger = logger;
@@ -149,6 +152,28 @@ public class PortfolioController : ControllerBase
 
         var dto = _blockService.MapBlockToDto(firstBlock);
         return Ok(new { type = dto.Type, variant = dto.Variant, data = dto.Data });
+    }
+
+    [HttpPost("{id:int}/preview/generate")]
+    [Authorize]
+    public async Task<IActionResult> GeneratePreview(int id, [FromBody] PortfolioPreviewGenerateRequest? request)
+    {
+        var result = await _portfolioPreviewService.GeneratePreviewAsync(id, request?.HighlightsDescription);
+        if (result == null || !result.Success)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = result?.Message ?? "Failed to generate preview"
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = result.Message,
+            data = result.Preview
+        });
     }
 
     [HttpGet("{id:int}")]
@@ -430,4 +455,3 @@ public class PortfolioController : ControllerBase
         }
     }
 }
-

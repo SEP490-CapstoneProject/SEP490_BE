@@ -1,3 +1,4 @@
+using Challenge.Application.Clients;
 using Challenge.Application.Services;
 using Challenge.Domain.Entities;
 
@@ -5,15 +6,16 @@ namespace Challenge.Application.Services.AI;
 
 public class GeminiAIService : IGeminiAIService
 {
+    private readonly IGeminiAIClient _geminiClient;
     private readonly IPromptSanitizationService _promptSanitization;
     private readonly ILogger<GeminiAIService> _logger;
 
     public GeminiAIService(
+        IGeminiAIClient geminiClient,
         IPromptSanitizationService promptSanitization,
-        IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
         ILogger<GeminiAIService> logger)
     {
+        _geminiClient = geminiClient;
         _promptSanitization = promptSanitization;
         _logger = logger;
     }
@@ -26,25 +28,19 @@ public class GeminiAIService : IGeminiAIService
     {
         _logger.LogInformation("Starting AI challenge analysis for '{Title}'", title);
 
-        _ = await _promptSanitization.SanitizePromptAsync(description, Guid.Empty, cancellationToken);
-        _ = await _promptSanitization.SanitizePromptAsync(expectedSolution, Guid.Empty, cancellationToken);
+        var sanitizedDescription = await _promptSanitization.SanitizePromptAsync(description, Guid.Empty, cancellationToken);
+        var sanitizedExpectedSolution = await _promptSanitization.SanitizePromptAsync(expectedSolution, Guid.Empty, cancellationToken);
+
+        var clientResult = await _geminiClient.AnalyzeChallengeAsync(
+            sanitizedDescription,
+            sanitizedExpectedSolution);
 
         return new ChallengeAnalysisResult
         {
-            DifficultyScore = 6.5m,
-            DifficultyLabel = "Hard",
-            SkillWeights = new Dictionary<string, decimal>
-            {
-                { "C#", 3m },
-                { "ASP.NET Core", 4m },
-                { "SignalR", 5m }
-            },
-            EvaluationCriteria = new List<string>
-            {
-                "SignalR implementation",
-                "Concurrency handling",
-                "Error handling"
-            }
+            DifficultyScore = (decimal)clientResult.Difficulty,
+            DifficultyLabel = clientResult.DifficultyLabel,
+            SkillWeights = clientResult.SkillWeights.ToDictionary(pair => pair.Key, pair => (decimal)pair.Value),
+            EvaluationCriteria = clientResult.ExtractedCriteria ?? new List<string>()
         };
     }
 
@@ -55,29 +51,60 @@ public class GeminiAIService : IGeminiAIService
     {
         _logger.LogInformation("Starting AI grading for version {VersionId}", version.Id);
 
-        _ = await _promptSanitization.SanitizePromptAsync(submission, version.Id, cancellationToken);
+        var sanitizedSubmission = await _promptSanitization.SanitizePromptAsync(submission, version.Id, cancellationToken);
+        var criteria = ExtractCriteria(version);
+        var clientResult = await _geminiClient.GradeSubmissionAsync(
+            BuildChallengeDescription(version),
+            criteria,
+            sanitizedSubmission);
 
         return new SubmissionGradingResult
         {
-            OverallScore = 8.5m,
-            Feedback = "Well-structured SignalR implementation with good error handling. Consider improving concurrency patterns.",
-            CriteriaScores = new Dictionary<string, CriteriaScore>
-            {
+            OverallScore = (decimal)clientResult.OverallScore,
+            Feedback = clientResult.Feedback,
+            CriteriaScores = clientResult.CriteriaScores.ToDictionary(
+                pair => pair.Key,
+                pair => new CriteriaScore
                 {
-                    "SignalR implementation",
-                    new CriteriaScore { Score = 9, Feedback = "Excellent use of hubs and groups" }
-                },
-                {
-                    "Concurrency handling",
-                    new CriteriaScore { Score = 8, Feedback = "Good async/await patterns" }
-                },
-                {
-                    "Error handling",
-                    new CriteriaScore { Score = 8.5m, Feedback = "Comprehensive exception handling" }
-                }
-            },
-            ModelName = "Gemini 1.5 Pro",
-            GradedAt = DateTime.UtcNow
+                    Score = (decimal)pair.Value,
+                    Feedback = clientResult.Feedback
+                }),
+            ModelName = clientResult.ModelName,
+            GradedAt = clientResult.GradedAt
         };
+    }
+
+    private static List<string> ExtractCriteria(ChallengeVersion version)
+    {
+        if (string.IsNullOrWhiteSpace(version.SkillWeightMapping))
+        {
+            return new List<string> { "Correctness", "Code quality", "Error handling" };
+        }
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(version.SkillWeightMapping);
+            return doc.RootElement
+                .EnumerateObject()
+                .Select(prop => prop.Name)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToList();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new List<string> { "Correctness", "Code quality", "Error handling" };
+        }
+    }
+
+    private static string BuildChallengeDescription(ChallengeVersion version)
+    {
+        return string.Join(
+            Environment.NewLine + Environment.NewLine,
+            new[]
+            {
+                $"Title: {version.Title}",
+                $"Description: {version.Description}",
+                $"Expected Solution: {version.ExpectedSolution}"
+            }.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 }

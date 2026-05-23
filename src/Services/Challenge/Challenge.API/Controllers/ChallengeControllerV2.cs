@@ -59,18 +59,27 @@ public class ChallengeControllerV2 : ControllerBase
     public async Task<IActionResult> GetChallenge(Guid id)
     {
         var userId = GetCurrentUserId();
-        var challenge = await _challengeService.GetChallengeByIdAsync(id, userId);
         
-        if (challenge == null)
-            return NotFound(new { message = $"Challenge {id} not found" });
+        try
+        {
+            var challenge = await _challengeService.GetChallengeByIdAsync(id, userId);
+            
+            if (challenge == null)
+                return NotFound(new { message = $"Challenge {id} not found" });
 
-        return Ok(challenge);
+            return Ok(challenge);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     /// <summary>
     /// List all challenges with pagination
     /// </summary>
     [HttpGet]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(List<ChallengeDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListChallenges(
         [FromQuery] int skip = 0,
