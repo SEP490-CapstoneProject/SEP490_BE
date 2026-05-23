@@ -111,7 +111,7 @@ public class CompanyPostController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Search and filter job posts</summary>
+    /// <summary>Search and filter job posts with advanced filtering</summary>
     [HttpGet("search")]
     [AllowAnonymous]
     public async Task<IActionResult> Search(
@@ -121,13 +121,16 @@ public class CompanyPostController : ControllerBase
         [FromQuery] string? location,
         [FromQuery] string? type,
         [FromQuery] string? level,
+        [FromQuery] string? q_position,
+        [FromQuery] string? q_description,
+        [FromQuery] string? q_requirements,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 20)
     {
         try
         {
             var userId = GetUserId();
-            var result = await _service.SearchPostsAsync(q, position, salary, location, type, level, skip, take, userId);
+            var result = await _service.SearchPostsAsync(q, position, salary, location, type, level, q_position, q_description, q_requirements, skip, take, userId);
             return Ok(result);
         }
         catch (Exception ex)
