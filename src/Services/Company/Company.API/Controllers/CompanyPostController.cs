@@ -111,6 +111,31 @@ public class CompanyPostController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Search and filter job posts</summary>
+    [HttpGet("search")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? q,
+        [FromQuery] string? position,
+        [FromQuery] string? salary,
+        [FromQuery] string? location,
+        [FromQuery] string? type,
+        [FromQuery] string? level,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 20)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var result = await _service.SearchPostsAsync(q, position, salary, location, type, level, skip, take, userId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error searching posts", detail = ex.Message });
+        }
+    }
+
     /// <summary>Get job post detail with all media</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetDetail(int id)

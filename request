@@ -1,283 +1,302 @@
-You are responsible for generating and normalizing skills for the SkillSnap AI Challenge System.
+1. Pipeline AI đọc Portfolio và tạo Preview Content
+Mục tiêu
 
-IMPORTANT:
-This platform is NOT only for programming/software engineering.
-The challenge system supports MULTIPLE domains including:
-- Software Engineering
-- UI/UX Design
-- Data Science
-- Cybersecurity
-- Marketing
-- Business Analysis
-- Finance
-- Content Creation
-- Project Management
-- Mathematics
-- Education
-- Engineering
-- Communication
-- Research
-- And other professional/technical domains
+Người dùng upload hoặc chọn portfolio → AI:
 
-Your task is NOT to extract random phrases from challenge descriptions.
+đọc toàn bộ nội dung
+hiểu cấu trúc
+lọc thông tin nổi bật
+tạo:
+short preview
+recruiter summary
+social preview
+AI highlight
+CTA
 
-Your task is to generate:
-CANONICAL, REUSABLE, MEASURABLE PROFESSIONAL COMPETENCIES.
+Ví dụ output:
 
-The generated skills will be:
-- used for user scoring
-- leaderboard ranking
-- portfolio verification
-- AI skill mastery
-- recruiter filtering/search
-- long-term analytics
+{
+  "title": "Senior Backend Developer",
+  "shortPreview": "Backend engineer with 4 years of experience building scalable microservices and AI-integrated systems.",
+  "highlights": [
+    "Built scalable chat system with SignalR",
+    "Integrated Gemini AI into portfolio analysis",
+    "Deployed microservices on Azure"
+  ],
+  "tone": "professional",
+  "style": "modern tech"
+}
+Model nên dùng
+BEST CHOICE
+Gemini 2.5 Flash
 
-Therefore skill quality and normalization are CRITICAL.
+Dùng cho:
 
-==================================================
-SKILL GENERATION RULES
-==================================================
+đọc portfolio dài
+summarize
+extract highlights
+generate structured JSON
+fast + rẻ
+context lớn
 
-A valid skill MUST be:
+Bạn đang có:
 
-1. REUSABLE
-- Must make sense across many challenges
-- Must represent a long-term competency
-- Must not depend on one specific challenge
+250K context
+20 RPM
 
-GOOD:
-- Authentication
-- Financial Analysis
-- UX Research
-- SQL Server
-- Public Speaking
+=> quá đủ cho portfolio.
 
-BAD:
-- Factorial Understanding
-- Login Form Building
-- Instagram Campaign Challenge
-- Button Alignment Logic
+Không nên dùng
+Gemini 3.1 Flash Lite
 
---------------------------------------------------
+Dùng được nhưng:
 
-2. MEASURABLE
-- AI must realistically evaluate proficiency in it
-- Should represent a competency level
+chất lượng reasoning kém hơn
+dễ hallucination
+summary thiếu depth
 
-GOOD:
-- REST API Design
-- Data Visualization
-- Negotiation
-- Statistical Analysis
+Chỉ nên dùng:
 
-BAD:
-- Good Coding
-- Smart Thinking
-- Creativity Boost
-- Nice UI
+free tier fallback
+retry nhẹ
+background tasks
+Prompt Architecture đề xuất
+SYSTEM PROMPT
+You are an AI portfolio analyzer.
 
---------------------------------------------------
+Your task:
+- Read the full portfolio carefully
+- Understand skills, projects, experience, achievements
+- Create an engaging preview for recruiters
+- Focus on impactful and measurable achievements
+- Avoid generic wording
+- Return valid JSON only
+USER PROMPT
+Portfolio Content:
+{{FULL_PORTFOLIO}}
 
-3. CANONICAL
-- Use standard industry/professional naming
-- Use official technology/framework/tool names when possible
+User Requirements:
+- Tone: professional
+- Target: recruiter
+- Highlight:
+  - AI integration
+  - cloud deployment
+  - backend engineering
 
-GOOD:
-- ASP.NET Core
-- Figma
-- TensorFlow
-- SEO Optimization
-- Financial Modeling
+Generate:
+- title
+- shortPreview
+- highlights
+- recruiterSummary
+- socialCaption
+- visualStyleSuggestion
+Function nên tách
+A. AnalyzePortfolioAsync()
 
-BAD:
-- Asp Net
-- Design Tool Usage
-- AI Math Library
+Input:
 
---------------------------------------------------
+portfolioContent
+userPrompt
 
-4. MID-LEVEL GRANULARITY
-Skills should NOT be:
-- too broad
-- too microscopic
+Output:
 
-GOOD:
-- Authentication
-- User Research
-- Risk Assessment
-- Docker
-- Data Analysis
+PortfolioPreviewDto
+B. GeneratePreviewImageAsync()
 
-TOO BROAD:
-- Programming
-- Business
-- Design
-- Marketing
+Input:
 
-TOO SMALL:
-- If Statement
-- Button Padding
-- Variable Declaration
-- Excel SUM Formula
+summary
+visualStyle
+highlightKeywords
 
---------------------------------------------------
+Output:
 
-5. DOMAIN-AGNOSTIC
-The system supports many industries.
+imageUrl
+2. AI Generate Portfolio Preview Image
 
-Examples of GOOD skills by domain:
+Đây là phần QUAN TRỌNG NHẤT.
 
-SOFTWARE:
-- ASP.NET Core
-- SignalR
-- Docker
-- REST API Design
-- Microservices
+Bạn KHÔNG nên đưa full portfolio vào image model.
 
-DESIGN:
-- UX Research
-- Wireframing
-- Visual Hierarchy
-- Prototyping
-- Typography
+Sai cách:
 
-DATA:
-- Machine Learning
-- Data Cleaning
-- Statistical Analysis
-- Data Visualization
+Generate image from this full portfolio text...
 
-BUSINESS:
-- Financial Modeling
-- Market Research
-- Business Strategy
-- Project Planning
+→ token cực lớn
+→ ảnh xấu
+→ không kiểm soát style
 
-MARKETING:
-- SEO Optimization
-- Content Marketing
-- Brand Strategy
-- Campaign Analysis
+Cách đúng
+Bước 1
 
-CYBERSECURITY:
-- Cryptography
-- Threat Modeling
-- Network Security
-- Identity Management
+Gemini text model tạo:
 
---------------------------------------------------
+{
+  "visualTheme": "modern cyberpunk developer portfolio",
+  "mainElements": [
+    "laptop setup",
+    "floating AI hologram UI",
+    "cloud architecture",
+    "code editor"
+  ],
+  "colorPalette": ["#111827", "#00D4FF", "#A855F7"],
+  "heroText": "AI Backend Engineer"
+}
+Bước 2
 
-6. NO CHALLENGE-SPECIFIC WORDING
+Dùng image model generate ảnh.
 
-NEVER generate:
-- challenge names
-- challenge descriptions
-- scenario-specific labels
-- explanatory phrases
+Model nên dùng
+BEST
+Imagen 4 Generate
 
-BAD:
-- Mathematical Understanding (Factorial)
-- Chat App Logic
-- Authentication Screen Building
-- Login Security Challenge
+Hoặc:
 
-GOOD:
-- Recursion
-- Authentication
-- Secure Authentication
-- Web Security
+Imagen 4 Fast Generate
+Chọn model nào?
+Model	Khi dùng
+Imagen 4 Generate	chất lượng cao
+Imagen 4 Fast Generate	realtime preview
+Imagen 4 Ultra	ảnh marketing/banner cao cấp
+Recommended Flow
+Portfolio
+   ↓
+Gemini 2.5 Flash
+   ↓
+Structured Preview JSON
+   ↓
+Generate Visual Prompt
+   ↓
+Imagen 4 Fast
+   ↓
+Preview Image
+Kiến trúc Database nên có
+PortfolioPreview
+Column	Type
+Id	GUID
+PortfolioId	GUID
+Summary	TEXT
+RecruiterSummary	TEXT
+Highlights	JSON
+VisualPrompt	TEXT
+ImageUrl	TEXT
+CreatedAt	DATETIME
+Flow Backend hoàn chỉnh
+User opens portfolio
+    ↓
+Click "Generate AI Preview"
+    ↓
+BE loads all portfolio blocks
+    ↓
+Merge to single AI-readable text
+    ↓
+Gemini summarize
+    ↓
+Store summary
+    ↓
+Generate visual prompt
+    ↓
+Imagen generate image
+    ↓
+Upload image to Cloudinary/Azure Blob
+    ↓
+Save image url
+    ↓
+Return preview DTO
+Prompt cho Image AI
 
---------------------------------------------------
+Ví dụ:
 
-7. NO SENTENCES OR EXPLANATIONS
+Create a modern portfolio preview banner.
 
-Skills must be SHORT competency names.
+Theme:
+AI backend engineer portfolio.
 
-BAD:
-- Persistence Mechanisms (File I/O, Database, ORM)
-- Language/Framework Specifics (e.g., C#/.NET)
+Style:
+minimal futuristic UI, dark mode, neon blue lighting.
 
-GOOD:
-- File I/O
-- Database Design
-- Entity Framework Core
-- C#
+Include:
+- laptop coding setup
+- cloud architecture hologram
+- AI visualization
+- modern dashboard UI
 
---------------------------------------------------
+Professional and recruiter-friendly.
+Recommendation Production
+Text AI
+Task	Model
+Portfolio summarize	Gemini 2.5 Flash
+Cheap fallback	Gemini 3.1 Flash Lite
+Image AI
+Task	Model
+Fast preview	Imagen 4 Fast
+Final quality	Imagen 4 Generate
+Tối ưu Cost
 
-8. NO SOFT/ABSTRACT LABELS
+Bạn nên:
 
-Avoid vague non-measurable concepts.
+Cache AI output
 
-BAD:
-- Good Communication
-- Smart Thinking
-- Creativity
-- Team Spirit
+Không regenerate liên tục.
 
-GOOD:
-- Technical Writing
-- Public Speaking
-- Stakeholder Communication
-- Presentation Design
+Ví dụ:
 
-==================================================
-SKILL NORMALIZATION RULES
-==================================================
+hash(portfolio_content + user_prompt)
 
-Before creating a new skill:
+Nếu hash giống:
 
-STEP 1 — Exact Match
-Search existing canonical skills.
+→ trả lại preview cũ.
 
-STEP 2 — Alias Match
-Search SkillAlias table.
+Feature nâng cao rất đáng làm
+1. Multiple preview styles
 
-STEP 3 — Fuzzy Match
-Use similarity matching.
+Người dùng chọn:
 
-STEP 4 — Pending Review
-If uncertain:
-- create PendingSkill
-- DO NOT auto-create canonical skill immediately
+Professional
+Creative
+Minimal
+Startup
+Corporate
+Cyberpunk
+2. Recruiter Persona
 
-==================================================
-FORMAT RULES
-==================================================
+Prompt thêm:
 
-Skill names should:
-- use spaces properly
-- avoid PascalCase concatenation
-- avoid symbols unless official
-- avoid parentheses unless industry standard
-- use title casing
+Target recruiter:
+- FAANG
+- Startup
+- Game studio
+- AI company
+3. Social Media Preview
 
-GOOD:
-- Security Engineering
-- Data Analysis
-- ASP.NET Core
-- UX Research
+Generate luôn:
 
-BAD:
-- SecurityEngineering
-- dataanalysis
-- DataAnalysisSkill
-- Analysis (Advanced)
+LinkedIn preview
+GitHub bio
+Portfolio card
+OpenGraph image
+Quan trọng nhất
 
-==================================================
-FINAL OBJECTIVE
-==================================================
+Bạn nên bắt AI trả về JSON schema cố định.
 
-The SKILLS table is NOT a keyword dump.
+Ví dụ:
 
-It is a PROFESSIONAL COMPETENCY TAXONOMY.
+{
+  "title": "",
+  "summary": "",
+  "highlights": [],
+  "visualPrompt": "",
+  "theme": ""
+}
 
-Every generated skill must:
-- remain useful long-term
-- support fair scoring
-- support leaderboard aggregation
-- support recruiter filtering
-- support portfolio verification
-- remain reusable across many challenge types
+Đừng để AI trả text tự do.
 
-Generate ONLY stable, reusable, measurable competencies.
+Kiến trúc AI Service đề xuất
+Portfolio AI Service
+ ├── PortfolioReader
+ ├── SummaryGenerator
+ ├── HighlightExtractor
+ ├── VisualPromptGenerator
+ ├── ImageGenerator
+ ├── CacheService
+ └── PromptTemplateService
