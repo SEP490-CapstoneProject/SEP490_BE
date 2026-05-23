@@ -10,6 +10,7 @@ namespace Connection.API.Controllers;
 public class ConnectionController : ControllerBase
 {
     private readonly IConnectionService _service;
+    private readonly ILogger<ConnectionController> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> _hubContext;
     private readonly IConnectionEventPublisher _eventPublisher;
@@ -17,12 +18,14 @@ public class ConnectionController : ControllerBase
 
     public ConnectionController(
         IConnectionService service,
+        ILogger<ConnectionController> logger,
         IHttpClientFactory httpClientFactory,
         Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> hubContext,
         IConnectionEventPublisher eventPublisher,
         Connection.Application.Interfaces.IUserProfileResolver userProfileResolver)
     {
         _service = service;
+        _logger = logger;
         _httpClientFactory = httpClientFactory;
         _hubContext = hubContext;
         _eventPublisher = eventPublisher;
@@ -170,7 +173,7 @@ public class ConnectionController : ControllerBase
     // Room creation is handled automatically when a Connection is matched; manual room endpoints removed
 
     /// <summary>
-    /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED).
+    /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED và DENY).
     /// Trả về: { connectionId, status } — connectionId = 0 nếu không tìm thấy connection.
     /// </summary>
     [HttpGet("status/by-users")]
@@ -189,6 +192,19 @@ public class ConnectionController : ControllerBase
         public int UserId2 { get; set; }
     }
 
+    public class MatchByUsersResponse
+    {
+        public int? ConnectionId { get; set; }
+        public string? Status { get; set; }
+        public bool IsMatched { get; set; }
+        public string? Reason { get; set; }
+        public int? RoomId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Avatar { get; set; }
+        public string? CoverImage { get; set; }
+        public string Role { get; set; } = "USER";
+    }
+
     [HttpPost("match-by-users")]
     [Authorize]
     public async Task<IActionResult> MatchByUsers([FromBody] MatchByUsersRequest request)
@@ -205,10 +221,36 @@ public class ConnectionController : ControllerBase
         }
 
         var (connectionId, status) = await _service.GetConnectionStatusByUsersAsync(request.UserId1, request.UserId2);
-        
-        if (connectionId == 0 || status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.PENDING.ToString())
+
+        if (connectionId <= 0 || string.IsNullOrWhiteSpace(status))
         {
-            return Ok(null);
+            _logger.LogInformation("MatchByUsers: no connection found for users {UserId1} and {UserId2}", request.UserId1, request.UserId2);
+            return Ok(new MatchByUsersResponse
+            {
+                ConnectionId = null,
+                Status = status,
+                IsMatched = false,
+                Reason = "CONNECTION_NOT_FOUND"
+            });
+        }
+
+        if (status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("MatchByUsers: users already matched for connection {ConnectionId}", connectionId);
+            var matchedResponse = await BuildMatchedRoomCardResponseAsync(connectionId, currentUserId, status, "ALREADY_MATCHED");
+            return Ok(matchedResponse);
+        }
+
+        if (!status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.PENDING.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("MatchByUsers: connection {ConnectionId} has non-pending status {Status}", connectionId, status);
+            return Ok(new MatchByUsersResponse
+            {
+                ConnectionId = connectionId,
+                Status = status,
+                IsMatched = false,
+                Reason = "NOT_PENDING"
+            });
         }
 
         // Update to MATCHED
@@ -241,58 +283,14 @@ public class ConnectionController : ControllerBase
             CreatedAt = updated.ConnectionAt ?? DateTime.UtcNow
         });
 
-        // Get the generated room summary
-        var roomSummary = await _service.GetRoomSummaryByConnectionIdAsync(updated.Id, currentUserId);
-        if (roomSummary == null) return Ok(null);
-
-        int otherUserId = roomSummary.UserIdFrom == currentUserId ? roomSummary.UserIdTo : roomSummary.UserIdFrom;
-        string name = otherUserId.ToString();
-        string? avatar = null;
-        string? cover = null;
-        string role = "USER";
-
-        var client = _httpClientFactory.CreateClient("UserProfile");
-        try
-        {
-            var res = await client.GetAsync($"/api/company/by-user/{otherUserId}");
-            if (res.IsSuccessStatusCode)
-            {
-                var json = await res.Content.ReadAsStringAsync();
-                using var doc = System.Text.Json.JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("companyName", out var comp)) name = comp.GetString() ?? name;
-                if (doc.RootElement.TryGetProperty("avatar", out var av)) avatar = av.GetString();
-                if (doc.RootElement.TryGetProperty("coverImage", out var cv)) cover = cv.GetString();
-                role = "COMPANY";
-            }
-            else
-            {
-                var res2 = await client.GetAsync($"/api/employee/by-user/{otherUserId}");
-                if (res2.IsSuccessStatusCode)
-                {
-                    var json2 = await res2.Content.ReadAsStringAsync();
-                    using var doc2 = System.Text.Json.JsonDocument.Parse(json2);
-                    if (doc2.RootElement.TryGetProperty("name", out var nm)) name = nm.GetString() ?? name;
-                    if (doc2.RootElement.TryGetProperty("avatar", out var av2)) avatar = av2.GetString();
-                    if (doc2.RootElement.TryGetProperty("coverImage", out var cv2)) cover = cv2.GetString();
-                    role = "USER";
-                }
-            }
-        }
-        catch { }
-
-        return Ok(new
-        {
-            roomId = roomSummary.RoomId,
-            name = name,
-            avatar = avatar,
-            coverImage = cover,
-            role = role
-        });
+        _logger.LogInformation("MatchByUsers: connection {ConnectionId} updated to MATCHED by user {UserId}", updated.Id, currentUserId);
+        var response = await BuildMatchedRoomCardResponseAsync(updated.Id, currentUserId, updated.Status, "MATCHED_NOW");
+        return Ok(response);
     }
 
     /// <summary>
     /// Lấy trạng thái connection theo roomId.
-    /// STORED trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
+    /// STORED và DENY trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
     /// Trả về 404 nếu không tìm thấy connection.
     /// </summary>
     [HttpGet("rooms/{roomId}/status")]
@@ -594,5 +592,93 @@ public class ConnectionController : ControllerBase
         {
             return null;
         }
+    }
+
+    private async Task<MatchByUsersResponse> BuildMatchedRoomCardResponseAsync(int connectionId, int currentUserId, string? status, string reason)
+    {
+        var roomSummary = await _service.GetRoomSummaryByConnectionIdAsync(connectionId, currentUserId);
+
+        int roomId = connectionId;
+        int otherUserId = 0;
+
+        if (roomSummary != null)
+        {
+            roomId = roomSummary.RoomId;
+            otherUserId = roomSummary.UserIdFrom == currentUserId ? roomSummary.UserIdTo : roomSummary.UserIdFrom;
+        }
+        else
+        {
+            _logger.LogWarning("MatchByUsers: room summary missing for connection {ConnectionId}, using fallback lookup", connectionId);
+            var conn = await _service.GetConnectionByIdAsync(connectionId);
+            if (conn != null)
+            {
+                otherUserId = conn.UserIdFrom == currentUserId ? conn.UserIdTo : conn.UserIdFrom;
+                var rooms = await _service.GetRoomsByConnectionAsync(connectionId);
+                var room = rooms.FirstOrDefault();
+                if (room != null)
+                {
+                    roomId = room.Id;
+                }
+            }
+        }
+
+        var (name, avatar, coverImage, role) = await ResolveCounterpartCardAsync(otherUserId);
+        return new MatchByUsersResponse
+        {
+            ConnectionId = connectionId,
+            Status = status,
+            IsMatched = true,
+            Reason = reason,
+            RoomId = roomId,
+            Name = name,
+            Avatar = avatar,
+            CoverImage = coverImage,
+            Role = role
+        };
+    }
+
+    private async Task<(string Name, string? Avatar, string? CoverImage, string Role)> ResolveCounterpartCardAsync(int otherUserId)
+    {
+        string name = otherUserId > 0 ? otherUserId.ToString() : "Unknown";
+        string? avatar = null;
+        string? coverImage = null;
+        string role = "USER";
+
+        if (otherUserId <= 0)
+        {
+            return (name, avatar, coverImage, role);
+        }
+
+        var client = _httpClientFactory.CreateClient("UserProfile");
+        try
+        {
+            var companyRes = await client.GetAsync($"/api/company/by-user/{otherUserId}");
+            if (companyRes.IsSuccessStatusCode)
+            {
+                var json = await companyRes.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("companyName", out var comp)) name = comp.GetString() ?? name;
+                if (doc.RootElement.TryGetProperty("avatar", out var av)) avatar = av.GetString();
+                if (doc.RootElement.TryGetProperty("coverImage", out var cv)) coverImage = cv.GetString();
+                role = "COMPANY";
+                return (name, avatar, coverImage, role);
+            }
+
+            var employeeRes = await client.GetAsync($"/api/employee/by-user/{otherUserId}");
+            if (employeeRes.IsSuccessStatusCode)
+            {
+                var json = await employeeRes.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("name", out var nm)) name = nm.GetString() ?? name;
+                if (doc.RootElement.TryGetProperty("avatar", out var av)) avatar = av.GetString();
+                if (doc.RootElement.TryGetProperty("coverImage", out var cv)) coverImage = cv.GetString();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "MatchByUsers: failed to resolve counterpart profile for user {OtherUserId}", otherUserId);
+        }
+
+        return (name, avatar, coverImage, role);
     }
 }

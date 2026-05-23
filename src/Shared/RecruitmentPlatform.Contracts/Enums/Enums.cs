@@ -42,7 +42,8 @@ public enum ConnectionStatus
     PENDING,
     MATCHED,
     STORED,
-    BLOCK
+    BLOCK,
+    DENY
 }
 
 public enum CommunityPostStatus

@@ -32,6 +32,7 @@ public class ConnectionDbContext : DbContext
         {
             entity.ToTable("Room");
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.ConnectionId).IsRequired();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETDATE()");
             entity.Property(e => e.LastMessAt);

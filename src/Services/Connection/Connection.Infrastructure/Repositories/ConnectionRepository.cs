@@ -79,11 +79,12 @@ public class ConnectionRepository : IConnectionRepository
     public async Task<IEnumerable<Connection.Application.DTOs.RoomSummaryRaw>> GetRoomSummariesByUserIdAsync(int userId)
     {
         // Single-query projection to get last message and unread count per room
-        // Exclude connections with STORED status (hidden/archived by user)
+        // Exclude connections with STORED or DENY status (hidden/archived/denied)
         var query = from r in _context.Rooms
                     join c in _context.Connections on r.ConnectionId equals c.Id
                     where (c.UserIdFrom == userId || c.UserIdTo == userId)
                           && c.Status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString()
+                          && c.Status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.DENY.ToString()
                     select new
                     {
                         Room = r,
@@ -177,12 +178,13 @@ public class ConnectionRepository : IConnectionRepository
 
     public async Task<(int ConnectionId, string? Status)> GetConnectionStatusByUsersAsync(int userId1, int userId2)
     {
-        // Find active (non-STORED) connection between the two users
+        // Find active (non-STORED, non-DENY) connection between the two users
         var conn = await _context.Connections
             .Where(c =>
                 ((c.UserIdFrom == userId1 && c.UserIdTo == userId2) ||
                  (c.UserIdFrom == userId2 && c.UserIdTo == userId1)) &&
-                c.Status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString())
+                c.Status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.STORED.ToString() &&
+                c.Status != RecruitmentPlatform.Contracts.Enums.ConnectionStatus.DENY.ToString())
             .OrderByDescending(c => c.CreateAt)
             .FirstOrDefaultAsync();
 

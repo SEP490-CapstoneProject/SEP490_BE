@@ -38,15 +38,28 @@ public class PaymentService : IPaymentService
         var existingPayment = await _paymentRepository.GetPendingByUserAndPlanAsync(userId, request.PlanId);
         if (existingPayment != null)
         {
-            _logger.LogInformation("Reusing existing pending payment {PaymentId} for user {UserId}", 
-                existingPayment.Id, userId);
-            
-            return new CreatePaymentResponse
+            // Verify with provider to ensure it hasn't been cancelled
+            var paymentInfo = await _paymentProvider.VerifyPaymentAsync(existingPayment.OrderCode);
+            if (paymentInfo != null && (paymentInfo.Status == "CANCELLED" || paymentInfo.Status == "EXPIRED"))
             {
-                PaymentId = existingPayment.Id,
-                PaymentUrl = existingPayment.PaymentUrl ?? "",
-                OrderCode = existingPayment.OrderCode
-            };
+                _logger.LogInformation("Existing payment {PaymentId} was cancelled on provider. Updating local status and creating new payment.", existingPayment.Id);
+                existingPayment.Status = PaymentStatus.Failed;
+                existingPayment.UpdatedAt = DateTime.UtcNow;
+                await _paymentRepository.UpdateAsync(existingPayment);
+                // Fall through to create a new payment
+            }
+            else
+            {
+                _logger.LogInformation("Reusing existing pending payment {PaymentId} for user {UserId}", 
+                    existingPayment.Id, userId);
+                
+                return new CreatePaymentResponse
+                {
+                    PaymentId = existingPayment.Id,
+                    PaymentUrl = existingPayment.PaymentUrl ?? "",
+                    OrderCode = existingPayment.OrderCode
+                };
+            }
         }
 
         // 3. Create new payment
