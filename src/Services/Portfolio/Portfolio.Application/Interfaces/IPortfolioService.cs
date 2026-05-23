@@ -24,4 +24,6 @@ public interface IPortfolioService
     Task<JobMatchPagedResult> MatchJobsForPortfolioAsync(int portfolioId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default);
     Task<PortfolioReportDto> ReportPortfolioAsync(int portfolioId, int reporterUserId, CreatePortfolioReportRequest request);
+    Task<List<PortfolioSummaryDto>> GetPortfoliosByIdsAsync(IEnumerable<int> ids);
+
 }
