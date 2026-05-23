@@ -19,7 +19,12 @@ public interface ICompanyPostService
     Task UnsavePostAsync(int postId, int userId);
     Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<MatchingCandidateFeed> GetMatchingCandidatesAsync(int limit, CancellationToken cancellationToken = default);
-    
+     
+    // Search and filter operations
+    Task<PagedResult<CompanyPostFeedDto>> SearchPostsAsync(
+        string? q, string? position, string? salary, string? location, string? employmentType, string? level,
+        int skip, int take, int? userId);
+     
     // Admin moderation operations
     Task<List<CompanyPostDetailDto>> GetPendingPostsAsync(int skip, int take);
     Task<CompanyPost> ApprovePostAsync(int postId, string? notes);
