@@ -22,6 +22,16 @@ public class PortfolioPreview
     public string GenerationModel { get; set; } = "gemini-1.5-pro";
     public int? TokensUsed { get; set; }
     
+    // AI Image Generation
+    public string? VisualPrompt { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? ImageId { get; set; }
+    public string? RecruiterSummary { get; set; }
+    public string? SelectedTheme { get; set; } = "professional";
+    public string? SocialCaption { get; set; }
+    public string? ImagegenModel { get; set; }
+    public string? CacheKey { get; set; }
+    
     // Navigation
     public Portfolio Portfolio { get; set; } = null!;
 }
