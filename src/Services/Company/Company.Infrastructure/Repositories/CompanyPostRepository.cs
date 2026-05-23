@@ -402,7 +402,7 @@ public class CompanyPostRepository : ICompanyPostRepository
     {
         var query = _context.CompanyPosts.Where(p => p.Status == 1);
 
-        // Full-text search on keywords (position, description, requirements)
+        // Full-text search on keywords across all searchable company post fields
         // Split keywords and search for ALL of them (AND logic)
         if (!string.IsNullOrWhiteSpace(q))
         {
@@ -414,8 +414,15 @@ public class CompanyPostRepository : ICompanyPostRepository
                 var keywordFilter = keyword;
                 query = query.Where(p =>
                     p.Position.ToLower().Contains(keywordFilter) ||
+                    (p.Address != null && p.Address.ToLower().Contains(keywordFilter)) ||
+                    (p.Salary != null && p.Salary.ToLower().Contains(keywordFilter)) ||
+                    (p.EmploymentType != null && p.EmploymentType.ToLower().Contains(keywordFilter)) ||
                     p.JobDescription.ToLower().Contains(keywordFilter) ||
-                    p.RequirementsMandatory.ToLower().Contains(keywordFilter));
+                    p.RequirementsMandatory.ToLower().Contains(keywordFilter) ||
+                    (p.RequirementsPreferred != null && p.RequirementsPreferred.ToLower().Contains(keywordFilter)) ||
+                    (p.Benefits != null && p.Benefits.ToLower().Contains(keywordFilter)) ||
+                    (p.ExperienceYear.HasValue && p.ExperienceYear.Value.ToString().Contains(keywordFilter)) ||
+                    (p.Quantity.HasValue && p.Quantity.Value.ToString().Contains(keywordFilter)));
             }
         }
 
@@ -556,4 +563,3 @@ public class CompanyPostRepository : ICompanyPostRepository
         };
     }
 }
-

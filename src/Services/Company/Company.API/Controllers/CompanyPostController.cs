@@ -1,5 +1,6 @@
 using Company.Application.DTOs;
 using Company.Application.Interfaces;
+using Company.API.Swagger;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
@@ -121,9 +122,9 @@ public class CompanyPostController : ControllerBase
         [FromQuery] string? location,
         [FromQuery] string? type,
         [FromQuery] string? level,
-        [FromQuery] string? q_position,
-        [FromQuery] string? q_description,
-        [FromQuery] string? q_requirements,
+        [FromQuery, SwaggerIgnore] string? q_position,
+        [FromQuery, SwaggerIgnore] string? q_description,
+        [FromQuery, SwaggerIgnore] string? q_requirements,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 20)
     {
