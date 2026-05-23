@@ -122,11 +122,25 @@ public static class ChallengeApiStartup
                 }
             }
 
-            if (missingTables.Any())
+            // Check if SKILLS table is missing Description column (schema version mismatch)
+            var skillsNeedsRebuild = false;
+            if (!missingTables.Any() && await TableExistsAsync(dbContext, "SKILLS"))
             {
-                logger.LogWarning(
-                    "Challenge schema missing tables after migration: {Tables}. Applying schema bootstrap script.",
-                    string.Join(", ", missingTables));
+                skillsNeedsRebuild = !await ColumnExistsAsync(dbContext, "SKILLS", "Description");
+            }
+
+            if (missingTables.Any() || skillsNeedsRebuild)
+            {
+                if (skillsNeedsRebuild)
+                {
+                    logger.LogWarning("Challenge schema version mismatch detected (SKILLS.Description missing). Rebuilding schema.");
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Challenge schema missing tables after migration: {Tables}. Applying schema bootstrap script.",
+                        string.Join(", ", missingTables));
+                }
                 await RebuildChallengeSchemaAsync(dbContext);
             }
 
@@ -204,7 +218,7 @@ public static class ChallengeApiStartup
             END";
 
         await dbContext.Database.ExecuteSqlRawAsync(dropForeignKey);
-        await dbContext.Database.ExecuteSqlRawAsync(dropForeignKey);
+        await dbContext.Database.ExecuteSqlRawAsync(dropCurrentVersionIndex);
         await dbContext.Database.ExecuteSqlRawAsync(alterColumn);
         await dbContext.Database.ExecuteSqlRawAsync(recreateCurrentVersionIndex);
         await dbContext.Database.ExecuteSqlRawAsync(addForeignKey);
@@ -216,21 +230,22 @@ public static class ChallengeApiStartup
             Environment.NewLine,
             new[]
             {
+                // Drop tables in dependency order (dependent first)
                 "DROP TABLE IF EXISTS [PROMPT_SANITIZATION_LOGS];",
+                "DROP TABLE IF EXISTS [SKILL_POINT_TRANSACTIONS];",
                 "DROP TABLE IF EXISTS [SKILL_RELATIONSHIPS];",
                 "DROP TABLE IF EXISTS [USER_SKILLS];",
-                "DROP TABLE IF EXISTS [SKILL_POINT_TRANSACTIONS];",
                 "DROP TABLE IF EXISTS [SUBMISSION_CRITERIA_SCORES];",
                 "DROP TABLE IF EXISTS [CHALLENGE_SUBMISSIONS];",
                 "DROP TABLE IF EXISTS [CHALLENGE_CRITERIA];",
+                "DROP TABLE IF EXISTS [CRITERIA_SKILL_MAPPINGS];",
                 "DROP TABLE IF EXISTS [CHALLENGE_VERSIONS];",
                 "DROP TABLE IF EXISTS [CHALLENGES];",
                 "DROP TABLE IF EXISTS [PENDING_SKILLS];",
-                "DROP TABLE IF EXISTS [CRITERIA_SKILL_MAPPINGS];",
                 "DROP TABLE IF EXISTS [EVALUATION_CRITERIA];",
                 "DROP TABLE IF EXISTS [SKILL_ALIASES];",
-                "DROP TABLE IF EXISTS [SKILL_CATEGORIES];",
-                "DROP TABLE IF EXISTS [SKILLS];"
+                "DROP TABLE IF EXISTS [SKILLS];",
+                "DROP TABLE IF EXISTS [SKILL_CATEGORIES];"
             });
 
         await dbContext.Database.ExecuteSqlRawAsync(dropScript);
@@ -268,6 +283,47 @@ public static class ChallengeApiStartup
             parameter.ParameterName = "@tableName";
             parameter.Value = tableName;
             command.Parameters.Add(parameter);
+
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result) > 0;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static async Task<bool> ColumnExistsAsync(ChallengeDbContext dbContext, string tableName, string columnName)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        var shouldClose = connection.State != System.Data.ConnectionState.Open;
+
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = @tableName AND COLUMN_NAME = @columnName
+            ";
+
+            var tableParam = command.CreateParameter();
+            tableParam.ParameterName = "@tableName";
+            tableParam.Value = tableName;
+            command.Parameters.Add(tableParam);
+
+            var columnParam = command.CreateParameter();
+            columnParam.ParameterName = "@columnName";
+            columnParam.Value = columnName;
+            command.Parameters.Add(columnParam);
 
             var result = await command.ExecuteScalarAsync();
             return Convert.ToInt32(result) > 0;

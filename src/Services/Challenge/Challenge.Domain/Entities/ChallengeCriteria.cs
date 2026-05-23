@@ -11,4 +11,7 @@ public class ChallengeCriteria
     public decimal Weight { get; set; }
 
     public DateTime VersionedAt { get; set; }
+
+    // Navigation properties
+    public virtual EvaluationCriteria Criteria { get; set; }
 }

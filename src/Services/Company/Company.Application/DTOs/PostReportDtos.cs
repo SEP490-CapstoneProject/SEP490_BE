@@ -6,6 +6,12 @@ public class CreatePostReportRequest
     public string? Description { get; set; }
 }
 
+public class ReviewPostReportRequest
+{
+    public string Action { get; set; } = string.Empty; // approve_violation | reject
+    public string? ReviewNote { get; set; }
+}
+
 public class CompanyPostReportDto
 {
     public int Id { get; set; }

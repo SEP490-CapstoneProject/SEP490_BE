@@ -7,7 +7,7 @@ public class ChallengeSubmission
 
     public Guid ChallengeId { get; set; }
 
-    public Guid UserId { get; set; }
+    public int UserId { get; set; }
 
     public string SubmissionContent { get; set; }
 
@@ -21,6 +21,8 @@ public class ChallengeSubmission
 
     // Reference to immutable snapshot
     public Guid VersionSnapshotId { get; set; }
+
+    public Guid VersionId { get; set; }
 
     // Track attempts for anti-farming
     public int AttemptCount { get; set; }

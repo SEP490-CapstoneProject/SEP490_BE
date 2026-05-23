@@ -1,455 +1,302 @@
-SkillSnap AI Challenge System — Complete Implementation Plan
-Mục tiêu hệ thống
+1. Pipeline AI đọc Portfolio và tạo Preview Content
+Mục tiêu
 
-Xây dựng một hệ thống:
+Người dùng upload hoặc chọn portfolio → AI:
 
-tạo challenge đánh giá kỹ năng
-AI chấm bài
-AI đánh giá độ khó
-AI phân tích kỹ năng
-cộng điểm kỹ năng chuẩn hóa
-hiển thị AI-verified skills trên portfolio
+đọc toàn bộ nội dung
+hiểu cấu trúc
+lọc thông tin nổi bật
+tạo:
+short preview
+recruiter summary
+social preview
+AI highlight
+CTA
 
-Hệ thống hướng tới:
+Ví dụ output:
 
-AI Validated Talent Platform
-
-thay vì:
-
-Portfolio Showcase Platform
-I. Kiến trúc tổng thể
-Recruiter/Admin
-    ↓
-Create Challenge
-    ↓
-AI Analyze Challenge
-    ↓
-Normalize Skills
-    ↓
-Publish Challenge
-    ↓
-User Submit
-    ↓
-AI Grading Service
-    ↓
-Skill Point Engine
-    ↓
-Portfolio Update
-    ↓
-Realtime Notification
-II. Core Features
-1. Challenge Management
-Chức năng
-tạo challenge
-chỉnh sửa challenge
-đóng challenge
-xem challenge
-AI phân tích challenge
-2. AI Challenge Analysis
-
-AI sẽ:
-
-đánh giá độ khó
-detect skills
-detect evaluation criteria
-map về canonical skills
-3. Submission System
-
-User:
-
-submit source code
-submit github repo
-submit text answer
-submit zip/file
-4. AI Grading
-
-AI:
-
-so sánh expected solution
-chấm theo criteria
-trả feedback
-tính mastery score
-5. Skill Point Engine
-
-Hệ thống:
-
-convert AI result → skill point
-cộng điểm skill
-lưu history
-6. Portfolio Integration
-
-Portfolio hiển thị:
-
-verified skills
-AI score
-mastery level
-challenge history
-III. Microservice Architecture
-1. Challenge Service
-Responsibility
-challenge CRUD
-submission CRUD
-challenge status
-2. AI Assessment Service
-Responsibility
-AI challenge analysis
-AI grading
-skill extraction
-difficulty evaluation
-AI Provider
-Google AI Studio
-Gemini
-3. Skill Intelligence Service
-Responsibility
-skill normalization
-alias mapping
-skill graph
-skill point engine
-4. Portfolio Service
-Responsibility
-user skills
-verified skills
-ranking
-leaderboard
-5. Notification Service
-Responsibility
-grading notifications
-challenge notifications
-realtime updates
-6. Realtime Service
-Responsibility
-SignalR
-live leaderboard
-realtime notifications
-IV. Database Design
-1. Skill System
-Skill
-public class Skill
 {
-    public Guid Id { get; set; }
-
-    public string Name { get; set; }
-
-    public string Slug { get; set; }
-
-    public Guid CategoryId { get; set; }
-
-    public bool IsSystem { get; set; }
-
-    public bool IsApproved { get; set; }
-}
-SkillAlias
-public class SkillAlias
-{
-    public Guid Id { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public string Alias { get; set; }
-}
-SkillCategory
-public class SkillCategory
-{
-    public Guid Id { get; set; }
-
-    public string Name { get; set; }
-}
-PendingSkill
-public class PendingSkill
-{
-    public Guid Id { get; set; }
-
-    public string ProposedName { get; set; }
-
-    public Guid ProposedById { get; set; }
-
-    public PendingSkillStatus Status { get; set; }
-}
-2. Evaluation Criteria System
-EvaluationCriteria
-public class EvaluationCriteria
-{
-    public Guid Id { get; set; }
-
-    public string Name { get; set; }
-
-    public string Description { get; set; }
-}
-CriteriaSkillMapping
-public class CriteriaSkillMapping
-{
-    public Guid CriteriaId { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public decimal Weight { get; set; }
-}
-3. Challenge System
-Challenge
-public class Challenge
-{
-    public Guid Id { get; set; }
-
-    public string Title { get; set; }
-
-    public string Description { get; set; }
-
-    public string ExpectedSolution { get; set; }
-
-    public decimal DifficultyScore { get; set; }
-
-    public string DifficultyLabel { get; set; }
-
-    public DateTime Deadline { get; set; }
-
-    public ChallengeStatus Status { get; set; }
-
-    public Guid CreatedById { get; set; }
-}
-ChallengeCriteria
-public class ChallengeCriteria
-{
-    public Guid ChallengeId { get; set; }
-
-    public Guid CriteriaId { get; set; }
-
-    public decimal Weight { get; set; }
-}
-4. Submission System
-ChallengeSubmission
-public class ChallengeSubmission
-{
-    public Guid Id { get; set; }
-
-    public Guid ChallengeId { get; set; }
-
-    public Guid UserId { get; set; }
-
-    public string SubmissionContent { get; set; }
-
-    public string GithubUrl { get; set; }
-
-    public decimal OverallScore { get; set; }
-
-    public string AiFeedback { get; set; }
-
-    public SubmissionStatus Status { get; set; }
-}
-SubmissionCriteriaScore
-public class SubmissionCriteriaScore
-{
-    public Guid SubmissionId { get; set; }
-
-    public Guid CriteriaId { get; set; }
-
-    public decimal Score { get; set; }
-
-    public string Feedback { get; set; }
-}
-5. Skill Point Engine
-SkillPointTransaction
-public class SkillPointTransaction
-{
-    public Guid Id { get; set; }
-
-    public Guid UserId { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public decimal Points { get; set; }
-
-    public string SourceType { get; set; }
-
-    public Guid SourceId { get; set; }
-}
-UserSkill
-public class UserSkill
-{
-    public Guid UserId { get; set; }
-
-    public Guid SkillId { get; set; }
-
-    public decimal TotalPoints { get; set; }
-
-    public decimal MasteryScore { get; set; }
-
-    public bool IsVerified { get; set; }
-}
-V. AI Flow
-1. AI Analyze Challenge
-Recruiter Input
-Title
-Description
-Expected Solution
-AI Output
-{
-  "difficultyScore": 8,
-  "difficultyLabel": "Hard",
-  "criteria": [
-    "OOP",
-    "SignalR",
-    "Concurrency"
+  "title": "Senior Backend Developer",
+  "shortPreview": "Backend engineer with 4 years of experience building scalable microservices and AI-integrated systems.",
+  "highlights": [
+    "Built scalable chat system with SignalR",
+    "Integrated Gemini AI into portfolio analysis",
+    "Deployed microservices on Azure"
   ],
-  "skills": [
-    {
-      "name": "C#",
-      "weight": 4
-    },
-    {
-      "name": "SignalR",
-      "weight": 5
-    }
-  ]
+  "tone": "professional",
+  "style": "modern tech"
 }
-2. AI Grading
-Input
+Model nên dùng
+BEST CHOICE
+Gemini 2.5 Flash
+
+Dùng cho:
+
+đọc portfolio dài
+summarize
+extract highlights
+generate structured JSON
+fast + rẻ
+context lớn
+
+Bạn đang có:
+
+250K context
+20 RPM
+
+=> quá đủ cho portfolio.
+
+Không nên dùng
+Gemini 3.1 Flash Lite
+
+Dùng được nhưng:
+
+chất lượng reasoning kém hơn
+dễ hallucination
+summary thiếu depth
+
+Chỉ nên dùng:
+
+free tier fallback
+retry nhẹ
+background tasks
+Prompt Architecture đề xuất
+SYSTEM PROMPT
+You are an AI portfolio analyzer.
+
+Your task:
+- Read the full portfolio carefully
+- Understand skills, projects, experience, achievements
+- Create an engaging preview for recruiters
+- Focus on impactful and measurable achievements
+- Avoid generic wording
+- Return valid JSON only
+USER PROMPT
+Portfolio Content:
+{{FULL_PORTFOLIO}}
+
+User Requirements:
+- Tone: professional
+- Target: recruiter
+- Highlight:
+  - AI integration
+  - cloud deployment
+  - backend engineering
+
+Generate:
+- title
+- shortPreview
+- highlights
+- recruiterSummary
+- socialCaption
+- visualStyleSuggestion
+Function nên tách
+A. AnalyzePortfolioAsync()
+
+Input:
+
+portfolioContent
+userPrompt
+
+Output:
+
+PortfolioPreviewDto
+B. GeneratePreviewImageAsync()
+
+Input:
+
+summary
+visualStyle
+highlightKeywords
+
+Output:
+
+imageUrl
+2. AI Generate Portfolio Preview Image
+
+Đây là phần QUAN TRỌNG NHẤT.
+
+Bạn KHÔNG nên đưa full portfolio vào image model.
+
+Sai cách:
+
+Generate image from this full portfolio text...
+
+→ token cực lớn
+→ ảnh xấu
+→ không kiểm soát style
+
+Cách đúng
+Bước 1
+
+Gemini text model tạo:
+
 {
-  "challenge": "...",
-  "expectedSolution": "...",
-  "criteria": [],
-  "submission": "..."
-}
-Output
-{
-  "overallScore": 8.7,
-  "criteriaScores": [
-    {
-      "criteria": "SignalR",
-      "score": 9
-    }
+  "visualTheme": "modern cyberpunk developer portfolio",
+  "mainElements": [
+    "laptop setup",
+    "floating AI hologram UI",
+    "cloud architecture",
+    "code editor"
   ],
-  "feedback": "..."
+  "colorPalette": ["#111827", "#00D4FF", "#A855F7"],
+  "heroText": "AI Backend Engineer"
 }
-VI. Skill Point Formula
-Formula
-FinalSkillPoint =
-BaseSkillWeight
-*
-CriteriaScoreMultiplier
-*
-DifficultyMultiplier
-Example
-Challenge
-SignalR Chat App
-AI Skill Weight
-Skill	Weight
-C#	3
-SignalR	5
-OOP	2
-User Score
-Criteria	Score
-SignalR	9
-OOP	7
-Final
-Skill	Result
-SignalR	4.5
-C#	2.7
-OOP	1.4
-VII. Event-Driven Architecture
-Events
-ChallengeCreatedEvent
-ChallengeAnalyzedEvent
-SubmissionCreatedEvent
-SubmissionGradedEvent
-SkillPointAwardedEvent
-Event Bus
+Bước 2
 
-Sử dụng:
+Dùng image model generate ảnh.
 
-RabbitMQ
-VIII. API Design
-Challenge APIs
-POST /api/challenges
-GET /api/challenges
-GET /api/challenges/{id}
-PUT /api/challenges/{id}
-DELETE /api/challenges/{id}
-Submission APIs
-POST /api/challenges/{id}/submit
-GET /api/submissions/me
-GET /api/submissions/{id}
-Skill APIs
-GET /api/skills
-GET /api/skills/categories
-GET /api/skills/trending
-Portfolio APIs
-GET /api/portfolio/skills
-GET /api/portfolio/verified-skills
-GET /api/portfolio/skill-history
-IX. Background Jobs
-1. Challenge Expiration Job
-Every 5 minutes
+Model nên dùng
+BEST
+Imagen 4 Generate
 
-Nếu:
+Hoặc:
 
-deadline < now
-
-→ status:
-
-Expired
-2. Skill Recalculation Job
-
-Recalculate:
-
-mastery
-ranking
-leaderboard
-X. Frontend UI
-1. Challenge Page
-
-Hiển thị:
-
-title
-difficulty
-detected skills
-deadline
-reward preview
-2. Submission Page
-
-Cho phép:
-
-upload code
-github repo
-markdown answer
-3. Portfolio Skills
-ASP.NET Core
-█████████ 92%
-
-SignalR
-███████ 70%
-4. Skill History
-+4.5 SignalR Challenge
-+2 OOP Challenge
-XI. Future Expansion
-1. AI Career Path
-Bạn mạnh về backend.
-Nên thử:
-- Redis
-- Kafka
-- Distributed System
-2. Company Sponsored Challenge
+Imagen 4 Fast Generate
+Chọn model nào?
+Model	Khi dùng
+Imagen 4 Generate	chất lượng cao
+Imagen 4 Fast Generate	realtime preview
+Imagen 4 Ultra	ảnh marketing/banner cao cấp
+Recommended Flow
+Portfolio
+   ↓
+Gemini 2.5 Flash
+   ↓
+Structured Preview JSON
+   ↓
+Generate Visual Prompt
+   ↓
+Imagen 4 Fast
+   ↓
+Preview Image
+Kiến trúc Database nên có
+PortfolioPreview
+Column	Type
+Id	GUID
+PortfolioId	GUID
+Summary	TEXT
+RecruiterSummary	TEXT
+Highlights	JSON
+VisualPrompt	TEXT
+ImageUrl	TEXT
+CreatedAt	DATETIME
+Flow Backend hoàn chỉnh
+User opens portfolio
+    ↓
+Click "Generate AI Preview"
+    ↓
+BE loads all portfolio blocks
+    ↓
+Merge to single AI-readable text
+    ↓
+Gemini summarize
+    ↓
+Store summary
+    ↓
+Generate visual prompt
+    ↓
+Imagen generate image
+    ↓
+Upload image to Cloudinary/Azure Blob
+    ↓
+Save image url
+    ↓
+Return preview DTO
+Prompt cho Image AI
 
 Ví dụ:
 
-FPT Backend Challenge
-Shopee Frontend Challenge
-3. Verified Skill Badge
-Verified ASP.NET Core Developer
-4. AI Skill Radar
-Backend ████████
-DevOps ████
-AI ██
-XII. Suggested Tech Stack
-Part	Tech
-Backend	ASP.NET Core
+Create a modern portfolio preview banner.
 
-DB	PostgreSQL
+Theme:
+AI backend engineer portfolio.
 
-Cache	Redis
+Style:
+minimal futuristic UI, dark mode, neon blue lighting.
 
-Queue	RabbitMQ
-AI	Google AI Studio
+Include:
+- laptop coding setup
+- cloud architecture hologram
+- AI visualization
+- modern dashboard UI
 
-Realtime	SignalR
+Professional and recruiter-friendly.
+Recommendation Production
+Text AI
+Task	Model
+Portfolio summarize	Gemini 2.5 Flash
+Cheap fallback	Gemini 3.1 Flash Lite
+Image AI
+Task	Model
+Fast preview	Imagen 4 Fast
+Final quality	Imagen 4 Generate
+Tối ưu Cost
 
-Storage	Cloudinary
+Bạn nên:
+
+Cache AI output
+
+Không regenerate liên tục.
+
+Ví dụ:
+
+hash(portfolio_content + user_prompt)
+
+Nếu hash giống:
+
+→ trả lại preview cũ.
+
+Feature nâng cao rất đáng làm
+1. Multiple preview styles
+
+Người dùng chọn:
+
+Professional
+Creative
+Minimal
+Startup
+Corporate
+Cyberpunk
+2. Recruiter Persona
+
+Prompt thêm:
+
+Target recruiter:
+- FAANG
+- Startup
+- Game studio
+- AI company
+3. Social Media Preview
+
+Generate luôn:
+
+LinkedIn preview
+GitHub bio
+Portfolio card
+OpenGraph image
+Quan trọng nhất
+
+Bạn nên bắt AI trả về JSON schema cố định.
+
+Ví dụ:
+
+{
+  "title": "",
+  "summary": "",
+  "highlights": [],
+  "visualPrompt": "",
+  "theme": ""
+}
+
+Đừng để AI trả text tự do.
+
+Kiến trúc AI Service đề xuất
+Portfolio AI Service
+ ├── PortfolioReader
+ ├── SummaryGenerator
+ ├── HighlightExtractor
+ ├── VisualPromptGenerator
+ ├── ImageGenerator
+ ├── CacheService
+ └── PromptTemplateService

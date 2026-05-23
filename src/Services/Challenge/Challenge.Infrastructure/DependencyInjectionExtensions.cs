@@ -39,6 +39,10 @@ public static class ChallengeServiceCollectionExtensions
         services.AddScoped<IChallengeRepository, ChallengeRepository>();
         services.AddScoped<IChallengeVersionRepository, ChallengeVersionRepository>();
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
+        services.AddScoped<ISubmissionCriteriaScoreRepository, SubmissionCriteriaScoreRepository>();
+        services.AddScoped<IEvaluationCriteriaRepository, EvaluationCriteriaRepository>();
+        services.AddScoped<IChallengeCriteriaRepository, ChallengeCriteriaRepository>();
+        services.AddScoped<ICriteriaSkillMappingRepository, CriteriaSkillMappingRepository>();
         services.AddScoped<IUserSkillRepository, UserSkillRepository>();
         services.AddScoped<ISkillPointTransactionRepository, SkillPointTransactionRepository>();
 
