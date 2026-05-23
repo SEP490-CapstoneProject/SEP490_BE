@@ -43,4 +43,35 @@ public sealed class CompanyMatchingClient : ICompanyMatchingClient
             return Array.Empty<MatchingCandidate>();
         }
     }
+
+    public async Task<IReadOnlyList<CompanyPostDetailForMatchDto>> GetPostsByIdsAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default)
+    {
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0) return Array.Empty<CompanyPostDetailForMatchDto>();
+
+        var idsParam = string.Join(",", idList);
+        var endpoint = $"/api/company-posts/batch?ids={idsParam}";
+        try
+        {
+            var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Company posts batch request failed. Endpoint: {Endpoint}, Status: {Status}", endpoint, response.StatusCode);
+                return Array.Empty<CompanyPostDetailForMatchDto>();
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<List<CompanyPostDetailForMatchDto>>(cancellationToken: cancellationToken);
+            return result ?? new List<CompanyPostDetailForMatchDto>();
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(ex, "Company posts batch request timed out. Endpoint: {Endpoint}", endpoint);
+            return Array.Empty<CompanyPostDetailForMatchDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Company posts batch request failed. Endpoint: {Endpoint}", endpoint);
+            return Array.Empty<CompanyPostDetailForMatchDto>();
+        }
+    }
 }

@@ -10,6 +10,15 @@ public sealed class PortfolioMatchResultDto
     public double SkillScore { get; set; }
     public double CategoryScore { get; set; }
     public double FinalScore { get; set; }
+
+    // Portfolio detail fields
+    public int EmployeeId { get; set; }
+    public bool IsMain { get; set; }
+    public bool IsPublic { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string ModerationStatus { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }
 
 public sealed class PortfolioMatchPagedResult
