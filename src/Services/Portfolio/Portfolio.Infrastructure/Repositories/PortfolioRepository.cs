@@ -384,6 +384,16 @@ WHERE [EmployeeId] = {employeeId}
             .ToListAsync();
     }
 
+    public async Task<List<Portfolio.Domain.Entities.Portfolio>> GetPortfoliosByIdsAsync(IEnumerable<int> ids)
+    {
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0) return new List<Portfolio.Domain.Entities.Portfolio>();
+        return await _context.Portfolios
+            .AsNoTracking()
+            .Where(p => idList.Contains(p.Id))
+            .ToListAsync();
+    }
+
     public async Task UpdateEmbeddingAsync(int portfolioId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus)
     {
         var portfolio = await _context.Portfolios.FirstOrDefaultAsync(p => p.Id == portfolioId);

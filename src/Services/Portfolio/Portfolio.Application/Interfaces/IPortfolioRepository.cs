@@ -22,6 +22,7 @@ public interface IPortfolioRepository
     Task<(List<PortfolioWithComplimentDto> Items, int Total)> GetAllWithComplimentFilterAsync(PortfolioQueryParams queryParams);
     Task<List<Portfolio.Domain.Entities.Portfolio>> GetPublicPortfoliosForMatchingAsync(int limit);
     Task<List<Portfolio.Domain.Entities.Portfolio>> GetPortfoliosForEmbeddingBackfillAsync(int limit);
+    Task<List<Portfolio.Domain.Entities.Portfolio>> GetPortfoliosByIdsAsync(IEnumerable<int> ids);
     Task UpdateEmbeddingAsync(int portfolioId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus);
     Task<PortfolioReport> CreatePortfolioReportAsync(PortfolioReport report);
     Task<PortfolioReport?> GetPortfolioReportByIdAndReporterAsync(int portfolioId, int reporterUserId);

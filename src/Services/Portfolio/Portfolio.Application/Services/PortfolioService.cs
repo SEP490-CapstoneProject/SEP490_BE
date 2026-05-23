@@ -910,19 +910,37 @@ public class PortfolioService : IPortfolioService
         };
 
         var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
+
+        // Enrich with job post details
+        var matchedIds = matches.Items.Select(x => x.Id).ToList();
+        var postDetails = await _companyMatchingClient.GetPostsByIdsAsync(matchedIds, cancellationToken);
+        var postLookup = postDetails.ToDictionary(p => p.PostId);
+
         var result = new JobMatchPagedResult
         {
             Total = matches.Total,
             Page = matches.Page,
             PageSize = matches.PageSize,
-            Items = matches.Items.Select(x => new JobMatchResultDto
+            Items = matches.Items.Select(x =>
             {
-                JobId = x.Id,
-                Title = x.Title,
-                Cosine = x.Cosine,
-                SkillScore = x.SkillScore,
-                CategoryScore = x.CategoryScore,
-                FinalScore = x.FinalScore
+                postLookup.TryGetValue(x.Id, out var detail);
+                return new JobMatchResultDto
+                {
+                    JobId = x.Id,
+                    Title = x.Title,
+                    Cosine = x.Cosine,
+                    SkillScore = x.SkillScore,
+                    CategoryScore = x.CategoryScore,
+                    FinalScore = x.FinalScore,
+                    Address = detail?.Address,
+                    Salary = detail?.Salary,
+                    EmploymentType = detail?.EmploymentType,
+                    CoverImageUrl = detail?.CoverImageUrl,
+                    CompanyName = detail?.CompanyName,
+                    CompanyAvatar = detail?.CompanyAvatar,
+                    CompanyId = detail?.CompanyId ?? 0,
+                    CreatedAt = detail?.CreatedAt ?? default
+                };
             }).ToList()
         };
 
@@ -1151,6 +1169,21 @@ public class PortfolioService : IPortfolioService
         };
     }
 
+    public async Task<List<PortfolioSummaryDto>> GetPortfoliosByIdsAsync(IEnumerable<int> ids)
+    {
+        var portfolios = await _repo.GetPortfoliosByIdsAsync(ids);
+        return portfolios.Select(p => new PortfolioSummaryDto
+        {
+            PortfolioId = p.Id,
+            EmployeeId = p.EmployeeId,
+            Name = p.Name,
+            Status = p.Status,
+            ModerationStatus = p.ModerationStatus ?? string.Empty,
+            IsMain = p.IsMain,
+            IsPublic = p.IsPublic,
+            CreatedAt = p.CreatedAt,
+            UpdatedAt = p.UpdatedAt
+        }).ToList();
     public async Task<PortfolioReportDto> ReviewPortfolioReportAsync(int reportId, int reviewerUserId, ReviewPortfolioReportRequest request)
     {
         var report = await _repo.GetPortfolioReportByIdAsync(reportId)
