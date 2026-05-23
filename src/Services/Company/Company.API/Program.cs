@@ -14,6 +14,7 @@ using RecruitmentPlatform.AI.DependencyInjection;
 using RecruitmentPlatform.AI.Services;
 using System.Text;
 using RecruitmentPlatform.Common;
+using Company.API.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,6 +55,8 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+
+    c.OperationFilter<SwaggerIgnoreParameterOperationFilter>();
 });
 
 builder.Services.AddDbContext<CompanyDbContext>(options =>
