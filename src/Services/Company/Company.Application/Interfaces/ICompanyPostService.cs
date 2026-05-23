@@ -23,6 +23,7 @@ public interface ICompanyPostService
     // Search and filter operations
     Task<PagedResult<CompanyPostFeedDto>> SearchPostsAsync(
         string? q, string? position, string? salary, string? location, string? employmentType, string? level,
+        string? q_position, string? q_description, string? q_requirements,
         int skip, int take, int? userId);
      
     // Admin moderation operations

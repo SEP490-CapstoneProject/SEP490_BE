@@ -397,18 +397,57 @@ public class CompanyPostRepository : ICompanyPostRepository
 
     public async Task<PagedResult<CompanyPostFeedDto>> SearchPostsAsync(
         string? q, string? position, string? salary, string? location, string? employmentType, string? level,
+        string? q_position, string? q_description, string? q_requirements,
         int skip, int take, int? userId)
     {
         var query = _context.CompanyPosts.Where(p => p.Status == 1);
 
-        // Full-text search on keywords (position, title, description)
+        // Full-text search on keywords (position, description, requirements)
+        // Split keywords and search for ALL of them (AND logic)
         if (!string.IsNullOrWhiteSpace(q))
         {
-            var keywords = q.Trim().ToLower();
-            query = query.Where(p =>
-                p.Position.ToLower().Contains(keywords) ||
-                p.JobDescription.ToLower().Contains(keywords) ||
-                p.RequirementsMandatory.ToLower().Contains(keywords));
+            var keywordArray = q.Trim().ToLower().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            // Each keyword must appear in at least one of the searchable fields
+            foreach (var keyword in keywordArray)
+            {
+                var keywordFilter = keyword;
+                query = query.Where(p =>
+                    p.Position.ToLower().Contains(keywordFilter) ||
+                    p.JobDescription.ToLower().Contains(keywordFilter) ||
+                    p.RequirementsMandatory.ToLower().Contains(keywordFilter));
+            }
+        }
+
+        // Advanced search: specific field searches
+        if (!string.IsNullOrWhiteSpace(q_position))
+        {
+            var posKeywords = q_position.Trim().ToLower().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var keyword in posKeywords)
+            {
+                var keywordFilter = keyword;
+                query = query.Where(p => p.Position.ToLower().Contains(keywordFilter));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(q_description))
+        {
+            var descKeywords = q_description.Trim().ToLower().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var keyword in descKeywords)
+            {
+                var keywordFilter = keyword;
+                query = query.Where(p => p.JobDescription.ToLower().Contains(keywordFilter));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(q_requirements))
+        {
+            var reqKeywords = q_requirements.Trim().ToLower().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var keyword in reqKeywords)
+            {
+                var keywordFilter = keyword;
+                query = query.Where(p => p.RequirementsMandatory.ToLower().Contains(keywordFilter));
+            }
         }
 
         // Filter by position
