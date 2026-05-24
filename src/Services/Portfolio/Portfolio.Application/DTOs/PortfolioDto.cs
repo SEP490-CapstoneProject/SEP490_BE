@@ -47,6 +47,7 @@ public class PortfolioSummaryDto
     public bool IsPublic { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<BlockDto> Blocks { get; set; } = new();
 }
 
 
