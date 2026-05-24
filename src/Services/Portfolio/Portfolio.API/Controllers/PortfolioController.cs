@@ -232,6 +232,13 @@ public class PortfolioController : ControllerBase
             return Ok(new List<object>());
 
         var result = await _portfolioService.GetPortfoliosByIdsAsync(idList);
+
+        foreach (var p in result)
+        {
+            var blocks = await _blockRepo.GetByPortfolioIdAsync(p.PortfolioId);
+            p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+        }
+
         return Ok(result);
     }
 

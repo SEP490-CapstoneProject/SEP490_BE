@@ -423,7 +423,8 @@ public class CompanyPostService : ICompanyPostService
                     Status = detail?.Status ?? string.Empty,
                     ModerationStatus = detail?.ModerationStatus ?? string.Empty,
                     CreatedAt = detail?.CreatedAt ?? default,
-                    UpdatedAt = detail?.UpdatedAt
+                    UpdatedAt = detail?.UpdatedAt,
+                    Blocks = detail?.Blocks ?? new()
                 };
             }).ToList()
         };

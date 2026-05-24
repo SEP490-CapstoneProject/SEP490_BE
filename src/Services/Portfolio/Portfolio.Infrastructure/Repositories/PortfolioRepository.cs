@@ -390,6 +390,8 @@ WHERE [EmployeeId] = {employeeId}
         if (idList.Count == 0) return new List<Portfolio.Domain.Entities.Portfolio>();
         return await _context.Portfolios
             .AsNoTracking()
+            .Include(p => p.Blocks)
+                .ThenInclude(b => b.BlockType)
             .Where(p => idList.Contains(p.Id))
             .ToListAsync();
     }

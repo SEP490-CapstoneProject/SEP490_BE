@@ -30,6 +30,8 @@ public class CompanyPostDetailDto
     public string? CompanyName { get; set; }
     public string? CompanyAvatar { get; set; }
     public string? CoverImageUrl { get; set; }
+    public string? MediaType => Media.Count > 0 ? Media[0].Type : null;
+    public string? MediaUrl => Media.Count > 0 ? Media[0].Url : null;
     public string? Address { get; set; }
     public string? Salary { get; set; }
     public string? EmploymentType { get; set; }

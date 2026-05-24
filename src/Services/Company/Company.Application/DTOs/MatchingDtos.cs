@@ -1,4 +1,5 @@
 using RecruitmentPlatform.AI.Models;
+using Company.Application.Clients;
 
 namespace Company.Application.DTOs;
 
@@ -19,6 +20,7 @@ public sealed class PortfolioMatchResultDto
     public string ModerationStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<PortfolioBlockDto> Blocks { get; set; } = new();
 }
 
 public sealed class PortfolioMatchPagedResult

@@ -926,20 +926,20 @@ public class PortfolioService : IPortfolioService
                 postLookup.TryGetValue(x.Id, out var detail);
                 return new JobMatchResultDto
                 {
-                    JobId = x.Id,
-                    Title = x.Title,
-                    Cosine = x.Cosine,
-                    SkillScore = x.SkillScore,
-                    CategoryScore = x.CategoryScore,
-                    FinalScore = x.FinalScore,
+                    PostId = x.Id,
+                    Position = detail?.Position ?? x.Title,
+                    CompanyName = detail?.CompanyName,
+                    CompanyAvatar = detail?.CompanyAvatar,
+                    CoverImageUrl = detail?.CoverImageUrl,
+                    MediaType = detail?.MediaType,
+                    MediaUrl = detail?.MediaUrl,
                     Address = detail?.Address,
                     Salary = detail?.Salary,
                     EmploymentType = detail?.EmploymentType,
-                    CoverImageUrl = detail?.CoverImageUrl,
-                    CompanyName = detail?.CompanyName,
-                    CompanyAvatar = detail?.CompanyAvatar,
-                    CompanyId = detail?.CompanyId ?? 0,
-                    CreatedAt = detail?.CreatedAt ?? default
+                    CreatedAt = detail?.CreatedAt ?? default,
+                    IsSaved = detail?.IsSaved ?? false,
+                    ReviewStatus = detail?.ReviewStatus,
+                    ReviewReason = detail?.ReviewReason
                 };
             }).ToList()
         };
@@ -1184,6 +1184,8 @@ public class PortfolioService : IPortfolioService
             CreatedAt = p.CreatedAt,
             UpdatedAt = p.UpdatedAt
         }).ToList();
+    }
+
     public async Task<PortfolioReportDto> ReviewPortfolioReportAsync(int reportId, int reviewerUserId, ReviewPortfolioReportRequest request)
     {
         var report = await _repo.GetPortfolioReportByIdAsync(reportId)
