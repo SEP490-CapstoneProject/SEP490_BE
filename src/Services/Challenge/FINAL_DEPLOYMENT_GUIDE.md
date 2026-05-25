@@ -322,9 +322,8 @@ Alerts to set up:
 ## Support
 
 Documentation files in this directory:
-- **AI_CHALLENGE_IMPLEMENTATION_STATUS.md** - Architecture deep dive
 - **SETUP_AND_INTEGRATION_GUIDE.md** - Integration details
-- **IMPLEMENTATION_COMPLETE.md** - Project summary
+- **FINAL_DEPLOYMENT_GUIDE.md** - Current deployment reference
 
 Questions? Check logs or review controller implementations for examples.
 

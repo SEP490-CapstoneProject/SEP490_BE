@@ -245,7 +245,7 @@ Production (Azure):
 
 ### Documentation Created
 - ✅ `NOTIFICATION_SYSTEM_TIMEOUT_ROOT_CAUSE.md` - Detailed analysis
-- ✅ `NOTIFICATION_SYSTEM_FIX_IMPLEMENTED.md` - Implementation details
+- ✅ Implementation details (archived notes)
 - ✅ This file - Summary report
 
 ---
@@ -344,7 +344,7 @@ Docker configuration (service DNS names) works locally but fails in Azure Contai
 ## References
 
 - Root Cause Document: `NOTIFICATION_SYSTEM_TIMEOUT_ROOT_CAUSE.md`
-- Implementation Details: `NOTIFICATION_SYSTEM_FIX_IMPLEMENTED.md`
+- Implementation Details: archived implementation notes
 - Original Mobile Guide: `FCM_MOBILE_SETUP_GUIDE.md`
 - Azure Container Apps Docs: https://docs.microsoft.com/azure/container-apps/
 
