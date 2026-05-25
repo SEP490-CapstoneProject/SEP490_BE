@@ -10,76 +10,47 @@ using Portfolio.Application.Interfaces;
 namespace Portfolio.Application.Services;
 
 /// <summary>
-/// Service for generating images using configurable providers (Google AI Nano Banana or Cloudflare Workers AI)
-/// Supports switching between:
-/// - Google AI: Nano Banana (Gemini 2.5 Flash Image) - 2 images/day free tier
-/// - Cloudflare: FLUX.1 Schnell - 10,000 Neurons/day (~50-100 images) free tier
-/// Uses REST API endpoints with appropriate authentication
+/// Service for generating images using Google AI Studio Nano Banana (Gemini 2.5 Flash Image)
+/// Limited to 2 images/day on free tier - provided as fallback when Cloudflare quota is exhausted
+/// Uses REST API endpoint with API key authentication
 /// </summary>
-public class ImageGenerationService
+public class GoogleAiImageService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly IMediaServiceClient _mediaServiceClient;
-    private readonly ILogger<ImageGenerationService> _logger;
-    private readonly GoogleAiImageService? _googleImageService;
-    private readonly CloudflareImageService? _cloudflareImageService;
+    private readonly ILogger<GoogleAiImageService> _logger;
 
-    public ImageGenerationService(
+    public GoogleAiImageService(
         HttpClient httpClient,
         IConfiguration configuration,
         IMediaServiceClient mediaServiceClient,
-        ILogger<ImageGenerationService> logger,
-        GoogleAiImageService? googleImageService = null,
-        CloudflareImageService? cloudflareImageService = null)
+        ILogger<GoogleAiImageService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
         _mediaServiceClient = mediaServiceClient;
         _logger = logger;
-        _googleImageService = googleImageService;
-        _cloudflareImageService = cloudflareImageService;
     }
 
     /// <summary>
-    /// Generate an image using configured provider (Google AI or Cloudflare) and upload to Media service
-    /// Routes to appropriate service based on configuration
+    /// Generate an image using Google AI Nano Banana and upload to Media service
     /// </summary>
     public async Task<(bool Success, string? ImageUrl, string? ImageId, string? ErrorMessage)> GenerateAndUploadImageAsync(
         VisualPromptDto visualPrompt,
         string selectedTheme = "professional",
         CancellationToken cancellationToken = default)
     {
-        var provider = _configuration["ImageGeneration:Provider"] ?? "cloudflare";
-        
-        _logger.LogInformation("🎨 Using image generation provider: {Provider}", provider);
-
-        return provider.ToLower() switch
-        {
-            "google" => await GenerateWithGoogleAsync(visualPrompt, selectedTheme, cancellationToken),
-            "cloudflare" => await GenerateWithCloudflareAsync(visualPrompt, selectedTheme, cancellationToken),
-            _ => (false, null, null, $"Unknown image provider: {provider}")
-        };
-    }
-
-    /// <summary>
-    /// Generate using Google AI Nano Banana
-    /// </summary>
-    private async Task<(bool Success, string? ImageUrl, string? ImageId, string? ErrorMessage)> GenerateWithGoogleAsync(
-        VisualPromptDto visualPrompt,
-        string selectedTheme = "professional",
-        CancellationToken cancellationToken = default)
-    {
         try
         {
-            _logger.LogInformation("🔍 Generating image using Google AI Nano Banana for theme: {Theme}", selectedTheme);
+            _logger.LogInformation("🔍 Generating image via Google AI Nano Banana for theme: {Theme}", selectedTheme);
 
             // Generate image using Nano Banana
-            var (imageSuccess, imageBytes, imageError) = await GenerateImageWithGoogleAsync(visualPrompt, cancellationToken);
+            var (imageSuccess, imageBytes, imageError) = await GenerateImageAsync(visualPrompt, cancellationToken);
 
             if (!imageSuccess || imageBytes == null || imageBytes.Length == 0)
             {
-                _logger.LogError("❌ Google image generation failed: {Error}", imageError);
+                _logger.LogError("❌ Google AI image generation failed: {Error}", imageError);
                 return (false, null, null, imageError);
             }
 
@@ -102,32 +73,16 @@ public class ImageGenerationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Unexpected error in Google image generation pipeline");
+            _logger.LogError(ex, "❌ Unexpected error in Google AI image generation pipeline");
             return (false, null, null, $"Unexpected error: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// Generate using Cloudflare Workers AI
-    /// </summary>
-    private async Task<(bool Success, string? ImageUrl, string? ImageId, string? ErrorMessage)> GenerateWithCloudflareAsync(
-        VisualPromptDto visualPrompt,
-        string selectedTheme = "professional",
-        CancellationToken cancellationToken = default)
-    {
-        if (_cloudflareImageService == null)
-        {
-            return (false, null, null, "Cloudflare image service not configured");
-        }
-
-        return await _cloudflareImageService.GenerateAndUploadImageAsync(visualPrompt, selectedTheme, cancellationToken);
     }
 
     /// <summary>
     /// Call Google AI Studio Nano Banana (Gemini 2.5 Flash Image) API to generate an image
     /// Uses REST API endpoint directly with API key authentication
     /// </summary>
-    private async Task<(bool Success, byte[]? ImageBytes, string? ErrorMessage)> GenerateImageWithGoogleAsync(
+    private async Task<(bool Success, byte[]? ImageBytes, string? ErrorMessage)> GenerateImageAsync(
         VisualPromptDto visualPrompt,
         CancellationToken cancellationToken)
     {
@@ -136,18 +91,18 @@ public class ImageGenerationService
             var apiKey = _configuration["GoogleAI:ApiKey"] ?? throw new InvalidOperationException("GoogleAI ApiKey not configured");
 
             // Build a detailed prompt for Nano Banana
-            var prompt = BuildGooglePrompt(visualPrompt);
+            var prompt = BuildPrompt(visualPrompt);
 
-            _logger.LogInformation("Calling Nano Banana Generate API with prompt: {Prompt}", prompt);
+            _logger.LogInformation("📝 Calling Nano Banana API with prompt: {Prompt}", prompt);
 
             // Google AI Studio REST API endpoint for Nano Banana (gemini-2.5-flash-image)
-            // This is the free-tier image generation model - no paid plan required
+            // This is the free-tier image generation model
             var requestUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={apiKey}";
 
             var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
             request.Headers.Add("x-goog-api-key", apiKey);
 
-            // Prepare request body for Nano Banana (Gemini format, not Imagen format)
+            // Prepare request body for Nano Banana (Gemini format)
             request.Content = JsonContent.Create(new
             {
                 contents = new[]
@@ -173,6 +128,7 @@ public class ImageGenerationService
 
             request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
+            _logger.LogInformation("🔄 Sending request to Google AI Nano Banana endpoint...");
             using var response = await _httpClient.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
@@ -205,6 +161,11 @@ public class ImageGenerationService
 
             _logger.LogInformation("✅ Image generated from Nano Banana API: {SizeBytes} bytes", imageBytes.Length);
             return (true, imageBytes, null);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "❌ HTTP error calling Nano Banana API");
+            return (false, null, $"HTTP error: {ex.Message}");
         }
         catch (Exception ex)
         {
@@ -260,9 +221,9 @@ public class ImageGenerationService
     }
 
     /// <summary>
-    /// Build detailed prompt for Google Nano Banana from visual prompt DTO
+    /// Build detailed prompt for Nano Banana from visual prompt DTO
     /// </summary>
-    private string BuildGooglePrompt(VisualPromptDto visualPrompt)
+    private string BuildPrompt(VisualPromptDto visualPrompt)
     {
         var elements = string.Join(", ", visualPrompt.MainElements ?? new List<string>());
         var colors = string.Join(", ", visualPrompt.ColorPalette ?? new List<string>());
@@ -290,7 +251,7 @@ Style Directives:
 Technical: HD resolution, professional lighting, no watermarks, no text except hero text";
     }
 
-    #region Google AI API Response Models
+    #region Nano Banana API Response Models
 
     private sealed class NanoBananaResponse
     {
@@ -345,4 +306,3 @@ Technical: HD resolution, professional lighting, no watermarks, no text except h
 
     #endregion
 }
-
