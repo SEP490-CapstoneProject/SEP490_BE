@@ -92,6 +92,54 @@ public class AuthController : ControllerBase
         }
     }
 
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<object>>> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        try
+        {
+            await _authService.ForgotPasswordAsync(request);
+            return Ok(ApiResponse<object>.SuccessResponse(null, "Nếu email tồn tại, mã OTP đã được gửi đến email của bạn"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+        }
+    }
+
+    [HttpPost("verify-reset-token")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<object>>> VerifyResetToken([FromBody] VerifyResetTokenRequest request)
+    {
+        try
+        {
+            var isValid = await _authService.VerifyResetTokenAsync(request);
+            if (!isValid)
+                return BadRequest(ApiResponse<object>.ErrorResponse("Mã OTP không hợp lệ hoặc đã hết hạn"));
+
+            return Ok(ApiResponse<object>.SuccessResponse(null, "Mã OTP hợp lệ"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+        }
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<object>>> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        try
+        {
+            await _authService.ResetPasswordAsync(request);
+            return Ok(ApiResponse<object>.SuccessResponse(null, "Mật khẩu đã được đặt lại thành công"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+        }
+    }
+
     [HttpPut("lock-user/{id}")]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> LockUser(int id)
