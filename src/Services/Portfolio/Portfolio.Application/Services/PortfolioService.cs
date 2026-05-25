@@ -910,19 +910,37 @@ public class PortfolioService : IPortfolioService
         };
 
         var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
+
+        // Enrich with job post details
+        var matchedIds = matches.Items.Select(x => x.Id).ToList();
+        var postDetails = await _companyMatchingClient.GetPostsByIdsAsync(matchedIds, cancellationToken);
+        var postLookup = postDetails.ToDictionary(p => p.PostId);
+
         var result = new JobMatchPagedResult
         {
             Total = matches.Total,
             Page = matches.Page,
             PageSize = matches.PageSize,
-            Items = matches.Items.Select(x => new JobMatchResultDto
+            Items = matches.Items.Select(x =>
             {
-                JobId = x.Id,
-                Title = x.Title,
-                Cosine = x.Cosine,
-                SkillScore = x.SkillScore,
-                CategoryScore = x.CategoryScore,
-                FinalScore = x.FinalScore
+                postLookup.TryGetValue(x.Id, out var detail);
+                return new JobMatchResultDto
+                {
+                    PostId = x.Id,
+                    Position = detail?.Position ?? x.Title,
+                    CompanyName = detail?.CompanyName,
+                    CompanyAvatar = detail?.CompanyAvatar,
+                    CoverImageUrl = detail?.CoverImageUrl,
+                    MediaType = detail?.MediaType,
+                    MediaUrl = detail?.MediaUrl,
+                    Address = detail?.Address,
+                    Salary = detail?.Salary,
+                    EmploymentType = detail?.EmploymentType,
+                    CreatedAt = detail?.CreatedAt ?? default,
+                    IsSaved = detail?.IsSaved ?? false,
+                    ReviewStatus = detail?.ReviewStatus,
+                    ReviewReason = detail?.ReviewReason
+                };
             }).ToList()
         };
 
@@ -1149,6 +1167,23 @@ public class PortfolioService : IPortfolioService
             CreatedAt = report.CreatedAt,
             UpdatedAt = report.UpdatedAt
         };
+    }
+
+    public async Task<List<PortfolioSummaryDto>> GetPortfoliosByIdsAsync(IEnumerable<int> ids)
+    {
+        var portfolios = await _repo.GetPortfoliosByIdsAsync(ids);
+        return portfolios.Select(p => new PortfolioSummaryDto
+        {
+            PortfolioId = p.Id,
+            EmployeeId = p.EmployeeId,
+            Name = p.Name,
+            Status = p.Status,
+            ModerationStatus = p.ModerationStatus ?? string.Empty,
+            IsMain = p.IsMain,
+            IsPublic = p.IsPublic,
+            CreatedAt = p.CreatedAt,
+            UpdatedAt = p.UpdatedAt
+        }).ToList();
     }
 
     public async Task<PortfolioReportDto> ReviewPortfolioReportAsync(int reportId, int reviewerUserId, ReviewPortfolioReportRequest request)

@@ -11,6 +11,7 @@ public class AuthDbContext : DbContext
 
     public DbSet<User> Users { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+    public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -36,6 +37,19 @@ public class AuthDbContext : DbContext
             
             entity.HasOne(e => e.User)
                 .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Token).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.ExpiredAt).IsRequired();
+            entity.Property(e => e.IsUsed).IsRequired();
+
+            entity.HasOne(e => e.User)
+                .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

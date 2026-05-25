@@ -33,6 +33,24 @@ public class PagedResult<T>
     public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)Total / PageSize) : 0;
 }
 
+/// <summary>
+/// Lightweight portfolio summary used for matching result enrichment.
+/// </summary>
+public class PortfolioSummaryDto
+{
+    public int PortfolioId { get; set; }
+    public int EmployeeId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string ModerationStatus { get; set; } = string.Empty;
+    public bool IsMain { get; set; }
+    public bool IsPublic { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public List<BlockDto> Blocks { get; set; } = new();
+}
+
+
 public class UpdatePortfolioRequest
 {
     public string Name { get; set; } = string.Empty;

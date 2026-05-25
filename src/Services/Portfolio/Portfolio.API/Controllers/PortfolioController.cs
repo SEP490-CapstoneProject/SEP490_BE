@@ -213,6 +213,35 @@ public class PortfolioController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Internal endpoint: batch fetch portfolio summaries by IDs</summary>
+    [HttpGet("internal/by-ids")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPortfoliosByIds([FromQuery] string ids)
+    {
+        if (string.IsNullOrWhiteSpace(ids))
+            return Ok(new List<object>());
+
+        var idList = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => int.TryParse(x, out var v) ? v : (int?)null)
+            .Where(x => x.HasValue && x.Value > 0)
+            .Select(x => x!.Value)
+            .Distinct()
+            .ToList();
+
+        if (idList.Count == 0)
+            return Ok(new List<object>());
+
+        var result = await _portfolioService.GetPortfoliosByIdsAsync(idList);
+
+        foreach (var p in result)
+        {
+            var blocks = await _blockRepo.GetByPortfolioIdAsync(p.PortfolioId);
+            p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+        }
+
+        return Ok(result);
+    }
+
     [HttpGet("employee/{employeeId:int}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetByEmployee(int employeeId)

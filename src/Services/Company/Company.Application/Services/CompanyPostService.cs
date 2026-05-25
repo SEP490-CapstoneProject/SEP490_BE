@@ -395,19 +395,37 @@ public class CompanyPostService : ICompanyPostService
         };
 
         var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
+
+        // Enrich with portfolio details
+        var matchedIds = matches.Items.Select(x => x.Id).ToList();
+        var portfolioDetails = await _portfolioMatchingClient.GetPortfoliosByIdsAsync(matchedIds, cancellationToken);
+        var detailLookup = portfolioDetails.ToDictionary(p => p.PortfolioId);
+
         var result = new PortfolioMatchPagedResult
         {
             Total = matches.Total,
             Page = matches.Page,
             PageSize = matches.PageSize,
-            Items = matches.Items.Select(x => new PortfolioMatchResultDto
+            Items = matches.Items.Select(x =>
             {
-                PortfolioId = x.Id,
-                Title = x.Title,
-                Cosine = x.Cosine,
-                SkillScore = x.SkillScore,
-                CategoryScore = x.CategoryScore,
-                FinalScore = x.FinalScore
+                detailLookup.TryGetValue(x.Id, out var detail);
+                return new PortfolioMatchResultDto
+                {
+                    PortfolioId = x.Id,
+                    Title = x.Title,
+                    Cosine = x.Cosine,
+                    SkillScore = x.SkillScore,
+                    CategoryScore = x.CategoryScore,
+                    FinalScore = x.FinalScore,
+                    EmployeeId = detail?.EmployeeId ?? 0,
+                    IsMain = detail?.IsMain ?? false,
+                    IsPublic = detail?.IsPublic ?? false,
+                    Status = detail?.Status ?? string.Empty,
+                    ModerationStatus = detail?.ModerationStatus ?? string.Empty,
+                    CreatedAt = detail?.CreatedAt ?? default,
+                    UpdatedAt = detail?.UpdatedAt,
+                    Blocks = detail?.Blocks ?? new()
+                };
             }).ToList()
         };
 

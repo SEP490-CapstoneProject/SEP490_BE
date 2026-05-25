@@ -18,12 +18,14 @@ public class AuthService : IAuthService
     private readonly IAuthRepository _repository;
     private readonly JwtSettings _jwtSettings;
     private readonly IUserProfileClient _userProfileClient;
+    private readonly IEmailService _emailService;
 
-    public AuthService(IAuthRepository repository, IOptions<JwtSettings> jwtSettings, IUserProfileClient userProfileClient)
+    public AuthService(IAuthRepository repository, IOptions<JwtSettings> jwtSettings, IUserProfileClient userProfileClient, IEmailService emailService)
     {
         _repository = repository;
         _jwtSettings = jwtSettings.Value;
         _userProfileClient = userProfileClient;
+        _emailService = emailService;
     }
 
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
@@ -262,5 +264,67 @@ public class AuthService : IAuthService
             Status = user.Status.ToString(),
             CreateAt = user.CreatedAt
         };
+    }
+
+    // =========== Forgot Password ===========
+
+    public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var user = await _repository.GetByEmailAsync(request.Email);
+        // Luôn trả về thành công để tránh lộ thông tin email có tồn tại hay không
+        if (user == null) return;
+
+        if (user.Status == UserStatus.Locked)
+            throw new Exception("Tài khoản đã bị khóa");
+
+        // Hủy tất cả token cũ chưa dùng
+        await _repository.InvalidatePasswordResetTokensAsync(request.Email);
+
+        // Tạo token ngẫu nhiên 6 chữ số (OTP)
+        var otp = GenerateOtp();
+
+        var resetToken = new PasswordResetToken
+        {
+            UserId = user.Id,
+            Token = otp,
+            ExpiredAt = DateTime.UtcNow.AddMinutes(15),
+            IsUsed = false
+        };
+
+        await _repository.AddPasswordResetTokenAsync(resetToken);
+        await _emailService.SendPasswordResetEmailAsync(request.Email, otp);
+    }
+
+    public async Task<bool> VerifyResetTokenAsync(VerifyResetTokenRequest request)
+    {
+        var token = await _repository.GetValidPasswordResetTokenAsync(request.Email, request.Token);
+        return token != null;
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var token = await _repository.GetValidPasswordResetTokenAsync(request.Email, request.Token);
+        if (token == null)
+            throw new Exception("Mã OTP không hợp lệ hoặc đã hết hạn");
+
+        var user = await _repository.GetByEmailAsync(request.Email);
+        if (user == null)
+            throw new Exception("Người dùng không tồn tại");
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        await _repository.UpdateAsync(user);
+
+        // Đánh dấu token đã dùng
+        token.IsUsed = true;
+        await _repository.InvalidatePasswordResetTokensAsync(request.Email);
+    }
+
+    private static string GenerateOtp()
+    {
+        using var rng = RandomNumberGenerator.Create();
+        var bytes = new byte[4];
+        rng.GetBytes(bytes);
+        var value = BitConverter.ToUInt32(bytes, 0) % 1000000;
+        return value.ToString("D6");
     }
 }
