@@ -4,6 +4,7 @@ using Auth.Infrastructure.Azure;
 using Auth.Infrastructure.Clients;
 using Auth.Infrastructure.Configuration;
 using Auth.Infrastructure.Data;
+using Auth.Infrastructure.Email;
 using Auth.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -70,6 +71,10 @@ builder.Services.AddAuthorization();
 // Register Services
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Register Email Service
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Register UserProfile Service client (service-to-service)
 var userProfileUrl = builder.Configuration["ServiceUrls:UserProfileService"] ?? "http://userprofile-service:8080";
