@@ -39,6 +39,7 @@ public class PortfolioPreviewResponse
     public int PortfolioId { get; set; }
     public Dictionary<string, object>? PreviewJson { get; set; }
     public string? HighlightsDescription { get; set; }
+    public string? ImageUrl { get; set; }
     public string? ImageId { get; set; }
     public int Version { get; set; }
     public int RegeneratedCount { get; set; }
