@@ -92,4 +92,37 @@ public class AuthRepository : IAuthRepository
     {
         return await _context.Users.ToListAsync();
     }
+
+    // =========== Password Reset ===========
+
+    public async Task AddPasswordResetTokenAsync(PasswordResetToken token)
+    {
+        _context.PasswordResetTokens.Add(token);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<PasswordResetToken?> GetValidPasswordResetTokenAsync(string email, string token)
+    {
+        return await _context.PasswordResetTokens
+            .Include(t => t.User)
+            .Where(t => t.User.Email == email
+                     && t.Token == token
+                     && !t.IsUsed
+                     && t.ExpiredAt > DateTime.UtcNow)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task InvalidatePasswordResetTokensAsync(string email)
+    {
+        var tokens = await _context.PasswordResetTokens
+            .Include(t => t.User)
+            .Where(t => t.User.Email == email && !t.IsUsed)
+            .ToListAsync();
+
+        foreach (var t in tokens)
+            t.IsUsed = true;
+
+        await _context.SaveChangesAsync();
+    }
 }

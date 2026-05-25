@@ -15,4 +15,9 @@ public interface IAuthRepository
     Task AddRefreshTokenAsync(RefreshToken refreshToken);
     Task RevokeRefreshTokenAsync(string token);
     Task<IEnumerable<User>> GetAllUsersAsync();
+
+    // Password Reset
+    Task AddPasswordResetTokenAsync(PasswordResetToken token);
+    Task<PasswordResetToken?> GetValidPasswordResetTokenAsync(string email, string token);
+    Task InvalidatePasswordResetTokensAsync(string email);
 }
