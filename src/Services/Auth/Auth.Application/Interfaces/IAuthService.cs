@@ -16,4 +16,9 @@ public interface IAuthService
     Task<InternalUserInfoDto?> GetInternalUserInfoByIdAsync(int userId);
     Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByIdsAsync(IEnumerable<int> userIds);
     Task<IEnumerable<InternalUserInfoDto>> GetInternalUserInfosByRolesAsync(IEnumerable<string> roles);
+
+    // Forgot Password
+    Task ForgotPasswordAsync(ForgotPasswordRequest request);
+    Task<bool> VerifyResetTokenAsync(VerifyResetTokenRequest request);
+    Task ResetPasswordAsync(ResetPasswordRequest request);
 }
