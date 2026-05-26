@@ -35,15 +35,15 @@ public class ApplicationService : IApplicationService
     {
         var employeeId = _currentUser.GetEmployeeId();
         var userId = _currentUser.GetUserId();
+        var quotaIncremented = false;
 
-        // TEMPORARILY DISABLED: Subscription quota check for testing
-        // TODO: Re-enable when subscription system is fully tested and ready
-        var (canApply, currentUsage) = await _entitlementChecker.TryIncrementUsageAsync(userId, "MAX_APPLY");
+        var (canApply, _) = await _entitlementChecker.TryIncrementUsageAsync(userId, "MAX_APPLY");
         if (!canApply)
         {
             _logger.LogWarning("User {UserId} exceeded MAX_APPLY quota", userId);
             throw new InvalidOperationException("You have reached your application limit. Upgrade your subscription to apply to more jobs.");
         }
+        quotaIncremented = true;
 
         try
         {
@@ -109,8 +109,10 @@ public class ApplicationService : IApplicationService
         }
         catch (Exception)
         {
-            // DISABLED: Rollback on failure
-            // await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
+            if (quotaIncremented)
+            {
+                await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
+            }
             throw;
         }
     }
