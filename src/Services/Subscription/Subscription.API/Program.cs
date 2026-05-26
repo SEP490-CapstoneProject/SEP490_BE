@@ -119,6 +119,7 @@ builder.Services.AddHttpClient<ISubscriptionUserProfileClient, SubscriptionUserP
 // Add Services
 builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IFeatureVerificationService, FeatureVerificationService>();
 builder.Services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
 builder.Services.AddScoped<IRabbitMQPublisher, RabbitMQPublisher>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
