@@ -8,6 +8,7 @@ public interface IPortfolioRepository
     Task<Portfolio.Domain.Entities.Portfolio?> GetByIdAsync(int id);
     Task<IEnumerable<Portfolio.Domain.Entities.Portfolio>> GetByEmployeeIdAsync(int employeeId);
     Task<Portfolio.Domain.Entities.Portfolio?> GetMainByEmployeeIdAsync(int employeeId);
+    Task<int> CountByEmployeeIdAsync(int employeeId);
     Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy);
     Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total)> GetPendingForModerationAsync(int page, int pageSize);
     Task<bool> ExistsByEmployeeIdAsync(int employeeId);
