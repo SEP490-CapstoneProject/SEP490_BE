@@ -19,6 +19,9 @@ public class ApplicationRepository : IApplicationRepository
     public async Task<List<Domain.Entities.Application>> GetByCompanyIdAsync(int companyId)
         => await _context.Applications.Where(a => a.CompanyId == companyId).OrderByDescending(a => a.AppliedAt).ToListAsync();
 
+    public async Task<int> CountByEmployeeIdAsync(int employeeId)
+        => await _context.Applications.CountAsync(a => a.EmployeeId == employeeId);
+
     public async Task<(List<Domain.Entities.Application> Items, int Total)> GetByEmployeeIdPagedAsync(int employeeId, int page, int pageSize)
     {
         var query = _context.Applications

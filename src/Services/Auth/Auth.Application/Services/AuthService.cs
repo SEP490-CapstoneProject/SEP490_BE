@@ -3,6 +3,7 @@ using Auth.Domain.Entities;
 using RecruitmentPlatform.Common;
 using RecruitmentPlatform.Contracts.Auth;
 using RecruitmentPlatform.Contracts.Enums;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -19,13 +20,15 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwtSettings;
     private readonly IUserProfileClient _userProfileClient;
     private readonly IEmailService _emailService;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(IAuthRepository repository, IOptions<JwtSettings> jwtSettings, IUserProfileClient userProfileClient, IEmailService emailService)
+    public AuthService(IAuthRepository repository, IOptions<JwtSettings> jwtSettings, IUserProfileClient userProfileClient, IEmailService emailService, ILogger<AuthService> logger)
     {
         _repository = repository;
         _jwtSettings = jwtSettings.Value;
         _userProfileClient = userProfileClient;
         _emailService = emailService;
+        _logger = logger;
     }
 
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
@@ -292,7 +295,17 @@ public class AuthService : IAuthService
         };
 
         await _repository.AddPasswordResetTokenAsync(resetToken);
-        await _emailService.SendPasswordResetEmailAsync(request.Email, otp);
+
+        try
+        {
+            await _emailService.SendPasswordResetEmailAsync(request.Email, otp);
+        }
+        catch (Exception ex)
+        {
+            // Ghi log lỗi SMTP, nhưng không throw để tránh lộ thông tin
+            // và không trả 400 khi SMTP lỗi
+            _logger.LogWarning(ex, "Failed to send password reset email to {Email}", request.Email);
+        }
     }
 
     public async Task<bool> VerifyResetTokenAsync(VerifyResetTokenRequest request)

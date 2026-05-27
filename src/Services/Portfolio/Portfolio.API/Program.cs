@@ -13,6 +13,7 @@ using Portfolio.Infrastructure.Services;
 using Portfolio.Infrastructure.Messaging;
 using Portfolio.Application.BlockHandlers;
 using RecruitmentPlatform.AI.DependencyInjection;
+using Subscription.Application.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -165,6 +166,11 @@ builder.Services.AddHttpClient<ICompanyMatchingClient, CompanyMatchingClient>(cl
 {
     client.BaseAddress = new Uri(serviceUrls["CompanyService"] ?? "http://company-service:8080");
     client.Timeout = TimeSpan.FromSeconds(2);
+});
+
+builder.Services.AddHttpClient<IFeatureVerificationService, SubscriptionFeatureVerificationService>(client =>
+{
+    client.BaseAddress = new Uri(serviceUrls["SubscriptionService"] ?? "http://subscription-service:8080");
 });
 
 builder.Services.AddHttpClient<GoogleAiPreviewGenerator>(client =>
