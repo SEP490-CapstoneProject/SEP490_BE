@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Subscription.Application.DTOs;
 using Subscription.Application.Interfaces;
@@ -28,216 +29,171 @@ public class FeatureVerificationService : IFeatureVerificationService
         _logger = logger;
     }
 
-    /// <summary>
-    /// Check if user has access to a specific feature
-    /// </summary>
     public async Task<bool> HasFeatureAccessAsync(int userId, string featureKey)
     {
-        try
+        var value = await GetFeatureValueAsync(userId, featureKey);
+        if (value == null)
         {
-            var value = await GetFeatureValueAsync(userId, featureKey);
-            return !string.IsNullOrEmpty(value);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error checking feature access for user {UserId}, feature {FeatureKey}", 
-                userId, featureKey);
             return false;
         }
+
+        return !bool.TryParse(value, out var boolValue) || boolValue;
     }
 
-    /// <summary>
-    /// Get the value/limit of a feature for the user
-    /// Returns: "5", "20", "-1", "true", "false", or null if user doesn't have feature
-    /// </summary>
     public async Task<string?> GetFeatureValueAsync(int userId, string featureKey)
     {
-        try
-        {
-            // Get user entitlements (cached)
-            var entitlements = await GetUserEntitlementsAsync(userId);
-            
-            if (entitlements.TryGetValue(featureKey, out var value))
-            {
-                return value;
-            }
-
-            _logger.LogDebug("Feature {FeatureKey} not found for user {UserId}", featureKey, userId);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting feature value for user {UserId}, feature {FeatureKey}", 
-                userId, featureKey);
-            return null;
-        }
+        var entitlements = await GetUserEntitlementsAsync(userId);
+        return entitlements.TryGetValue(featureKey, out var value) ? value : null;
     }
 
-    /// <summary>
-    /// Check if user can perform an action with a limit
-    /// Returns true if currentCount < limit (or limit is -1 for unlimited)
-    /// </summary>
     public async Task<bool> CanPerformActionAsync(int userId, string actionKey, int currentCount = 0)
     {
-        try
+        var value = await GetFeatureValueAsync(userId, actionKey);
+        if (value == null)
         {
-            var featureValue = await GetFeatureValueAsync(userId, actionKey);
-            
-            if (string.IsNullOrEmpty(featureValue))
-            {
-                _logger.LogWarning("User {UserId} doesn't have feature {ActionKey}", userId, actionKey);
-                return false;
-            }
-
-            // Handle unlimited (-1)
-            if (featureValue == "-1")
-            {
-                return true;
-            }
-
-            // Try to parse as integer
-            if (int.TryParse(featureValue, out var limit))
-            {
-                var canPerform = currentCount < limit;
-                _logger.LogDebug("Feature {ActionKey} check for user {UserId}: current={CurrentCount}, limit={Limit}, allowed={CanPerform}",
-                    actionKey, userId, currentCount, limit, canPerform);
-                return canPerform;
-            }
-
-            _logger.LogWarning("Invalid numeric value for feature {ActionKey}: {Value}", actionKey, featureValue);
             return false;
         }
-        catch (Exception ex)
+
+        if (value == "-1")
         {
-            _logger.LogError(ex, "Error checking action permission for user {UserId}, action {ActionKey}",
-                userId, actionKey);
+            return true;
+        }
+
+        if (!int.TryParse(value, out var limit))
+        {
+            _logger.LogWarning("Invalid numeric value '{Value}' for feature {FeatureKey}", value, actionKey);
             return false;
         }
+
+        return currentCount < limit;
     }
 
-    /// <summary>
-    /// Get full feature entitlement details for user
-    /// </summary>
     public async Task<FeatureEntitlementDto?> GetFeatureEntitlementAsync(int userId, string featureKey)
     {
-        try
-        {
-            var subscription = await GetUserActiveSubscriptionAsync(userId);
-            if (subscription?.Plan == null)
-            {
-                _logger.LogDebug("No active subscription for user {UserId}, checking free plan", userId);
-                return null;
-            }
+        var features = await GetPlanFeaturesForUserAsync(userId);
+        var feature = features.FirstOrDefault(f => f.IsActive && f.FeatureKey == featureKey);
 
-            var plan = subscription.Plan;
-            var feature = plan.Features?.FirstOrDefault(f => f.FeatureKey == featureKey && f.IsActive);
-            
-            if (feature == null)
-            {
-                _logger.LogDebug("Feature {FeatureKey} not found in user {UserId}'s plan {PlanId}",
-                    featureKey, userId, plan.Id);
-                return null;
-            }
-
-            return MapToFeatureEntitlementDto(feature);
-        }
-        catch (Exception ex)
+        if (feature == null)
         {
-            _logger.LogError(ex, "Error getting feature entitlement for user {UserId}, feature {FeatureKey}",
-                userId, featureKey);
             return null;
         }
+
+        return new FeatureEntitlementDto
+        {
+            FeatureKey = feature.FeatureKey,
+            FeatureName = feature.FeatureName,
+            Value = feature.Value,
+            Type = feature.Type.ToString(),
+            IsActive = feature.IsActive
+        };
     }
 
-    /// <summary>
-    /// Get all active features/entitlements for user
-    /// Results are cached for 1 hour using Redis
-    /// </summary>
     public async Task<Dictionary<string, string>> GetUserEntitlementsAsync(int userId)
     {
-        try
+        var entitlements = await GetEntitlementsAsync(userId);
+        return ConvertToStringDictionary(entitlements.Features);
+    }
+
+    private async Task<EntitlementsDto> GetEntitlementsAsync(int userId)
+    {
+        var cached = await _redisService.GetEntitlementsAsync(userId);
+        if (cached != null)
         {
-            // Level 1: Check Redis cache using EntitlementsDto
-            var cached = await _redisService.GetEntitlementsAsync(userId);
-            if (cached != null)
-            {
-                _logger.LogDebug("Entitlements cache hit for user {UserId}", userId);
-                // Convert cached Features (Dict<string, object>) to Dict<string, string>
-                return ConvertFeaturesObjectToDictionary(cached.Features);
-            }
+            return cached;
+        }
 
-            // Level 2: Query database
-            var subscription = await GetUserActiveSubscriptionAsync(userId);
-            Dictionary<string, string> entitlements;
-
-            if (subscription?.Plan != null)
-            {
-                entitlements = BuildFeatureDictionary(subscription.Plan.Features);
-                _logger.LogDebug("Loaded entitlements from DB for user {UserId}, plan {PlanId}",
-                    userId, subscription.PlanId);
-                
-                // Cache using EntitlementsDto format
-                var ttl = (subscription.EndDate - DateTime.UtcNow).Add(TimeSpan.FromDays(1));
-                var cacheDto = new EntitlementsDto
-                {
-                    Version = 1,
-                    PlanId = subscription.PlanId,
-                    PlanName = subscription.Plan.Name,
-                    Features = ConvertFeaturesDictionaryToObject(entitlements),
-                    ExpiredAt = subscription.EndDate
-                };
-                await _redisService.SetEntitlementsAsync(userId, cacheDto, ttl);
-            }
-            else
-            {
-                // Level 3: No active subscription
-                entitlements = new Dictionary<string, string>();
-                _logger.LogDebug("No active subscription for user {UserId}, using empty entitlements", userId);
-            }
-
+        var subscription = await GetActiveSubscriptionAsync(userId);
+        if (subscription != null)
+        {
+            var entitlements = BuildEntitlements(subscription);
+            await _redisService.SetEntitlementsAsync(userId, entitlements);
             return entitlements;
         }
-        catch (Exception ex)
+
+        var freePlan = await GetFreePlanAsync();
+        if (freePlan != null)
         {
-            _logger.LogError(ex, "Error getting entitlements for user {UserId}", userId);
-            // Return empty dict on error instead of throwing
-            return new Dictionary<string, string>();
+            var entitlements = BuildEntitlements(freePlan);
+            await _redisService.SetEntitlementsAsync(userId, entitlements);
+            return entitlements;
         }
+
+        _logger.LogWarning("No free plan found for user {UserId}. Returning empty entitlements.", userId);
+        return new EntitlementsDto
+        {
+            Version = 1,
+            PlanId = 0,
+            PlanName = "None",
+            Features = new Dictionary<string, object>(),
+            ExpiredAt = DateTime.UtcNow.AddYears(10)
+        };
     }
 
-    /// <summary>
-    /// Get user's active subscription with plan and features loaded
-    /// </summary>
-    private async Task<UserSubscription?> GetUserActiveSubscriptionAsync(int userId)
+    private async Task<UserSubscription?> GetActiveSubscriptionAsync(int userId)
     {
-        try
+        var subscription = await _subscriptionRepository.GetActiveByUserIdAsync(userId);
+        if (subscription == null)
         {
-            var subscription = await _subscriptionRepository.GetActiveByUserIdAsync(userId);
-            
-            // Make sure plan and features are loaded
-            if (subscription?.Plan != null && subscription.Plan.Features == null)
-            {
-                // Reload with features if needed
-                subscription.Plan = await _planRepository.GetByIdWithFeaturesAsync(subscription.PlanId) 
-                    ?? subscription.Plan;
-            }
-
-            return subscription;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting active subscription for user {UserId}", userId);
             return null;
         }
+
+        if (subscription.Status != SubscriptionStatus.Active || subscription.EndDate <= DateTime.UtcNow)
+        {
+            _logger.LogWarning("Subscription {SubscriptionId} for user {UserId} is not active or expired.", subscription.Id, userId);
+            return null;
+        }
+
+        return subscription;
     }
 
-    /// <summary>
-    /// Build a dictionary of feature key -> value from plan features
-    /// </summary>
-    private static Dictionary<string, string> BuildFeatureDictionary(ICollection<PlanFeature>? features)
+    private async Task<List<PlanFeature>> GetPlanFeaturesForUserAsync(int userId)
     {
-        var dict = new Dictionary<string, string>();
-        
+        var subscription = await GetActiveSubscriptionAsync(userId);
+        if (subscription?.Plan?.Features != null)
+        {
+            return subscription.Plan.Features.Where(f => f.IsActive).ToList();
+        }
+
+        var freePlan = await GetFreePlanAsync();
+        return freePlan?.Features.Where(f => f.IsActive).ToList() ?? new List<PlanFeature>();
+    }
+
+    private async Task<Plan?> GetFreePlanAsync()
+    {
+        var plans = await _planRepository.GetAllActiveAsync();
+        return plans
+            .Where(p => p.Price == 0)
+            .OrderBy(p => p.Id)
+            .FirstOrDefault();
+    }
+
+    private static EntitlementsDto BuildEntitlements(UserSubscription subscription)
+    {
+        return new EntitlementsDto
+        {
+            Version = 1,
+            PlanId = subscription.PlanId,
+            PlanName = subscription.Plan?.Name ?? "Unknown",
+            Features = BuildFeaturesDictionary(subscription.Plan?.Features),
+            ExpiredAt = subscription.EndDate
+        };
+    }
+
+    private static EntitlementsDto BuildEntitlements(Plan plan)
+    {
+        return new EntitlementsDto
+        {
+            Version = 1,
+            PlanId = plan.Id,
+            PlanName = plan.Name,
+            Features = BuildFeaturesDictionary(plan.Features),
+            ExpiredAt = DateTime.UtcNow.AddYears(10)
+        };
+    }
+
+    private static Dictionary<string, object> BuildFeaturesDictionary(ICollection<PlanFeature>? features)
+    {
+        var dict = new Dictionary<string, object>();
         if (features == null)
         {
             return dict;
@@ -245,82 +201,54 @@ public class FeatureVerificationService : IFeatureVerificationService
 
         foreach (var feature in features.Where(f => f.IsActive))
         {
-            // Store all values as strings for consistency
-            dict[feature.FeatureKey] = feature.Value;
+            object value = feature.Type switch
+            {
+                FeatureType.Boolean => bool.Parse(feature.Value),
+                FeatureType.Number => int.Parse(feature.Value),
+                _ => feature.Value
+            };
+
+            dict[feature.FeatureKey] = value;
         }
 
         return dict;
     }
 
-    /// <summary>
-    /// Convert feature dictionary (string values) to object values for caching
-    /// </summary>
-    private static Dictionary<string, object> ConvertFeaturesDictionaryToObject(Dictionary<string, string> features)
+    private static Dictionary<string, string> ConvertToStringDictionary(Dictionary<string, object> features)
     {
-        var dict = new Dictionary<string, object>();
-        foreach (var kvp in features)
+        var result = new Dictionary<string, string>();
+        foreach (var (key, value) in features)
         {
-            dict[kvp.Key] = kvp.Value;
+            result[key] = NormalizeValue(value);
         }
-        return dict;
+
+        return result;
     }
 
-    /// <summary>
-    /// Convert cached features (object values) back to string values
-    /// </summary>
-    private static Dictionary<string, string> ConvertFeaturesObjectToDictionary(Dictionary<string, object> features)
+    private static string NormalizeValue(object value)
     {
-        var dict = new Dictionary<string, string>();
-        foreach (var kvp in features)
+        return value switch
         {
-            dict[kvp.Key] = kvp.Value?.ToString() ?? string.Empty;
-        }
-        return dict;
-    }
-
-    /// <summary>
-    /// Map PlanFeature to FeatureEntitlementDto
-    /// </summary>
-    private static FeatureEntitlementDto MapToFeatureEntitlementDto(PlanFeature feature)
-    {
-        return new FeatureEntitlementDto
-        {
-            FeatureKey = feature.FeatureKey,
-            FeatureName = feature.FeatureName,
-            Value = feature.Value,
-            Type = MapFeatureTypeToString(feature.Type),
-            IsActive = feature.IsActive
+            null => string.Empty,
+            bool boolValue => boolValue.ToString().ToLowerInvariant(),
+            int intValue => intValue.ToString(),
+            long longValue => longValue.ToString(),
+            decimal decimalValue => decimalValue.ToString(),
+            JsonElement jsonElement => JsonElementToString(jsonElement),
+            _ => value.ToString() ?? string.Empty
         };
     }
 
-    /// <summary>
-    /// Convert FeatureType enum to string representation
-    /// </summary>
-    private static string MapFeatureTypeToString(FeatureType type)
+    private static string JsonElementToString(JsonElement element)
     {
-        return type switch
+        return element.ValueKind switch
         {
-            FeatureType.Boolean => "1",
-            FeatureType.Number => "2",
-            FeatureType.Text => "3",
-            _ => "0" // Default to Text
+            JsonValueKind.String => element.GetString() ?? string.Empty,
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Number when element.TryGetInt64(out var intValue) => intValue.ToString(),
+            JsonValueKind.Number when element.TryGetDecimal(out var decimalValue) => decimalValue.ToString(),
+            _ => element.ToString()
         };
-    }
-
-    /// <summary>
-    /// Invalidate user's entitlements cache (call after subscription changes)
-    /// </summary>
-    public async Task InvalidateUserEntitlementsCacheAsync(int userId)
-    {
-        try
-        {
-            await _redisService.RemoveEntitlementsAsync(userId);
-            _logger.LogInformation("Entitlements cache invalidated for user {UserId}", userId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error invalidating entitlements cache for user {UserId}", userId);
-        }
     }
 }
-

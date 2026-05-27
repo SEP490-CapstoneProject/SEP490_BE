@@ -3,6 +3,7 @@ using Application.Application.Interfaces;
 using Application.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using RecruitmentPlatform.Contracts.Time;
+using Subscription.Application.Interfaces;
 
 namespace Application.Application.Services;
 
@@ -11,7 +12,7 @@ public class ApplicationService : IApplicationService
     private readonly IApplicationRepository _repo;
     private readonly IUserProfileClient _userProfileClient;
     private readonly ICurrentUserService _currentUser;
-    private readonly IEntitlementChecker _entitlementChecker;
+    private readonly IFeatureVerificationService _featureVerificationService;
     private readonly IApplicationNotificationEventPublisher _notificationEventPublisher;
     private readonly ILogger<ApplicationService> _logger;
 
@@ -19,14 +20,14 @@ public class ApplicationService : IApplicationService
         IApplicationRepository repo,
         IUserProfileClient userProfileClient,
         ICurrentUserService currentUser,
-        IEntitlementChecker entitlementChecker,
+        IFeatureVerificationService featureVerificationService,
         IApplicationNotificationEventPublisher notificationEventPublisher,
         ILogger<ApplicationService> logger)
     {
         _repo = repo;
         _userProfileClient = userProfileClient;
         _currentUser = currentUser;
-        _entitlementChecker = entitlementChecker;
+        _featureVerificationService = featureVerificationService;
         _notificationEventPublisher = notificationEventPublisher;
         _logger = logger;
     }
@@ -37,21 +38,12 @@ public class ApplicationService : IApplicationService
         var userId = _currentUser.GetUserId();
         var quotaIncremented = false;
 
-        var (canApply, _) = await _entitlementChecker.TryIncrementUsageAsync(userId, "MAX_APPLY");
-        if (!canApply)
-        {
-            _logger.LogWarning("User {UserId} exceeded MAX_APPLY quota", userId);
-            throw new InvalidOperationException("You have reached your application limit. Upgrade your subscription to apply to more jobs.");
-        }
-        quotaIncremented = true;
-
         try
         {
             // Validate employee exists
             var employee = await _userProfileClient.GetEmployeeByIdAsync(employeeId);
             if (employee == null)
             {
-                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new KeyNotFoundException($"Employee {employeeId} not found");
             }
 
@@ -59,7 +51,6 @@ public class ApplicationService : IApplicationService
             var post = await _userProfileClient.GetCompanyPostByIdAsync(request.CompanyPostId);
             if (post == null)
             {
-                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new KeyNotFoundException($"Company post {request.CompanyPostId} not found");
             }
 
@@ -67,7 +58,6 @@ public class ApplicationService : IApplicationService
             var ownsPortfolio = await _userProfileClient.ValidatePortfolioOwnershipAsync(employeeId, request.PortfolioId);
             if (!ownsPortfolio)
             {
-                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new UnauthorizedAccessException($"Portfolio {request.PortfolioId} does not belong to employee {employeeId}");
             }
 
@@ -75,8 +65,15 @@ public class ApplicationService : IApplicationService
             var exists = await _repo.ExistsByEmployeeAndPostAsync(employeeId, request.CompanyPostId);
             if (exists)
             {
-                // DISABLED: await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
                 throw new InvalidOperationException("You have already applied to this position");
+            }
+
+            var currentCount = await _repo.CountByEmployeeIdAsync(employeeId);
+            var canApply = await _featureVerificationService.CanPerformActionAsync(userId, "MAX_APPLY", currentCount);
+            if (!canApply)
+            {
+                _logger.LogWarning("User {UserId} exceeded MAX_APPLY quota", userId);
+                throw new InvalidOperationException("You have reached your application limit. Upgrade your subscription to apply to more jobs.");
             }
 
             var application = new Domain.Entities.Application
@@ -109,10 +106,6 @@ public class ApplicationService : IApplicationService
         }
         catch (Exception)
         {
-            if (quotaIncremented)
-            {
-                await _entitlementChecker.RollbackUsageAsync(userId, "MAX_APPLY");
-            }
             throw;
         }
     }

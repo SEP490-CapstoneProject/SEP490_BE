@@ -37,6 +37,9 @@ public class PortfolioRepository : IPortfolioRepository
             .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)
             .FirstOrDefaultAsync();
 
+    public async Task<int> CountByEmployeeIdAsync(int employeeId)
+        => await _context.Portfolios.CountAsync(p => p.EmployeeId == employeeId);
+
     public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         var query = _context.Portfolios

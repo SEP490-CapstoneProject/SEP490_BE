@@ -13,6 +13,7 @@ using RecruitmentPlatform.AI.Services;
 using RecruitmentPlatform.Contracts.Time;
 using System.Text.Json;
 using System.Transactions;
+using Subscription.Application.Interfaces;
 
 namespace Portfolio.Application.Services;
 
@@ -32,6 +33,7 @@ public class PortfolioService : IPortfolioService
     private readonly ITextNormalizer _textNormalizer;
     private readonly IEmbeddingService _embeddingService;
     private readonly ModerationService _moderationService;
+    private readonly IFeatureVerificationService _featureVerificationService;
     private readonly IMemoryCache _cache;
     private readonly IEnumerable<IBlockHandler> _handlers;
     private readonly ILogger<PortfolioService> _logger;
@@ -51,6 +53,7 @@ public class PortfolioService : IPortfolioService
         ITextNormalizer textNormalizer,
         IEmbeddingService embeddingService,
         ModerationService moderationService,
+        IFeatureVerificationService featureVerificationService,
         IMemoryCache cache,
         IEnumerable<IBlockHandler> handlers,
         ILogger<PortfolioService> logger)
@@ -69,6 +72,7 @@ public class PortfolioService : IPortfolioService
         _textNormalizer = textNormalizer;
         _embeddingService = embeddingService;
         _moderationService = moderationService;
+        _featureVerificationService = featureVerificationService;
         _cache = cache;
         _handlers = handlers;
         _logger = logger;
@@ -97,6 +101,15 @@ public class PortfolioService : IPortfolioService
         var valid = await _employeeClient.ValidateEmployeeAsync(employeeId);
         if (!valid)
             throw new KeyNotFoundException($"Employee {employeeId} not found");
+
+        var currentCount = await _repo.CountByEmployeeIdAsync(employeeId);
+        var userId = _currentUser.UserId;
+        var canCreate = await _featureVerificationService.CanPerformActionAsync(userId, "MAX_PORTFOLIOS", currentCount);
+        if (!canCreate)
+        {
+            _logger.LogWarning("User {UserId} exceeded MAX_PORTFOLIOS quota", userId);
+            throw new InvalidOperationException("You have reached your portfolio limit. Upgrade your subscription to create more portfolios.");
+        }
 
         var portfolio = new Domain.Entities.Portfolio
         {
@@ -926,8 +939,14 @@ public class PortfolioService : IPortfolioService
                 postLookup.TryGetValue(x.Id, out var detail);
                 return new JobMatchResultDto
                 {
+                    // Matching scores
                     PostId = x.Id,
-                    Position = detail?.Position ?? x.Title,
+                    Title = detail?.Position ?? x.Title,
+                    Cosine = x.Cosine,
+                    SkillScore = x.SkillScore,
+                    CategoryScore = x.CategoryScore,
+                    FinalScore = x.FinalScore,
+                    // Post detail fields
                     CompanyName = detail?.CompanyName,
                     CompanyAvatar = detail?.CompanyAvatar,
                     CoverImageUrl = detail?.CoverImageUrl,
@@ -936,6 +955,13 @@ public class PortfolioService : IPortfolioService
                     Address = detail?.Address,
                     Salary = detail?.Salary,
                     EmploymentType = detail?.EmploymentType,
+                    ExperienceYear = detail?.ExperienceYear,
+                    Quantity = detail?.Quantity,
+                    JobDescription = detail?.JobDescription,
+                    RequirementsMandatory = detail?.RequirementsMandatory,
+                    RequirementsPreferred = detail?.RequirementsPreferred,
+                    Benefits = detail?.Benefits,
+                    Status = detail?.Status ?? 0,
                     CreatedAt = detail?.CreatedAt ?? default,
                     IsSaved = detail?.IsSaved ?? false,
                     ReviewStatus = detail?.ReviewStatus,
