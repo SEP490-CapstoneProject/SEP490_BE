@@ -185,11 +185,14 @@ builder.Services.AddHttpClient<VisualPromptService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-builder.Services.AddHttpClient<ImageGenerationService>(client =>
+builder.Services.AddHttpClient<CloudflareImageService>(client =>
 {
-    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
-    client.Timeout = TimeSpan.FromSeconds(60); // Image generation takes longer
+    client.BaseAddress = new Uri("https://api.cloudflare.com");
+    client.Timeout = TimeSpan.FromSeconds(120);
 });
+
+builder.Services.AddScoped<CloudflareImageService>();
+builder.Services.AddScoped<ImageGenerationService>();
 
 
 // CORS

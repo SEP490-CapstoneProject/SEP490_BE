@@ -14,6 +14,9 @@ public class FeatureVerificationService : IFeatureVerificationService
     private readonly IRedisService _redisService;
     private readonly ILogger<FeatureVerificationService> _logger;
 
+    private const string ENTITLEMENTS_CACHE_KEY_PREFIX = "feature_entitlements:{0}"; // {userId}
+    private const int ENTITLEMENTS_CACHE_TTL_HOURS = 1;
+
     public FeatureVerificationService(
         ISubscriptionRepository subscriptionRepository,
         IPlanRepository planRepository,

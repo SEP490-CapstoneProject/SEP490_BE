@@ -238,17 +238,40 @@ IMPORTANT GUIDELINES:
     {
         try
         {
-            // Extract JSON from response
-            var jsonStartIdx = responseText.IndexOf('{');
-            var jsonEndIdx = responseText.LastIndexOf('}');
-
-            if (jsonStartIdx < 0 || jsonEndIdx < 0)
+            if (string.IsNullOrWhiteSpace(responseText))
             {
-                _logger.LogWarning("⚠️ No JSON object found in response");
+                _logger.LogWarning("⚠️ Empty response from Gemini");
                 return (false, null);
             }
 
-            var jsonText = responseText.Substring(jsonStartIdx, jsonEndIdx - jsonStartIdx + 1);
+            // Remove markdown code blocks if present
+            var cleaned = responseText.Trim();
+            if (cleaned.StartsWith("```json"))
+            {
+                cleaned = cleaned["```json".Length..];
+            }
+            if (cleaned.StartsWith("```"))
+            {
+                cleaned = cleaned["```".Length..];
+            }
+            if (cleaned.EndsWith("```"))
+            {
+                cleaned = cleaned[..^3];
+            }
+            cleaned = cleaned.Trim();
+
+            // Extract JSON from response
+            var jsonStartIdx = cleaned.IndexOf('{');
+            var jsonEndIdx = cleaned.LastIndexOf('}');
+
+            if (jsonStartIdx < 0 || jsonEndIdx < 0 || jsonStartIdx >= jsonEndIdx)
+            {
+                _logger.LogWarning("⚠️ No JSON object found in response: {Response}", cleaned[..Math.Min(200, cleaned.Length)]);
+                return (false, null);
+            }
+
+            var jsonText = cleaned.Substring(jsonStartIdx, jsonEndIdx - jsonStartIdx + 1);
+            _logger.LogDebug("📝 Extracted JSON: {Json}", jsonText[..Math.Min(300, jsonText.Length)]);
 
             // Parse JSON
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -260,15 +283,30 @@ IMPORTANT GUIDELINES:
                 return (false, null);
             }
 
-            // Validate required fields
-            if (string.IsNullOrWhiteSpace(visualPrompt.VisualTheme) ||
-                visualPrompt.MainElements == null ||
-                visualPrompt.MainElements.Count == 0 ||
-                visualPrompt.ColorPalette == null ||
-                visualPrompt.ColorPalette.Count == 0)
+            // Validate required fields - use fallback values if missing
+            if (string.IsNullOrWhiteSpace(visualPrompt.VisualTheme))
             {
-                _logger.LogWarning("⚠️ Missing required fields in visual prompt");
-                return (false, null);
+                visualPrompt.VisualTheme = "Modern professional portfolio";
+            }
+
+            if (visualPrompt.MainElements == null || visualPrompt.MainElements.Count == 0)
+            {
+                visualPrompt.MainElements = new List<string> { "Skills", "Projects", "Expertise" };
+            }
+
+            if (visualPrompt.ColorPalette == null || visualPrompt.ColorPalette.Count == 0)
+            {
+                visualPrompt.ColorPalette = new List<string> { "#0F172A", "#2563EB", "#F8FAFC" };
+            }
+
+            if (string.IsNullOrWhiteSpace(visualPrompt.HeroText))
+            {
+                visualPrompt.HeroText = "Professional";
+            }
+
+            if (string.IsNullOrWhiteSpace(visualPrompt.Style))
+            {
+                visualPrompt.Style = "professional";
             }
 
             _logger.LogInformation("✅ Visual prompt validation passed");

@@ -55,10 +55,10 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             }
 
             // Check authorization (owner only)
-            if (portfolio.EmployeeId != _currentUser.UserId && !_currentUser.IsAdmin)
+            if (portfolio.EmployeeId != _currentUser.EmployeeId && !_currentUser.IsAdmin)
             {
-                _logger.LogWarning("❌ User {UserId} not authorized to generate preview for portfolio {PortfolioId}", 
-                    _currentUser.UserId, portfolioId);
+                _logger.LogWarning("❌ Employee {EmployeeId} not authorized to generate preview for portfolio {PortfolioId}", 
+                    _currentUser.EmployeeId, portfolioId);
                 return new Interfaces.GeneratePreviewResponse 
                 { 
                     Success = false, 
@@ -232,10 +232,10 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             }
 
             // Check authorization: public if portfolio.IsPublic, otherwise owner/admin only
-            if (!portfolio.IsPublic && portfolio.EmployeeId != _currentUser.UserId && !_currentUser.IsAdmin)
+            if (!portfolio.IsPublic && portfolio.EmployeeId != _currentUser.EmployeeId && !_currentUser.IsAdmin)
             {
-                _logger.LogWarning("User {UserId} not authorized to view preview for portfolio {PortfolioId}", 
-                    _currentUser.UserId, portfolioId);
+                _logger.LogWarning("Employee {EmployeeId} not authorized to view preview for portfolio {PortfolioId}", 
+                    _currentUser.EmployeeId, portfolioId);
                 return null;
             }
 
@@ -275,7 +275,8 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             PortfolioId = preview.PortfolioId,
             PreviewJson = previewJson,
             HighlightsDescription = preview.HighlightsDescription,
-            ImageId = imageId,
+            ImageUrl = preview.ImageUrl,
+            ImageId = imageId ?? preview.ImageId,
             Version = preview.Version,
             RegeneratedCount = preview.RegeneratedCount,
             CreatedAt = preview.CreatedAt,
