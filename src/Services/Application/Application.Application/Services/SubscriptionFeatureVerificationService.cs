@@ -1,8 +1,7 @@
 using System.Text.Json;
+using Application.Application.DTOs;
 using Application.Application.Interfaces;
 using Microsoft.Extensions.Logging;
-using Subscription.Application.DTOs;
-using Subscription.Application.Interfaces;
 
 namespace Application.Application.Services;
 
