@@ -3,7 +3,6 @@ using Application.Application.Interfaces;
 using Application.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using RecruitmentPlatform.Contracts.Time;
-using Subscription.Application.Interfaces;
 
 namespace Application.Application.Services;
 

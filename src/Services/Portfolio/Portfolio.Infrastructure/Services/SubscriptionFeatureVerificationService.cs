@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Subscription.Application.DTOs;
-using Subscription.Application.Interfaces;
+using Portfolio.Application.DTOs;
+using Portfolio.Application.Interfaces;
 
 namespace Portfolio.Infrastructure.Services;
 
