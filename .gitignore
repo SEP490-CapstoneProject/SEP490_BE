@@ -127,7 +127,7 @@ ServiceFabricBackup/
 TestResult.xml
 *.odx.cs
 *.ps1
-
+*.txt
 *.sql
 *.xsd.cs
 
@@ -135,6 +135,7 @@ TestResult.xml
 docker-compose.override.yml
 
 ## Environment
+.env
 .env.local
 .env.*.local
 .env.production
@@ -148,7 +149,7 @@ firebase-credentials-prod.json
 firebase-credentials-*.json
 *-credentials-prod.json
 google-services.json
-
+secrets/
 
 ## OS
 .DS_Store
