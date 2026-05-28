@@ -102,6 +102,8 @@ builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
 builder.Services.AddScoped<IComplimentRepository, ComplimentRepository>();
 builder.Services.AddScoped<ICriterionRepository, CriterionRepository>();
 builder.Services.AddScoped<IPortfolioPreviewRepository, PortfolioPreviewRepository>();
+builder.Services.AddScoped<IRewardPointTransactionRepository, RewardPointTransactionRepository>();
+builder.Services.AddScoped<ISponsoredPostRepository, SponsoredPostRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
@@ -112,6 +114,9 @@ builder.Services.AddScoped<IComplimentService, ComplimentService>();
 builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCategoryService>();
 builder.Services.AddScoped<IPortfolioPreviewService, PortfolioPreviewService>();
+builder.Services.AddScoped<IComplimentPointEvaluator, ComplimentPointEvaluator>();
+builder.Services.AddScoped<IRewardPointsService, RewardPointsService>();
+builder.Services.AddScoped<ISponsoredPostService, SponsoredPostService>();
 builder.Services.AddScoped<GoogleAiPreviewGenerator>();
 builder.Services.AddScoped<VisualPromptService>();
 builder.Services.AddScoped<ImageGenerationService>();

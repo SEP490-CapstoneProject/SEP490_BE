@@ -15,6 +15,23 @@ public static class DatabaseExtensions
     public static async Task ApplyMigrationsAsync(this IServiceProvider serviceProvider)
     {
         using var scope = serviceProvider.CreateScope();
+        var config = scope.ServiceProvider.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
+        var disableAuto = false;
+        if (config != null)
+        {
+            var raw = config["DisableAutoMigrations"];
+            if (!string.IsNullOrEmpty(raw) && bool.TryParse(raw, out var parsed))
+            {
+                disableAuto = parsed;
+            }
+        }
+
+        if (disableAuto)
+        {
+            Console.WriteLine("Auto migrations disabled via DisableAutoMigrations=true");
+            return;
+        }
+
         var dbContext = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
         
         try

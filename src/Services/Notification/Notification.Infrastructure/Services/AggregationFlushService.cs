@@ -19,7 +19,6 @@ public class AggregationFlushService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConnectionMultiplexer _redis;
     private readonly IActorResolverClient _actorResolverClient;
-    private readonly INotificationPublishingService _publishingService;
     private readonly ILogger<AggregationFlushService> _logger;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _aggregationWindow;
@@ -29,14 +28,12 @@ public class AggregationFlushService : BackgroundService
         IServiceScopeFactory scopeFactory,
         IConnectionMultiplexer redis,
         IActorResolverClient actorResolverClient,
-        INotificationPublishingService publishingService,
         IConfiguration configuration,
         ILogger<AggregationFlushService> logger)
     {
         _scopeFactory = scopeFactory;
         _redis = redis;
         _actorResolverClient = actorResolverClient;
-        _publishingService = publishingService;
         _logger = logger;
         
         var pollSeconds = configuration.GetValue<int?>("FavoriteAggregation:PollIntervalSeconds") ?? 30;
@@ -333,7 +330,8 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
+        var publishingService = scope.ServiceProvider.GetRequiredService<INotificationPublishingService>();
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, publishingService);
     }
 
     private async Task CreateCommentReplyAggregatedNotificationAsync(CommentReplyAggregationData data, CancellationToken cancellationToken)
@@ -390,7 +388,8 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
+        var publishingService = scope.ServiceProvider.GetRequiredService<INotificationPublishingService>();
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, publishingService);
         
         _logger.LogInformation("💬 [COM_PUBLISHED] Comment/reply notification published. NotificationId={NotificationId}, UserId={UserId}, EventType={EventType}, Type={Type}",
             entity.Id, entity.UserId, data.EventType, entity.Type);
@@ -416,7 +415,8 @@ public class AggregationFlushService : BackgroundService
             IsRead = false
         };
 
-        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, _publishingService);
+        var publishingService = scope.ServiceProvider.GetRequiredService<INotificationPublishingService>();
+        await PublishNotificationAsync(scope.ServiceProvider, notificationService, entity, publishingService);
     }
 
     private static async Task PublishNotificationAsync(

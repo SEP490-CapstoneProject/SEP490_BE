@@ -69,8 +69,12 @@ builder.Services.AddScoped<ICompanyEmbeddingEventPublisher, CompanyEmbeddingEven
 builder.Services.AddScoped<ICompanyNotificationEventPublisher, RabbitMqCompanyNotificationEventPublisher>();
 builder.Services.AddScoped<ModerationService>();
 builder.Services.AddRecruitmentPlatformAi(builder.Configuration);
-builder.Services.AddHostedService<CompanyEmbeddingConsumer>();
-builder.Services.AddHostedService<CompanyEmbeddingBackfillWorker>();
+var disableBackgroundWorkers = builder.Configuration["DisableBackgroundWorkers"];
+if (!(bool.TryParse(disableBackgroundWorkers, out var _disable) && _disable))
+{
+    builder.Services.AddHostedService<CompanyEmbeddingConsumer>();
+    builder.Services.AddHostedService<CompanyEmbeddingBackfillWorker>();
+}
 
 var mediaServiceUrl = builder.Configuration["ServiceUrls:MediaService"] ?? "http://media-service:8080";
 builder.Services.AddHttpClient<IMediaUploadClient, MediaUploadClient>(client =>
@@ -135,11 +139,14 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+var disableAutoMigrations = builder.Configuration.GetValue<bool?>("DisableAutoMigrations") ?? false;
+if (!disableAutoMigrations)
 {
-    var db = scope.ServiceProvider.GetRequiredService<CompanyDbContext>();
-    db.Database.Migrate();
-    db.Database.ExecuteSqlRaw(@"
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<CompanyDbContext>();
+        db.Database.Migrate();
+        db.Database.ExecuteSqlRaw(@"
 IF COL_LENGTH('companysvc.COMPANY_POST', 'embedding') IS NULL
     ALTER TABLE [companysvc].[COMPANY_POST] ADD [embedding] NVARCHAR(MAX) NULL;
 IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingVersion') IS NULL
@@ -148,6 +155,11 @@ IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingUpdatedAt') IS NULL
     ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingUpdatedAt] DATETIME2 NULL;
 IF COL_LENGTH('companysvc.COMPANY_POST', 'embeddingStatus') IS NULL
     ALTER TABLE [companysvc].[COMPANY_POST] ADD [embeddingStatus] NVARCHAR(20) NOT NULL CONSTRAINT DF_CompanyPost_EmbeddingStatus DEFAULT 'Pending';");
+    }
+}
+else
+{
+    Console.WriteLine("Auto migrations disabled via DisableAutoMigrations=true");
 }
 
 // Enable Swagger in all environments
