@@ -12,7 +12,7 @@ public class EmailSettings
     public string SmtpUser { get; set; } = string.Empty;
     public string SmtpPassword { get; set; } = string.Empty;
     public string SenderEmail { get; set; } = string.Empty;
-    public string SenderName { get; set; } = "RecruitmentPlatform";
+    public string SenderName { get; set; } = "SkillSnap";
 }
 
 public class EmailService : IEmailService
@@ -60,53 +60,79 @@ public class EmailService : IEmailService
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Đặt lại mật khẩu</title>
+                <title>Đặt lại mật khẩu - SkillSnap</title>
             </head>
-            <body style="margin:0;padding:0;background-color:#f4f7fb;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7fb;padding:40px 0;">
+            <body style="margin:0;padding:0;background-color:#eef2f7;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef2f7;padding:40px 16px;">
                     <tr>
                         <td align="center">
-                            <table width="580" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-                                <!-- Header -->
+                            <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+                                <!-- HEADER / LOGO -->
                                 <tr>
-                                    <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:36px 40px;text-align:center;">
-                                        <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:700;letter-spacing:-0.5px;">🔐 Đặt Lại Mật Khẩu</h1>
-                                        <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:14px;">RecruitmentPlatform</p>
+                                    <td style="background:linear-gradient(135deg,#0d2d6b 0%,#0a4fa8 50%,#0891b2 100%);border-radius:16px 16px 0 0;padding:36px 40px 32px;text-align:center;">
+                                        <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:800;letter-spacing:1px;">SkillSnap</h1>
                                     </td>
                                 </tr>
-                                <!-- Body -->
+
+                                <!-- BODY -->
                                 <tr>
-                                    <td style="padding:40px 40px 32px;">
-                                        <p style="color:#374151;font-size:16px;line-height:1.6;margin:0 0 20px;">Xin chào,</p>
-                                        <p style="color:#374151;font-size:16px;line-height:1.6;margin:0 0 28px;">
-                                            Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Sử dụng mã OTP bên dưới để xác thực:
+                                    <td style="background:#ffffff;padding:40px 40px 32px;">
+                                        <p style="color:#1e3a5f;font-size:16px;font-weight:600;margin:0 0 8px;">Xin chào! 👋</p>
+                                        <p style="color:#4b5563;font-size:15px;line-height:1.7;margin:0 0 28px;">
+                                            Chúng tôi nhận được yêu cầu <strong>đặt lại mật khẩu</strong> cho tài khoản SkillSnap của bạn.<br>
+                                            Sử dụng mã OTP dưới đây để tiếp tục:
                                         </p>
+
                                         <!-- OTP Box -->
-                                        <div style="text-align:center;margin:0 0 28px;">
-                                            <div style="display:inline-block;background:linear-gradient(135deg,#f0f4ff,#e8edff);border:2px solid #c7d2fe;border-radius:12px;padding:24px 48px;">
-                                                <span style="font-size:40px;font-weight:800;letter-spacing:10px;color:#4f46e5;font-family:'Courier New',monospace;">{otp}</span>
-                                            </div>
-                                        </div>
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+                                            <tr>
+                                                <td align="center">
+                                                    <div style="display:inline-block;background:linear-gradient(135deg,#e0f7ff,#e8f4ff);border:2px solid #29b6f6;border-radius:16px;padding:28px 52px;text-align:center;">
+                                                        <p style="color:#0a4fa8;font-size:12px;font-weight:700;letter-spacing:3px;margin:0 0 10px;text-transform:uppercase;">Mã xác thực OTP</p>
+                                                        <span style="font-size:44px;font-weight:900;letter-spacing:12px;color:#0d2d6b;font-family:'Courier New',Courier,monospace;display:block;">{otp}</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+
                                         <!-- Warning -->
-                                        <div style="background:#fff7ed;border-left:4px solid #f97316;border-radius:8px;padding:16px 20px;margin:0 0 28px;">
-                                            <p style="color:#92400e;font-size:14px;margin:0;line-height:1.5;">
-                                                ⏱️ <strong>Mã OTP này có hiệu lực trong 15 phút.</strong><br>
-                                                Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.
-                                            </p>
-                                        </div>
-                                        <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0;">
-                                            Vì lý do bảo mật, không chia sẻ mã OTP này với bất kỳ ai.
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                                            <tr>
+                                                <td style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:14px 18px;">
+                                                    <p style="color:#92400e;font-size:14px;margin:0;line-height:1.6;">
+                                                        <strong>Mã OTP có hiệu lực trong 15 phút.</strong><br>
+                                                        Nếu bạn không yêu cầu, hãy bỏ qua email này — tài khoản vẫn an toàn.
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <p style="color:#9ca3af;font-size:13px;line-height:1.6;margin:0;">
+                                            Vì lý do bảo mật, <strong>không chia sẻ mã OTP</strong> này với bất kỳ ai, kể cả nhân viên SkillSnap.
                                         </p>
                                     </td>
                                 </tr>
-                                <!-- Footer -->
+
+                                <!-- DIVIDER -->
                                 <tr>
-                                    <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
-                                        <p style="color:#9ca3af;font-size:12px;margin:0;">
-                                            © 2025 RecruitmentPlatform. Tất cả quyền được bảo lưu.
+                                    <td style="background:#ffffff;padding:0 40px;">
+                                        <div style="height:1px;background:linear-gradient(90deg,transparent,#29b6f6,#26c6da,transparent);"></div>
+                                    </td>
+                                </tr>
+
+                                <!-- FOOTER -->
+                                <tr>
+                                    <td style="background:#ffffff;border-radius:0 0 16px 16px;padding:20px 40px 28px;text-align:center;">
+                                        <p style="color:#6b7280;font-size:12px;margin:0 0 6px;">
+                                            Email này được gửi tự động từ hệ thống <strong style="color:#0a4fa8;">SkillSnap</strong>.
+                                        </p>
+                                        <p style="color:#9ca3af;font-size:11px;margin:0;">
+                                            © 2025 SkillSnap. Tất cả quyền được bảo lưu.
                                         </p>
                                     </td>
                                 </tr>
+
                             </table>
                         </td>
                     </tr>
