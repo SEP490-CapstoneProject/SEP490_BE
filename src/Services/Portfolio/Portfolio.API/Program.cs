@@ -13,7 +13,6 @@ using Portfolio.Infrastructure.Services;
 using Portfolio.Infrastructure.Messaging;
 using Portfolio.Application.BlockHandlers;
 using RecruitmentPlatform.AI.DependencyInjection;
-using Subscription.Application.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 

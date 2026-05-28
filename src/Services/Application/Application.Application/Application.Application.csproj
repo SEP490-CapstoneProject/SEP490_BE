@@ -1,9 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Application.Domain\Application.Domain.csproj" />
     <ProjectReference Include="..\..\..\Shared\RecruitmentPlatform.Contracts\RecruitmentPlatform.Contracts.csproj" />
-    <ProjectReference Include="..\..\Subscription\Subscription.Application\Subscription.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

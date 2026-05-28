@@ -14,7 +14,6 @@ using Polly;
 using Polly.Extensions.Http;
 using StackExchange.Redis;
 using System.Text;
-using Subscription.Application.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -13,7 +13,6 @@ using RecruitmentPlatform.AI.Services;
 using RecruitmentPlatform.Contracts.Time;
 using System.Text.Json;
 using System.Transactions;
-using Subscription.Application.Interfaces;
 
 namespace Portfolio.Application.Services;
 
