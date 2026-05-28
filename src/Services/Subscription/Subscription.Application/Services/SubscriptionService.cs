@@ -38,6 +38,12 @@ public class SubscriptionService : ISubscriptionService
         return plans.Select(MapToPlanDto);
     }
 
+    public async Task<IEnumerable<PlanDto>> GetPlansByRoleAsync(string role)
+    {
+        var plans = await _planRepository.GetActiveByRoleAsync(role);
+        return plans.Select(MapToPlanDto);
+    }
+
     public async Task<PlanDto?> GetPlanByIdAsync(int planId)
     {
         var plan = await _planRepository.GetByIdWithFeaturesAsync(planId);
@@ -62,6 +68,16 @@ public class SubscriptionService : ISubscriptionService
         {
             _logger.LogInformation("Returning existing pending subscription {SubscriptionId} for user {UserId}", 
                 pendingSubscription.Id, userId);
+
+            // Update StartDate and EndDate to current time
+            pendingSubscription.StartDate = DateTime.UtcNow;
+            pendingSubscription.EndDate = plan.BillingCycle == BillingCycle.Monthly 
+                ? DateTime.UtcNow.AddMonths(1) 
+                : DateTime.UtcNow.AddYears(1);
+            pendingSubscription.UpdatedAt = DateTime.UtcNow;
+
+            await _subscriptionRepository.UpdateAsync(pendingSubscription);
+
             return MapToSubscriptionDto(pendingSubscription, plan.Name);
         }
 
@@ -158,7 +174,7 @@ public class SubscriptionService : ISubscriptionService
         return MapToSubscriptionDto(subscription, subscription.Plan?.Name ?? "Unknown");
     }
 
-    public async Task<EntitlementsDto?> GetEntitlementsAsync(int userId)
+    public async Task<EntitlementsDto?> GetEntitlementsAsync(int userId, string? role = null)
     {
         // 3-level fallback
         // Level 1: Redis cache
@@ -178,8 +194,8 @@ public class SubscriptionService : ISubscriptionService
             return entitlements;
         }
 
-        // Level 3: Default free tier
-        return GetDefaultFreeTierEntitlements();
+        // Level 3: Default free tier theo role
+        return await GetDefaultFreeTierEntitlementsAsync(role);
     }
 
     public async Task ActivateSubscriptionAsync(int subscriptionId, string eventId)
@@ -290,8 +306,38 @@ public class SubscriptionService : ISubscriptionService
         return dict;
     }
 
-    private static EntitlementsDto GetDefaultFreeTierEntitlements()
+    private async Task<EntitlementsDto> GetDefaultFreeTierEntitlementsAsync(string? role)
     {
+        // Nếu có role, tìm free plan tương ứng từ DB
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            var freePlan = await _planRepository.GetFreePlanByRoleAsync(role);
+            if (freePlan != null)
+            {
+                return new EntitlementsDto
+                {
+                    Version = 1,
+                    PlanId = freePlan.Id,
+                    PlanName = freePlan.Name,
+                    Features = GetFeaturesDictionary(freePlan.Features),
+                    ExpiredAt = DateTime.UtcNow.AddYears(10)
+                };
+            }
+
+            // Có role nhưng không có free plan cho role này → trả về entitlements rỗng
+            _logger.LogWarning("No free plan found for role '{Role}'. Returning empty entitlements.", role);
+            return new EntitlementsDto
+            {
+                Version = 1,
+                PlanId = 0,
+                PlanName = "None",
+                Features = new Dictionary<string, object>(),
+                ExpiredAt = DateTime.UtcNow.AddYears(10)
+            };
+        }
+
+        // Fallback cứng chỉ khi caller không truyền role (legacy/anonymous call)
+        _logger.LogWarning("GetEntitlementsAsync called without role. Returning default Talent free tier.");
         return new EntitlementsDto
         {
             Version = 1,
@@ -318,6 +364,7 @@ public class SubscriptionService : ISubscriptionService
             Description = plan.Description,
             Price = plan.Price,
             BillingCycle = plan.BillingCycle.ToString(),
+            AllowedRole = plan.AllowedRole,
             Features = plan.Features.Where(f => f.IsActive).Select(f => new PlanFeatureDto
             {
                 FeatureKey = f.FeatureKey,

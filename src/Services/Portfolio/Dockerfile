@@ -10,14 +10,20 @@ COPY ["src/Services/Portfolio/Portfolio.API/Portfolio.API.csproj", "Services/Por
 COPY ["src/Services/Portfolio/Portfolio.Application/Portfolio.Application.csproj", "Services/Portfolio/Portfolio.Application/"]
 COPY ["src/Services/Portfolio/Portfolio.Domain/Portfolio.Domain.csproj", "Services/Portfolio/Portfolio.Domain/"]
 COPY ["src/Services/Portfolio/Portfolio.Infrastructure/Portfolio.Infrastructure.csproj", "Services/Portfolio/Portfolio.Infrastructure/"]
+COPY ["src/Shared/RecruitmentPlatform.Common/RecruitmentPlatform.Common.csproj", "Shared/RecruitmentPlatform.Common/"]
 COPY ["src/Shared/RecruitmentPlatform.Contracts/RecruitmentPlatform.Contracts.csproj", "Shared/RecruitmentPlatform.Contracts/"]
 COPY ["src/Shared/RecruitmentPlatform.AI/RecruitmentPlatform.AI.csproj", "Shared/RecruitmentPlatform.AI/"]
+COPY ["src/Services/Subscription/Subscription.Application/Subscription.Application.csproj", "Services/Subscription/Subscription.Application/"]
+COPY ["src/Services/Subscription/Subscription.Domain/Subscription.Domain.csproj", "Services/Subscription/Subscription.Domain/"]
+COPY ["src/Services/Subscription/Subscription.Infrastructure/Subscription.Infrastructure.csproj", "Services/Subscription/Subscription.Infrastructure/"]
 
 # Restore dependencies
 RUN dotnet restore "Services/Portfolio/Portfolio.API/Portfolio.API.csproj"
 
 # Copy source
 COPY src/Services/Portfolio/ Services/Portfolio/
+COPY src/Services/Subscription/ Services/Subscription/
+COPY src/Shared/RecruitmentPlatform.Common/ Shared/RecruitmentPlatform.Common/
 COPY src/Shared/RecruitmentPlatform.Contracts/ Shared/RecruitmentPlatform.Contracts/
 COPY src/Shared/RecruitmentPlatform.AI/ Shared/RecruitmentPlatform.AI/
 

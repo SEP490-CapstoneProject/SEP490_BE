@@ -13,6 +13,7 @@ public class ComplimentService : IComplimentService
     private readonly ICurrentUserService _currentUser;
     private readonly IEmployeeServiceClient _employeeServiceClient;
     private readonly IPortfolioNotificationEventPublisher _notificationEventPublisher;
+    private readonly IRewardPointsService _rewardPointsService;
     private readonly PortfolioDbContext _db;
     private readonly ILogger<ComplimentService> _logger;
 
@@ -21,6 +22,7 @@ public class ComplimentService : IComplimentService
         ICurrentUserService currentUser,
         IEmployeeServiceClient employeeServiceClient,
         IPortfolioNotificationEventPublisher notificationEventPublisher,
+        IRewardPointsService rewardPointsService,
         PortfolioDbContext db,
         ILogger<ComplimentService> logger)
     {
@@ -28,6 +30,7 @@ public class ComplimentService : IComplimentService
         _currentUser = currentUser;
         _employeeServiceClient = employeeServiceClient;
         _notificationEventPublisher = notificationEventPublisher;
+        _rewardPointsService = rewardPointsService;
         _db = db;
         _logger = logger;
     }
@@ -57,6 +60,10 @@ public class ComplimentService : IComplimentService
             await RecalculateAggregatesAsync(request.PortfolioId);
             await tx.CommitAsync();
             await TryPublishComplimentNotificationAsync(created);
+            
+            // Award reward points (fire and forget with graceful error handling)
+            _ = TryEarnPointsAsync(created);
+            
             _logger.LogInformation("Compliment {Id} created for portfolio {PortfolioId}", created.Id, request.PortfolioId);
             return MapToDto(created);
         }
@@ -201,6 +208,41 @@ public class ComplimentService : IComplimentService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to publish compliment notification. ComplimentId={ComplimentId}", compliment.Id);
+        }
+    }
+
+    /// <summary>
+    /// Attempts to award reward points for the created compliment.
+    /// Failures are logged but don't block compliment creation (non-critical operation).
+    /// </summary>
+    private async Task TryEarnPointsAsync(Compliment compliment)
+    {
+        try
+        {
+            var earned = await _rewardPointsService.EarnPointsAsync(
+                complimentId: compliment.Id,
+                recruiterId: compliment.CreatedBy,
+                complimentContent: compliment.Content ?? string.Empty,
+                portfolioId: compliment.PortfolioId);
+
+            if (earned)
+            {
+                _logger.LogInformation(
+                    "Reward point earned for compliment {ComplimentId} from recruiter {RecruiterId}",
+                    compliment.Id, compliment.CreatedBy);
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "Compliment {ComplimentId} does not qualify for reward points (recruiter {RecruiterId})",
+                    compliment.Id, compliment.CreatedBy);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to process reward points for compliment {ComplimentId}. Error: {Error}",
+                compliment.Id, ex.Message);
         }
     }
 

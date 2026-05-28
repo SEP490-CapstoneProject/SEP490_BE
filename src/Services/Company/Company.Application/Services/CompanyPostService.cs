@@ -11,6 +11,7 @@ using RecruitmentPlatform.AI.Abstractions;
 using RecruitmentPlatform.AI.Models;
 using RecruitmentPlatform.AI.Services;
 using RecruitmentPlatform.Contracts.Realtime;
+using Company.Domain.Enums;
 using System.Text.Json;
 
 namespace Company.Application.Services;
@@ -202,6 +203,25 @@ public class CompanyPostService : ICompanyPostService
             };
 
             await _notificationPublisher.PublishPostPendingReviewNotificationAsync(evt);
+
+            var triageEvt = new PostPendingReviewNotificationEvent
+            {
+                EventId = Guid.NewGuid().ToString("N"),
+                EventType = "post.pending.review",
+                Version = 1,
+                UserId = string.Empty,
+                ActorId = null,
+                ActorType = "SYSTEM",
+                ObjectId = created.PostId.ToString(),
+                Title = "Bài đăng tuyển dụng chờ duyệt thủ công",
+                Content = $"Bài đăng #{created.PostId} cần admin/moderator xem xét. Lý do: {moderationResult.Reason}",
+                Type = "POST_PENDING_REVIEW",
+                PostType = "Company",
+                TargetRoles = new[] { "ADMIN", "MODERATOR" },
+                CreatedAt = DateTimeHelper.GetVietnamTime()
+            };
+
+            await _notificationPublisher.PublishPostPendingReviewNotificationAsync(triageEvt);
         }
         else
         {
@@ -328,6 +348,16 @@ public class CompanyPostService : ICompanyPostService
     public Task UnsavePostAsync(int postId, int userId)
         => _repository.UnsavePostAsync(userId, postId);
 
+    public async Task<PagedResult<CompanyPostFeedDto>> SearchPostsAsync(
+        string? q, string? position, string? salary, string? location, string? employmentType, string? level,
+        string? q_position, string? q_description, string? q_requirements,
+        int skip, int take, int? userId)
+    {
+        var result = await _repository.SearchPostsAsync(q, position, salary, location, employmentType, level, q_position, q_description, q_requirements, skip, take, userId);
+        await EnrichCompanyCacheAsync(result.Items);
+        return result;
+    }
+
     public async Task<PortfolioMatchPagedResult> MatchPortfoliosForJobAsync(int postId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
@@ -350,7 +380,7 @@ public class CompanyPostService : ICompanyPostService
         }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
         var candidates = await _portfolioMatchingClient.GetPortfolioCandidatesAsync(cts.Token);
 
         var request = new MatchingRequest
@@ -365,19 +395,37 @@ public class CompanyPostService : ICompanyPostService
         };
 
         var matches = _matchingEngine.Match(request, candidates, safePage, safePageSize);
+
+        // Enrich with portfolio details
+        var matchedIds = matches.Items.Select(x => x.Id).ToList();
+        var portfolioDetails = await _portfolioMatchingClient.GetPortfoliosByIdsAsync(matchedIds, cancellationToken);
+        var detailLookup = portfolioDetails.ToDictionary(p => p.PortfolioId);
+
         var result = new PortfolioMatchPagedResult
         {
             Total = matches.Total,
             Page = matches.Page,
             PageSize = matches.PageSize,
-            Items = matches.Items.Select(x => new PortfolioMatchResultDto
+            Items = matches.Items.Select(x =>
             {
-                PortfolioId = x.Id,
-                Title = x.Title,
-                Cosine = x.Cosine,
-                SkillScore = x.SkillScore,
-                CategoryScore = x.CategoryScore,
-                FinalScore = x.FinalScore
+                detailLookup.TryGetValue(x.Id, out var detail);
+                return new PortfolioMatchResultDto
+                {
+                    PortfolioId = x.Id,
+                    Title = x.Title,
+                    Cosine = x.Cosine,
+                    SkillScore = x.SkillScore,
+                    CategoryScore = x.CategoryScore,
+                    FinalScore = x.FinalScore,
+                    EmployeeId = detail?.EmployeeId ?? 0,
+                    IsMain = detail?.IsMain ?? false,
+                    IsPublic = detail?.IsPublic ?? false,
+                    Status = detail?.Status ?? string.Empty,
+                    ModerationStatus = detail?.ModerationStatus ?? string.Empty,
+                    CreatedAt = detail?.CreatedAt ?? default,
+                    UpdatedAt = detail?.UpdatedAt,
+                    Blocks = detail?.Blocks ?? new()
+                };
             }).ToList()
         };
 
@@ -705,5 +753,232 @@ public class CompanyPostService : ICompanyPostService
 
         return post;
     }
+
+    public async Task<CompanyPostReportDto> ReportPostAsync(int postId, int reporterUserId, CreatePostReportRequest request)
+    {
+        var post = await _repository.GetByIdAsync(postId)
+            ?? throw new KeyNotFoundException($"Post {postId} not found");
+
+        if (post.CompanyId == reporterUserId)
+        {
+            throw new InvalidOperationException("You cannot report your own post.");
+        }
+
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("Reason is required.");
+        }
+
+        if (reason.Length > 100)
+        {
+            throw new ArgumentException("Reason must not exceed 100 characters.");
+        }
+
+        var description = request.Description?.Trim();
+        if (description?.Length > 1000)
+        {
+            throw new ArgumentException("Description must not exceed 1000 characters.");
+        }
+
+        var existing = await _repository.GetPostReportByPostAndReporterAsync(postId, reporterUserId);
+        if (existing != null)
+        {
+            throw new InvalidOperationException("You have already reported this post.");
+        }
+
+        var report = new CompanyPostReport
+        {
+            CompanyPostId = postId,
+            ReporterUserId = reporterUserId,
+            Reason = reason,
+            Description = description,
+            Status = Company.Domain.Enums.PostReportStatus.Pending,
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        var created = await _repository.CreatePostReportAsync(report);
+        created.CompanyPost = post;
+
+        var reportCreatedEvent = new PostReportCreatedNotificationEvent
+        {
+            EventId = Guid.NewGuid().ToString("N"),
+            EventType = "post.report.created",
+            Version = 1,
+            ActorId = reporterUserId.ToString(),
+            ActorType = "USER",
+            ObjectId = postId.ToString(),
+            Title = "Báo cáo bài đăng mới",
+            Content = $"Bài đăng #{postId} có báo cáo mới cần được kiểm duyệt.",
+            Type = "COMPANY_REPORT_REVIEW",
+            TargetRoles = new[] { "ADMIN", "MODERATOR" },
+            CreatedAt = DateTimeHelper.GetVietnamTime()
+        };
+
+        try
+        {
+            await _notificationPublisher.PublishReportCreatedAsync(reportCreatedEvent);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish report notification for post {PostId}", postId);
+        }
+
+        return new CompanyPostReportDto
+        {
+            Id = created.Id,
+            CompanyPostId = created.CompanyPostId,
+            PostOwnerUserId = post.CompanyId,
+            ReporterUserId = created.ReporterUserId,
+            Reason = created.Reason,
+            Description = created.Description,
+            Status = created.Status.ToString(),
+            ReviewedByUserId = created.ReviewedByUserId,
+            ReviewedAt = created.ReviewedAt,
+            ReviewNote = created.ReviewNote,
+            CreatedAt = created.CreatedAt,
+            UpdatedAt = created.UpdatedAt
+        };
+    }
+
+    public async Task<PagedResult<CompanyPostReportDto>> GetPostReportsAsync(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        var (items, total) = await _repository.GetPostReportsAsync(page, pageSize);
+        return new PagedResult<CompanyPostReportDto>
+        {
+            Items = items.Select(report => new CompanyPostReportDto
+            {
+                Id = report.Id,
+                CompanyPostId = report.CompanyPostId,
+                PostOwnerUserId = report.CompanyPost?.CompanyId ?? 0,
+                ReporterUserId = report.ReporterUserId,
+                Reason = report.Reason,
+                Description = report.Description,
+                Status = report.Status.ToString(),
+                ReviewedByUserId = report.ReviewedByUserId,
+                ReviewedAt = report.ReviewedAt,
+                ReviewNote = report.ReviewNote,
+                CreatedAt = report.CreatedAt,
+                UpdatedAt = report.UpdatedAt
+            }).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<CompanyPostReportDto> ReviewPostReportAsync(int reportId, int reviewerUserId, ReviewPostReportRequest request)
+    {
+        var report = await _repository.GetPostReportByIdAsync(reportId)
+            ?? throw new KeyNotFoundException($"Report {reportId} not found");
+
+        if (report.Status != PostReportStatus.Pending)
+        {
+            throw new InvalidOperationException("This report has already been reviewed.");
+        }
+
+        var action = request.Action?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            throw new ArgumentException("Action is required.");
+        }
+
+        var now = DateTimeHelper.GetVietnamTime();
+        report.ReviewedByUserId = reviewerUserId;
+        report.ReviewedAt = now;
+        report.ReviewNote = request.ReviewNote?.Trim();
+        report.UpdatedAt = now;
+
+        if (action == "approve_violation")
+        {
+            report.Status = PostReportStatus.Approved;
+
+            if (report.CompanyPost != null && report.CompanyPost.Status == CompanyPost.StatusActive)
+            {
+                // Soft delete the post
+                await _repository.SoftDeletePostAsync(report.CompanyPostId);
+
+                // Notify owner using PostRejectedNotificationEvent structure
+                var evt = new PostRejectedNotificationEvent
+                {
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "post.removed",
+                    Version = 1,
+                    UserId = report.CompanyPost.CompanyId.ToString(),
+                    ActorId = reviewerUserId.ToString(),
+                    ActorType = "ADMIN",
+                    ObjectId = report.CompanyPostId.ToString(),
+                    Title = "Your job post was removed",
+                    Content = "Your company job post has been removed due to violation of policies.",
+                    Type = "POST_REMOVED",
+                    PostType = "Company",
+                    CreatedAt = now
+                };
+
+                try
+                {
+                    await _notificationPublisher.PublishPostRejectedNotificationAsync(evt);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to publish post removed notification for post {PostId}", report.CompanyPostId);
+                }
+
+                var realtimeEvt = new PostModerationEvent
+                {
+                    EventId = Guid.NewGuid().ToString("N"),
+                    EventType = "post.moderation",
+                    Version = 1,
+                    PostId = report.CompanyPostId,
+                    UserId = report.CompanyPost.CompanyId.ToString(),
+                    Status = "REMOVED",
+                    Reason = report.ReviewNote ?? "Removed by moderation",
+                    PostType = "Company",
+                    Title = "Your job post was removed",
+                    Content = "Your company job post has been removed due to violation of policies.",
+                    ActorId = reviewerUserId.ToString(),
+                    ActorType = "ADMIN",
+                    CreatedAt = now
+                };
+
+                try
+                {
+                    await _embeddingEventPublisher.PublishCompanyPostChangedAsync(report.CompanyPostId);
+                }
+                catch { /* swallow */ }
+            }
+        }
+        else if (action == "reject")
+        {
+            report.Status = PostReportStatus.Rejected;
+        }
+        else
+        {
+            throw new ArgumentException("Action must be one of: approve_violation, reject.");
+        }
+
+        await _repository.UpdatePostReportAsync(report);
+
+        return new CompanyPostReportDto
+        {
+            Id = report.Id,
+            CompanyPostId = report.CompanyPostId,
+            PostOwnerUserId = report.CompanyPost?.CompanyId ?? 0,
+            ReporterUserId = report.ReporterUserId,
+            Reason = report.Reason,
+            Description = report.Description,
+            Status = report.Status.ToString(),
+            ReviewedByUserId = report.ReviewedByUserId,
+            ReviewedAt = report.ReviewedAt,
+            ReviewNote = report.ReviewNote,
+            CreatedAt = report.CreatedAt,
+            UpdatedAt = report.UpdatedAt
+        };
+    }
 }
+
 

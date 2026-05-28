@@ -1,128 +1,299 @@
-Implement the system strictly based on the provided final design. Do NOT reinterpret or simplify any part of the pipeline.
+Strategy đúng cho system này
 
-## Enforcement Rules (CRITICAL)
+Bạn nên chia test thành:
 
-1. **Pipeline order must be EXACT**
-   You MUST implement matching in this exact sequence:
+Layer	Purpose
+Unit Tests	business logic
+Integration Tests	DB + services
+Workflow Tests	full business flow
+AI Contract Tests	Gemini response consistency
+Projection Tests	aggregate correctness
+Concurrency Tests	race conditions
+Event Tests	RabbitMQ correctness
+Security Tests	sanitization/injection
+QUAN TRỌNG NHẤT
 
-2. Data quality filter
+Bạn cần test:
 
-3. Pre-filter (skill overlap ranking, take top 100–150)
+data consistency across tables
+Vì system bạn có:
+immutable snapshots
+→ scoring
+→ transactions
+→ projections
+→ leaderboard
+1. TEST DOMAIN 1 — Skill Management
+Tables
+SKILLS
+SKILL_ALIASES
+SKILL_RELATIONSHIPS
+PENDING_SKILLS
+Test Cases
+Skill Normalization Test
+Scenario
 
-4. Cosine similarity (safe)
+AI detect:
 
-5. Compute scoring components
+ASP Net Core
+Expect
+mapped to ASP.NET Core
+Verify
+Table	Verify
+SKILLS	no duplicate created
+SKILL_ALIASES	alias matched
+PENDING_SKILLS	not created
+Fuzzy Match Threshold Test
+Scenario
 
-6. Weighted scoring
+AI detect:
 
-7. Threshold filter (>= 0.3)
+AspNetCore
+Expect
 
-8. Deterministic sorting
+Above threshold:
 
-9. Pagination (max size = 50)
+existing skill reused
 
-10. Cache result (versioned key)
+Below threshold:
 
-Any deviation is NOT allowed.
+PendingSkill created
+PendingSkill Approval Test
+Scenario
 
----
+Admin approves:
 
-2. **Deterministic behavior is mandatory**
+Semantic Kernel
+Verify
+Table	Expected
+PENDING_SKILLS	status=Approved
+SKILLS	new canonical skill created
+SKILL_ALIASES	alias inserted
+2. TEST DOMAIN 2 — Challenge Management
+Tables
+CHALLENGES
+CHALLENGE_VERSIONS
+CHALLENGE_SUBMISSIONS
+CHALLENGE_CRITERIA
+MOST IMPORTANT TESTS
+Immutable Snapshot Test
+Scenario
+Publish Challenge v1
+User submits
+Edit challenge
+Publish v2
+Verify
 
-* Same input MUST always produce identical output
-* Always:
+Submission cũ:
 
-  * round finalScore to 4 decimal places
-  * apply stable sorting:
+still references v1
+Validate
+Table	Verify
+CHALLENGE_SUBMISSIONS	VersionId unchanged
+CHALLENGE_VERSIONS	v1 immutable
+Scores	unchanged
+Challenge Lifecycle Test
+Scenario
+Draft
+→ PendingReview
+→ Published
+→ Expired
+Verify
+State	Allowed Actions
+Draft	edit allowed
+Published	edit forbidden
+Expired	submissions blocked
+Anti-Farming Submission Test
+Scenario
 
-    * finalScore DESC
-    * UpdatedAt DESC
-    * Id ASC
+User submits:
 
----
+1st attempt
+2nd attempt
+3rd attempt
+Verify
+Attempt	Multiplier
+1	1.0
+2	0.5
+3	0.25
+3. TEST DOMAIN 3 — Evaluation & Scoring
+Tables
+EVALUATION_CRITERIA
+CRITERIA_SKILL_MAPPINGS
+SUBMISSION_CRITERIA_SCORES
+USER_SKILLS
+CRITICAL TESTS
+Criteria-to-Skill Mapping Test
+Scenario
 
-3. **Cosine similarity must be hardened**
+Criteria:
 
-Implement:
+SignalR Usage
 
-* null vectors → return 0
-* length mismatch → return 0
-* zero norm → return 0
-* never throw exceptions
+maps to:
 
----
+SignalR
+ASP.NET Core
+Verify
 
-4. **Scoring must follow exact formula**
+AI score:
 
-finalScore = cosine * 0.7 + skillScore * 0.2 + categoryScore * 0.1
+9/10
 
-* Clamp all values to [0..1]
-* Do not modify weights
+correctly distributes points.
 
----
+Point Aggregation Test
+Scenario
 
-5. **Pre-filter must reduce dataset BEFORE cosine**
+User completes:
 
-* Compute skill overlap count
-* Sort DESC
-* Take top 100–150
-* Only THEN compute cosine
+Challenge A
+Challenge B
+Verify
+Table	Verify
+SKILL_POINT_TRANSACTIONS	all transactions inserted
+USER_SKILLS	aggregated total correct
+Recalculation Integrity Test
+Scenario
 
----
+Delete transaction.
 
-6. **Strict filtering rules**
+Rebuild aggregate.
 
-Skip any record that:
+Verify
+USER_SKILLS recalculated correctly
+Mastery Level Test
+Scenario
 
-* has no skills
-* has very short description
-* EmbeddingStatus != Ready
+TotalPoints:
 
----
+55
+Verify
+ADVANCED
+4. TEST DOMAIN 4 — Audit & Security
+Tables
+SKILL_POINT_TRANSACTIONS
+PENDING_SKILLS
+PROMPT_SANITIZATION_LOG
+Prompt Injection Test
+Scenario
 
-7. **Cache must be version-aware**
+Challenge contains:
 
-Use keys:
+ignore previous instructions
+Verify
+Table	Verify
+PROMPT_SANITIZATION_LOG	risk flag inserted
+Sanitized prompt	cleaned
+AI request	safe
+Audit Trail Integrity Test
+Scenario
 
-* portfolio:{id}:{embeddingVersion}:matched-jobs
-* job:{id}:{embeddingVersion}:matched-portfolios
+Submission graded.
 
-Do NOT use non-versioned cache.
+Verify
+Table	Verify
+SKILL_POINT_TRANSACTIONS	transaction created
+USER_SKILLS	updated
+history	traceable
+5. EVENT-DRIVEN TESTS
+IMPORTANT
 
----
+Bạn đang dùng:
 
-8. **Cross-service calls must be safe**
+RabbitMQ
+projections
+aggregates
+Test Event Ordering
+Scenario
+SubmissionGradedEvent
+→ SkillPointsAwardedEvent
+→ UserSkillUpdatedEvent
+Verify
 
-* Add timeout (1–2 seconds)
-* On failure → return empty result
-* Never throw exception to caller
+Order đúng.
 
----
+Test Idempotency
+Scenario
 
-9. **Code structure requirements**
+RabbitMQ redelivers:
 
-* Implement:
+SubmissionGradedEvent
 
-  * MatchingEngine (full pipeline)
-  * ScoringHelper
-  * CosineSimilaritySafe
-* Shared module MUST be reused by both services
-* No duplicated logic allowed
+2 lần.
 
----
+Verify
+points NOT duplicated
+6. CONCURRENCY TESTS
+VERY IMPORTANT
+Concurrent Submission Test
+Scenario
 
-## Output
+User spam submit 10 requests.
 
-Generate full production-ready .NET code:
+Verify
+Table	Verify
+CHALLENGE_SUBMISSIONS	no corruption
+transactions	no duplicates
+USER_SKILLS	consistent
+Concurrent Leaderboard Update Test
+Scenario
 
-* MatchingEngine implementation (end-to-end pipeline)
-* ScoringHelper implementation
-* Safe cosine similarity function
-* DTOs and models
-* Example usage in both Portfolio and Company services
+100 submissions graded simultaneously.
 
-Ensure:
+Verify
 
-* clean, readable, maintainable code
-* no hidden assumptions
-* no skipped steps
+Leaderboard:
+
+consistent
+7. PERFORMANCE TESTS
+High Volume Submission Test
+Scenario
+100K submissions
+Verify
+Query	Target
+leaderboard	< 200ms
+portfolio load	< 100ms
+skill aggregation	scalable
+8. AI CONTRACT TESTS
+IMPORTANT
+
+AI responses KHÔNG deterministic.
+
+Bạn cần mock Gemini responses.
+Test Cases
+Test	Verify
+malformed JSON	parser safe
+missing fields	fallback works
+invalid score	validation works
+timeout	retry works
+empty response	graceful fail
+9. FULL END-TO-END TEST (MOST IMPORTANT)
+Đây là test QUAN TRỌNG NHẤT
+Scenario
+Create Challenge
+→ AI Analyze
+→ Publish
+→ Submit Solution
+→ AI Grade
+→ Award Points
+→ Update UserSkill
+→ Update Leaderboard
+→ Portfolio Displays Verified Skill
+Verify EVERY table
+Table	Verify
+CHALLENGES	created
+CHALLENGE_VERSIONS	snapshot created
+CHALLENGE_SUBMISSIONS	submission inserted
+SUBMISSION_CRITERIA_SCORES	scores inserted
+SKILL_POINT_TRANSACTIONS	points inserted
+USER_SKILLS	aggregate updated
+
+MOST IMPORTANT PRINCIPLE
+
+Bạn KHÔNG nên chỉ test:
+
+API returns 200
+
+Bạn phải test:
+
+entire workflow integrity

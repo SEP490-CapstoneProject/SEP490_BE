@@ -19,7 +19,7 @@ public sealed class PortfolioMatchingClient : IPortfolioMatchingClient
 
     public async Task<IReadOnlyList<MatchingCandidate>> GetPortfolioCandidatesAsync(CancellationToken cancellationToken = default)
     {
-        const string endpoint = "/api/portfolio/internal/matching-candidates?limit=150";
+        const string endpoint = "/api/portfolio/internal/matching-candidates?limit=500";
         try
         {
             var response = await _httpClient.GetAsync(endpoint, cancellationToken);
@@ -41,6 +41,37 @@ public sealed class PortfolioMatchingClient : IPortfolioMatchingClient
         {
             _logger.LogWarning(ex, "Portfolio matching candidates request failed. Endpoint: {Endpoint}", endpoint);
             return Array.Empty<MatchingCandidate>();
+        }
+    }
+
+    public async Task<IReadOnlyList<PortfolioDetailDto>> GetPortfoliosByIdsAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default)
+    {
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0) return Array.Empty<PortfolioDetailDto>();
+
+        var idsParam = string.Join(",", idList);
+        var endpoint = $"/api/portfolio/internal/by-ids?ids={idsParam}";
+        try
+        {
+            var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Portfolio by-ids request failed. Endpoint: {Endpoint}, Status: {Status}", endpoint, response.StatusCode);
+                return Array.Empty<PortfolioDetailDto>();
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<List<PortfolioDetailDto>>(cancellationToken: cancellationToken);
+            return result ?? new List<PortfolioDetailDto>();
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(ex, "Portfolio by-ids request timed out. Endpoint: {Endpoint}", endpoint);
+            return Array.Empty<PortfolioDetailDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Portfolio by-ids request failed. Endpoint: {Endpoint}", endpoint);
+            return Array.Empty<PortfolioDetailDto>();
         }
     }
 }

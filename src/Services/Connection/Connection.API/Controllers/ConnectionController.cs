@@ -10,20 +10,26 @@ namespace Connection.API.Controllers;
 public class ConnectionController : ControllerBase
 {
     private readonly IConnectionService _service;
+    private readonly ILogger<ConnectionController> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> _hubContext;
     private readonly IConnectionEventPublisher _eventPublisher;
+    private readonly Connection.Application.Interfaces.IUserProfileResolver _userProfileResolver;
 
     public ConnectionController(
         IConnectionService service,
+        ILogger<ConnectionController> logger,
         IHttpClientFactory httpClientFactory,
         Microsoft.AspNetCore.SignalR.IHubContext<Hubs.ChatHub> hubContext,
-        IConnectionEventPublisher eventPublisher)
+        IConnectionEventPublisher eventPublisher,
+        Connection.Application.Interfaces.IUserProfileResolver userProfileResolver)
     {
         _service = service;
+        _logger = logger;
         _httpClientFactory = httpClientFactory;
         _hubContext = hubContext;
         _eventPublisher = eventPublisher;
+        _userProfileResolver = userProfileResolver;
     }
 
     [HttpPost]
@@ -167,7 +173,7 @@ public class ConnectionController : ControllerBase
     // Room creation is handled automatically when a Connection is matched; manual room endpoints removed
 
     /// <summary>
-    /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED).
+    /// Kiểm tra trạng thái connection giữa 2 user (bỏ qua các connection STORED và DENY).
     /// Trả về: { connectionId, status } — connectionId = 0 nếu không tìm thấy connection.
     /// </summary>
     [HttpGet("status/by-users")]
@@ -180,22 +186,129 @@ public class ConnectionController : ControllerBase
         return Ok(new { connectionId, status });
     }
 
+    public class MatchByUsersRequest
+    {
+        public int UserId1 { get; set; }
+        public int UserId2 { get; set; }
+    }
+
+    public class MatchByUsersResponse
+    {
+        public int? ConnectionId { get; set; }
+        public string? Status { get; set; }
+        public bool IsMatched { get; set; }
+        public string? Reason { get; set; }
+        public int? RoomId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Avatar { get; set; }
+        public string? CoverImage { get; set; }
+        public string Role { get; set; } = "USER";
+    }
+
+    [HttpPost("match-by-users")]
+    [Authorize]
+    public async Task<IActionResult> MatchByUsers([FromBody] MatchByUsersRequest request)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int currentUserId))
+        {
+            return Unauthorized(new { error = "Invalid or missing user ID in token" });
+        }
+
+        if (request.UserId1 != currentUserId && request.UserId2 != currentUserId)
+        {
+            return Forbid(); // Current user must be one of the UIDs
+        }
+
+        var (connectionId, status) = await _service.GetConnectionStatusByUsersAsync(request.UserId1, request.UserId2);
+
+        if (connectionId <= 0 || string.IsNullOrWhiteSpace(status))
+        {
+            _logger.LogInformation("MatchByUsers: no connection found for users {UserId1} and {UserId2}", request.UserId1, request.UserId2);
+            return Ok(new MatchByUsersResponse
+            {
+                ConnectionId = null,
+                Status = status,
+                IsMatched = false,
+                Reason = "CONNECTION_NOT_FOUND"
+            });
+        }
+
+        if (status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("MatchByUsers: users already matched for connection {ConnectionId}", connectionId);
+            var matchedResponse = await BuildMatchedRoomCardResponseAsync(connectionId, currentUserId, status, "ALREADY_MATCHED");
+            return Ok(matchedResponse);
+        }
+
+        if (!status.Equals(RecruitmentPlatform.Contracts.Enums.ConnectionStatus.PENDING.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("MatchByUsers: connection {ConnectionId} has non-pending status {Status}", connectionId, status);
+            return Ok(new MatchByUsersResponse
+            {
+                ConnectionId = connectionId,
+                Status = status,
+                IsMatched = false,
+                Reason = "NOT_PENDING"
+            });
+        }
+
+        // Update to MATCHED
+        var updated = await _service.UpdateConnectionStatusAsync(connectionId, RecruitmentPlatform.Contracts.Enums.ConnectionStatus.MATCHED, currentUserId);
+        if (updated == null) return NotFound();
+
+        // Send real-time events as done in UpdateStatus endpoint
+        await _hubContext.Clients.Group($"user_{updated.UserIdFrom}").SendAsync("ConnectionAccepted", new
+        {
+            connectionId = updated.Id,
+            fromUserId   = updated.UserIdFrom,
+            toUserId     = updated.UserIdTo,
+            status       = updated.Status
+        });
+        _ = _eventPublisher.PublishConnectionAcceptedAsync(updated.Id, updated.UserIdFrom, updated.UserIdTo, updated.ConnectionAt ?? DateTime.UtcNow);
+        var acceptorProfile = await GetUserProfileAsync(updated.UserIdTo);
+        _ = _eventPublisher.PublishConnectionAcceptedNotificationAsync(new ConnectionNotificationEventPayload
+        {
+            EventType = "connection.request.accepted",
+            UserId = updated.UserIdFrom.ToString(),
+            ActorId = updated.UserIdTo.ToString(),
+            ActorType = "USER",
+            ObjectId = updated.Id.ToString(),
+            Title = "Yêu cầu kết nối đã được chấp nhận",
+            Content = acceptorProfile != null
+                ? $"{acceptorProfile.Name} đã chấp nhận yêu cầu kết nối của bạn."
+                : "Yêu cầu kết nối của bạn đã được chấp nhận.",
+            Type = "CONNECTION_REQUEST_ACCEPTED",
+            Author = acceptorProfile,
+            CreatedAt = updated.ConnectionAt ?? DateTime.UtcNow
+        });
+
+        _logger.LogInformation("MatchByUsers: connection {ConnectionId} updated to MATCHED by user {UserId}", updated.Id, currentUserId);
+        var response = await BuildMatchedRoomCardResponseAsync(updated.Id, currentUserId, updated.Status, "MATCHED_NOW");
+        return Ok(response);
+    }
+
     /// <summary>
-    /// Lấy trạng thái connection theo connectionId.
-    /// STORED trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
+    /// Lấy trạng thái connection theo roomId.
+    /// STORED và DENY trả về status = "0", các trạng thái khác trả về tên (PENDING/MATCHED/BLOCK).
     /// Trả về 404 nếu không tìm thấy connection.
     /// </summary>
-    [HttpGet("{connectionId}/status")]
-    public async Task<IActionResult> GetConnectionStatusById(int connectionId)
+    [HttpGet("rooms/{roomId}/status")]
+    public async Task<IActionResult> GetConnectionStatusByRoomId(int roomId)
     {
-        if (connectionId <= 0)
-            return BadRequest(new { error = "connectionId must be greater than 0" });
+        if (roomId <= 0)
+            return BadRequest(new { error = "roomId must be greater than 0" });
 
-        var status = await _service.GetConnectionStatusByIdAsync(connectionId);
-        if (status == null)
-            return NotFound(new { error = $"Connection {connectionId} not found" });
+        var conn = await _service.GetConnectionByRoomIdAsync(roomId);
+        if (conn == null)
+            return NotFound(new { error = $"Connection for room {roomId} not found" });
 
-        return Ok(new { connectionId, status });
+        if (conn.Status == RecruitmentPlatform.Contracts.Enums.ConnectionStatus.BLOCK.ToString())
+        {
+            return Ok(new { roomId, status = conn.Status, blockId = conn.BlockId });
+        }
+
+        return Ok(new { roomId, status = conn.Status });
     }
 
     [HttpGet("rooms/summary/{userId}")]
@@ -346,6 +459,30 @@ public class ConnectionController : ControllerBase
         };
 
         var created = await _service.CreateMessageAsync(message);
+
+        var roomUsers = await _service.GetRoomUsersAsync(roomId);
+        var roomConn = roomUsers.FirstOrDefault();
+        if (roomConn != default)
+        {
+            var targetUserId = roomConn.UserIdFrom == currentUserId ? roomConn.UserIdTo : roomConn.UserIdFrom;
+            var senderProfile = await _userProfileResolver.ResolveAsync(currentUserId);
+            _ = _eventPublisher.PublishChatMessageNotificationAsync(new ConnectionNotificationEventPayload
+            {
+                EventType = "connection.message.created",
+                UserId = targetUserId.ToString(),
+                ActorId = currentUserId.ToString(),
+                ActorType = "USER",
+                ObjectId = roomId.ToString(),
+                Title = senderProfile != null
+                    ? $"Tin nhắn mới từ {senderProfile.Name}"
+                    : "Tin nhắn mới",
+                Content = created.Content,
+                Type = "CHAT_MESSAGE",
+                Author = senderProfile,
+                CreatedAt = created.CreatedAt
+            });
+        }
+
         return CreatedAtAction(nameof(GetLatestMessages), new { roomId = roomId }, created);
     }
 
@@ -455,5 +592,93 @@ public class ConnectionController : ControllerBase
         {
             return null;
         }
+    }
+
+    private async Task<MatchByUsersResponse> BuildMatchedRoomCardResponseAsync(int connectionId, int currentUserId, string? status, string reason)
+    {
+        var roomSummary = await _service.GetRoomSummaryByConnectionIdAsync(connectionId, currentUserId);
+
+        int roomId = connectionId;
+        int otherUserId = 0;
+
+        if (roomSummary != null)
+        {
+            roomId = roomSummary.RoomId;
+            otherUserId = roomSummary.UserIdFrom == currentUserId ? roomSummary.UserIdTo : roomSummary.UserIdFrom;
+        }
+        else
+        {
+            _logger.LogWarning("MatchByUsers: room summary missing for connection {ConnectionId}, using fallback lookup", connectionId);
+            var conn = await _service.GetConnectionByIdAsync(connectionId);
+            if (conn != null)
+            {
+                otherUserId = conn.UserIdFrom == currentUserId ? conn.UserIdTo : conn.UserIdFrom;
+                var rooms = await _service.GetRoomsByConnectionAsync(connectionId);
+                var room = rooms.FirstOrDefault();
+                if (room != null)
+                {
+                    roomId = room.Id;
+                }
+            }
+        }
+
+        var (name, avatar, coverImage, role) = await ResolveCounterpartCardAsync(otherUserId);
+        return new MatchByUsersResponse
+        {
+            ConnectionId = connectionId,
+            Status = status,
+            IsMatched = true,
+            Reason = reason,
+            RoomId = roomId,
+            Name = name,
+            Avatar = avatar,
+            CoverImage = coverImage,
+            Role = role
+        };
+    }
+
+    private async Task<(string Name, string? Avatar, string? CoverImage, string Role)> ResolveCounterpartCardAsync(int otherUserId)
+    {
+        string name = otherUserId > 0 ? otherUserId.ToString() : "Unknown";
+        string? avatar = null;
+        string? coverImage = null;
+        string role = "USER";
+
+        if (otherUserId <= 0)
+        {
+            return (name, avatar, coverImage, role);
+        }
+
+        var client = _httpClientFactory.CreateClient("UserProfile");
+        try
+        {
+            var companyRes = await client.GetAsync($"/api/company/by-user/{otherUserId}");
+            if (companyRes.IsSuccessStatusCode)
+            {
+                var json = await companyRes.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("companyName", out var comp)) name = comp.GetString() ?? name;
+                if (doc.RootElement.TryGetProperty("avatar", out var av)) avatar = av.GetString();
+                if (doc.RootElement.TryGetProperty("coverImage", out var cv)) coverImage = cv.GetString();
+                role = "COMPANY";
+                return (name, avatar, coverImage, role);
+            }
+
+            var employeeRes = await client.GetAsync($"/api/employee/by-user/{otherUserId}");
+            if (employeeRes.IsSuccessStatusCode)
+            {
+                var json = await employeeRes.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("name", out var nm)) name = nm.GetString() ?? name;
+                if (doc.RootElement.TryGetProperty("avatar", out var av)) avatar = av.GetString();
+                if (doc.RootElement.TryGetProperty("coverImage", out var cv)) coverImage = cv.GetString();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "MatchByUsers: failed to resolve counterpart profile for user {OtherUserId}", otherUserId);
+        }
+
+        return (name, avatar, coverImage, role);
     }
 }

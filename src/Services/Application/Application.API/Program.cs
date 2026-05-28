@@ -63,6 +63,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
+builder.Services.AddScoped<IFeatureVerificationService, SubscriptionFeatureVerificationService>();
 builder.Services.AddScoped<IEntitlementChecker, EntitlementChecker>();
 builder.Services.AddScoped<IApplicationNotificationEventPublisher, RabbitMqApplicationNotificationEventPublisher>();
 

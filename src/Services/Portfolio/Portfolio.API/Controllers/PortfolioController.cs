@@ -15,17 +15,20 @@ public class PortfolioController : ControllerBase
 {
     private const string ActiveStatus = "active";
     private readonly IPortfolioService _portfolioService;
+    private readonly IPortfolioPreviewService _portfolioPreviewService;
     private readonly IBlockRepository _blockRepo;
     private readonly BlockService _blockService;
     private readonly ILogger<PortfolioController> _logger;
 
     public PortfolioController(
         IPortfolioService portfolioService,
+        IPortfolioPreviewService portfolioPreviewService,
         IBlockRepository blockRepo,
         BlockService blockService,
         ILogger<PortfolioController> logger)
     {
         _portfolioService = portfolioService;
+        _portfolioPreviewService = portfolioPreviewService;
         _blockRepo = blockRepo;
         _blockService = blockService;
         _logger = logger;
@@ -151,6 +154,28 @@ public class PortfolioController : ControllerBase
         return Ok(new { type = dto.Type, variant = dto.Variant, data = dto.Data });
     }
 
+    [HttpPost("{id:int}/preview/generate")]
+    [Authorize]
+    public async Task<IActionResult> GeneratePreview(int id, [FromBody] PortfolioPreviewGenerateRequest? request)
+    {
+        var result = await _portfolioPreviewService.GeneratePreviewAsync(id, request?.HighlightsDescription);
+        if (result == null || !result.Success)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = result?.Message ?? "Failed to generate preview"
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = result.Message,
+            data = result.Preview
+        });
+    }
+
     [HttpGet("{id:int}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetById(int id)
@@ -185,6 +210,35 @@ public class PortfolioController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var result = await _portfolioService.GetMatchingCandidatesAsync(limit, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Internal endpoint: batch fetch portfolio summaries by IDs</summary>
+    [HttpGet("internal/by-ids")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPortfoliosByIds([FromQuery] string ids)
+    {
+        if (string.IsNullOrWhiteSpace(ids))
+            return Ok(new List<object>());
+
+        var idList = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => int.TryParse(x, out var v) ? v : (int?)null)
+            .Where(x => x.HasValue && x.Value > 0)
+            .Select(x => x!.Value)
+            .Distinct()
+            .ToList();
+
+        if (idList.Count == 0)
+            return Ok(new List<object>());
+
+        var result = await _portfolioService.GetPortfoliosByIdsAsync(idList);
+
+        foreach (var p in result)
+        {
+            var blocks = await _blockRepo.GetByPortfolioIdAsync(p.PortfolioId);
+            p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+        }
+
         return Ok(result);
     }
 
@@ -368,5 +422,43 @@ public class PortfolioController : ControllerBase
 
         return null;
     }
-}
 
+    private int? GetUserId()
+    {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? User.FindFirst("sub")?.Value
+                 ?? User.FindFirst("nameid")?.Value
+                 ?? User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+        if (!string.IsNullOrEmpty(claim) && int.TryParse(claim, out int userId))
+            return userId;
+
+        return null;
+    }
+
+    /// <summary>Report a portfolio</summary>
+    [HttpPost("{portfolioId:int}/report")]
+    [Authorize]
+    public async Task<IActionResult> ReportPortfolio(int portfolioId, [FromBody] CreatePortfolioReportRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized(new { error = "Invalid token" });
+
+        try
+        {
+            var created = await _portfolioService.ReportPortfolioAsync(portfolioId, userId.Value, request);
+            return StatusCode(201, created);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+}

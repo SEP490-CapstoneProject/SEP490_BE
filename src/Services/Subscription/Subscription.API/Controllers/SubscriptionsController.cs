@@ -100,10 +100,10 @@ public class SubscriptionsController : ControllerBase
     }
 
     [HttpGet("entitlements/{userId}")]
-    public async Task<IActionResult> GetEntitlements(int userId)
+    public async Task<IActionResult> GetEntitlements(int userId, [FromQuery] string? role = null)
     {
         // This endpoint is used by other services as fallback
-        var entitlements = await _subscriptionService.GetEntitlementsAsync(userId);
+        var entitlements = await _subscriptionService.GetEntitlementsAsync(userId, role);
         return Ok(entitlements);
     }
 
@@ -115,7 +115,11 @@ public class SubscriptionsController : ControllerBase
         if (userId == null)
             return Unauthorized();
 
-        var entitlements = await _subscriptionService.GetEntitlementsAsync(userId.Value);
+        // Lấy role từ JWT claim
+        var role = User.FindFirst(ClaimTypes.Role)?.Value
+            ?? User.FindFirst("role")?.Value;
+
+        var entitlements = await _subscriptionService.GetEntitlementsAsync(userId.Value, role);
         return Ok(entitlements);
     }
 

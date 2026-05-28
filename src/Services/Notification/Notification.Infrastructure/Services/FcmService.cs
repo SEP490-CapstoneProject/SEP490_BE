@@ -88,6 +88,18 @@ namespace Notification.Infrastructure.Services
 
             _logger.LogInformation("📱 [FCM_MULTICAST_START] Count={Count}, Title={Title}, BodyLength={BodyLength}, DataKeys={DataKeys}",
                 deviceTokens.Count, title, body?.Length ?? 0, data != null ? string.Join(",", data.Keys) : "none");
+            
+            // Log each token (first 50 chars) for debugging
+            for (int i = 0; i < deviceTokens.Count; i++)
+            {
+                var token = deviceTokens[i];
+                if (!string.IsNullOrEmpty(token))
+                {
+                    var tokenPreview = token.Substring(0, Math.Min(50, token.Length)) + "...";
+                    _logger.LogInformation("📱 [FCM_MULTICAST_TOKEN] Index={Index}, TokenPreview={TokenPreview}, Length={Length}",
+                        i, tokenPreview, token.Length);
+                }
+            }
 
             try
             {
@@ -135,24 +147,33 @@ namespace Notification.Infrastructure.Services
                     var failedCount = 0;
                     var errorDetails = new List<string>();
                     
-                    for (int i = 0; i < response.Responses.Count && errorDetails.Count < 5; i++)
+                    for (int i = 0; i < response.Responses.Count; i++)
                     {
                         var sendResponse = response.Responses[i];
                         if (!sendResponse.IsSuccess)
                         {
                             failedCount++;
+                            var tokenPreview = i < deviceTokens.Count ? deviceTokens[i].Substring(0, Math.Min(30, deviceTokens[i].Length)) + "..." : "unknown";
+                            
                             if (sendResponse.Exception != null)
                             {
                                 var ex = sendResponse.Exception;
                                 if (ex is FirebaseMessagingException fmEx)
                                 {
+                                    _logger.LogWarning("📱 [FCM_MULTICAST_ERROR_DETAIL] Index={Index}, Token={Token}, ErrorCode={ErrorCode}, Message={Message}",
+                                        i, tokenPreview, fmEx.ErrorCode, fmEx.Message);
                                     errorDetails.Add($"Index={i}, ErrorCode={fmEx.ErrorCode}, Message={fmEx.Message}");
                                 }
                                 else
                                 {
-                                    errorDetails.Add($"Index={i}, Message={ex.Message}");
+                                    _logger.LogWarning("📱 [FCM_MULTICAST_ERROR_DETAIL] Index={Index}, Token={Token}, ExceptionType={ExceptionType}, Message={Message}",
+                                        i, tokenPreview, ex.GetType().Name, ex.Message);
+                                    errorDetails.Add($"Index={i}, Type={ex.GetType().Name}, Message={ex.Message}");
                                 }
                             }
+                            
+                            if (errorDetails.Count >= 5)
+                                break;
                         }
                     }
 
@@ -171,10 +192,23 @@ namespace Notification.Infrastructure.Services
                     ex.ErrorCode, ex.Message, deviceTokens.Count);
                 return false;
             }
+            catch (Exception ex) when (ex.GetType().Name.Contains("OAuth2") || ex.GetType().Name.Contains("TokenResponse"))
+            {
+                _logger.LogError(ex, "📱 [FCM_OAUTH2_ERROR] Google OAuth2/Token error. ExceptionType={ExceptionType}, Message={Message}, TokenCount={TokenCount}",
+                    ex.GetType().Name, ex.Message, deviceTokens.Count);
+                _logger.LogError("   Likely cause: Firebase credentials are invalid, expired, or missing in KeyVault");
+                return false;
+            }
+            catch (Exception ex) when (ex.GetType().Name.Contains("Credential") || ex.GetType().Name.Contains("ServiceAccount"))
+            {
+                _logger.LogError(ex, "📱 [FCM_CREDENTIAL_ERROR] Firebase service account credential error. ExceptionType={ExceptionType}, Message={Message}, TokenCount={TokenCount}",
+                    ex.GetType().Name, ex.Message, deviceTokens.Count);
+                return false;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "📱 [FCM_MULTICAST_ERROR] Unexpected error in multicast send. TokenCount={TokenCount}",
-                    deviceTokens.Count);
+                _logger.LogError(ex, "📱 [FCM_MULTICAST_ERROR] Unexpected error in multicast send. ExceptionType={ExceptionType}, TokenCount={TokenCount}",
+                    ex.GetType().Name, deviceTokens.Count);
                 return false;
             }
         }

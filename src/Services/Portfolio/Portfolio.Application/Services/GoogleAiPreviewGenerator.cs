@@ -16,7 +16,7 @@ public class GoogleAiPreviewGenerator
     private readonly ILogger<GoogleAiPreviewGenerator> _logger;
 
     // Constants for AI generation
-    private const int MaxOutputTokens = 500;
+    private const int MaxOutputTokens = 2048;
     private const float Temperature = 0.3f;  // Low for deterministic outputs
     private const int TopK = 40;
     private const float TopP = 0.95f;
@@ -26,7 +26,7 @@ public class GoogleAiPreviewGenerator
         _httpClient = httpClient;
         _apiKey = configuration["GoogleAI:ApiKey"] ?? string.Empty;
         _generativeModel = string.IsNullOrWhiteSpace(configuration["GoogleAI:GenerativeModel"])
-            ? "gemini-1.5-pro"
+            ? "gemini-2.5-flash"
             : configuration["GoogleAI:GenerativeModel"]!;
         _logger = logger;
 
@@ -166,7 +166,30 @@ IMPORTANT:
                     temperature = Temperature,
                     topK = TopK,
                     topP = TopP,
-                    maxOutputTokens = MaxOutputTokens
+                    maxOutputTokens = MaxOutputTokens,
+                    responseMimeType = "application/json",
+                    responseSchema = new
+                    {
+                        type = "object",
+                        properties = new
+                        {
+                            title = new { type = "string" },
+                            keySkills = new { type = "string" },
+                            specialization = new { type = "string" },
+                            recentProjects = new { type = "string" },
+                            achievement = new { type = "string" },
+                            summary = new { type = "string" }
+                        },
+                        required = new[]
+                        {
+                            "title",
+                            "keySkills",
+                            "specialization",
+                            "recentProjects",
+                            "achievement",
+                            "summary"
+                        }
+                    }
                 }
             });
 
@@ -189,6 +212,9 @@ IMPORTANT:
 
             var responseText = payload.Candidates[0].Content?.Parts?[0]?.Text ?? "";
             var tokensUsed = payload.UsageMetadata?.OutputTokenCount;
+
+            _logger.LogInformation("Gemini raw response preview: {Preview}",
+                responseText.Length > 500 ? responseText[..500] : responseText);
 
             return (true, responseText, null, tokensUsed);
         }

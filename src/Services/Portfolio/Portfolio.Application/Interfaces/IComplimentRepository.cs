@@ -9,4 +9,15 @@ public interface IComplimentRepository
     Task<Compliment> CreateAsync(Compliment compliment);
     Task<Compliment> UpdateAsync(Compliment compliment);
     Task MarkDeletedAsync(int id, int updatedBy);
+    
+    /// <summary>
+    /// Checks if creator has any non-deleted compliment on this portfolio.
+    /// </summary>
+    Task<bool> HasComplimentFromCreatorAsync(int portfolioId, int createdBy);
+    
+    /// <summary>
+    /// Checks if creator has any non-deleted compliment on this portfolio within last N days.
+    /// </summary>
+    Task<bool> HasComplimentFromCreatorInLastDaysAsync(int portfolioId, int createdBy, int days);
 }
+

@@ -9,7 +9,6 @@
     <PackageReference Include="xunit" Version="2.5.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Core" Version="1.1.0" />
-    <PackageReference Include="Azure.Core" Version="1.25.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Connection.Application\Connection.Application.csproj" />

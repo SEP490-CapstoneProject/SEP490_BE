@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  notification-service:
+    image: capstone-notification-service:latest
+    ports:
+      - "5011:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NotificationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - Firebase__CredentialsPath=/run/secrets/notification_firebase_credentials
+      - Firebase__ProjectId=skillsnap-notification
+    secrets:
+      - notification_firebase_credentials
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+secrets:
+  notification_firebase_credentials:
+    external: true

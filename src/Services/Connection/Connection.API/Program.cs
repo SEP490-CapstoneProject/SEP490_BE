@@ -107,6 +107,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionRepository, Connection.Infrastructure.Repositories.ConnectionRepository>();
 builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionService, Connection.Application.Services.ConnectionService>();
 builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionEventPublisher, Connection.Infrastructure.Messaging.RabbitMqConnectionEventPublisher>();
+builder.Services.AddScoped<Connection.Application.Interfaces.IUserProfileResolver, Connection.API.Services.UserProfileResolver>();
 
 // CORS
 builder.Services.AddCors(options =>

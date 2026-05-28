@@ -110,10 +110,7 @@ namespace Connection.Infrastructure.Migrations
             modelBuilder.Entity("Connection.Domain.Entities.Room", b =>
                 {
                     b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("ConnectionId")
                         .HasColumnType("int");

@@ -1,371 +1,302 @@
-You are a senior .NET architect. Update my existing microservices system to add AI-powered moderation and bidirectional matching using embeddings.
+1. Pipeline AI đọc Portfolio và tạo Preview Content
+Mục tiêu
 
----
+Người dùng upload hoặc chọn portfolio → AI:
 
-## Existing System
+đọc toàn bộ nội dung
+hiểu cấu trúc
+lọc thông tin nổi bật
+tạo:
+short preview
+recruiter summary
+social preview
+AI highlight
+CTA
 
-* Backend: .NET microservices
-* Services:
+Ví dụ output:
 
-  * Portfolio Service (user portfolios)
-  * Company Service (job posts)
-* Database: SQL Server
-* Messaging: RabbitMQ (optional)
-* No vector database
-* System already deployed on Azure (low-resource environment)
-
----
-
-## Goals
-
-### 1. AI Moderation
-
-Automatically review portfolios before publishing.
-
-### 2. Embedding-based Matching
-
-Implement semantic matching using embeddings.
-
-### 3. Bidirectional Matching
-
-* Candidate → Job
-* Company → Candidate
-
----
-
-## Core Principles
-
-* DO NOT call AI during matching
-* Embeddings must be precomputed
-* Use cosine similarity
-* Avoid tight coupling between services
-* Keep system lightweight (suitable for Azure Student tier)
-
----
-
-# =========================
-
-# PART 1 — DATABASE UPDATE
-
-# =========================
-
-Add column:
-
-```sql
-ALTER TABLE Portfolios ADD Embedding NVARCHAR(MAX);
-ALTER TABLE Jobs ADD Embedding NVARCHAR(MAX);
-```
-
-Store embedding as JSON array of floats.
-
----
-
-# =========================
-
-# PART 2 — EMBEDDING SERVICE
-
-# =========================
-
-Create reusable service:
-
-```csharp
-public interface IEmbeddingService
 {
-    Task<float[]> CreateEmbeddingAsync(string text);
+  "title": "Senior Backend Developer",
+  "shortPreview": "Backend engineer with 4 years of experience building scalable microservices and AI-integrated systems.",
+  "highlights": [
+    "Built scalable chat system with SignalR",
+    "Integrated Gemini AI into portfolio analysis",
+    "Deployed microservices on Azure"
+  ],
+  "tone": "professional",
+  "style": "modern tech"
 }
-```
-
-Implementation:
-
-* Use OpenAI API
-* Model: text-embedding-3-small
-
----
-
-# =========================
-
-# PART 3 — TEXT NORMALIZATION
-
-# =========================
-
-Before embedding, build structured text.
-
-## Portfolio:
-
-* Title
-* Description
-* Skills
-* Projects
-* Custom fields
-
-## Job:
-
-* Title
-* Description
-* Requirements
-* Skills
-
-Rules:
-
-* Missing fields → "N/A"
-* Consistent format
-* Remove noise
-
----
-
-# =========================
-
-# PART 4 — EMBEDDING TRIGGER
-
-# =========================
-
-Generate embedding ONLY when:
-
-* Portfolio created/updated
-* Job created/updated
-
-DO NOT generate during search.
-
----
-
-# =========================
-
-# PART 5 — MODERATION SYSTEM
-
-# =========================
-
-## Portfolio Status:
-
-```csharp
-enum PortfolioStatus
-{
-    Draft,
-    PendingReview,
-    Approved,
-    Rejected
-}
-```
-
----
-
-## Moderation Service:
-
-```csharp
-public interface IModerationService
-{
-    Task<ModerationResult> CheckAsync(string content);
-}
-```
-
----
-
-## Moderation Logic:
-
-* Rule-based first:
-
-  * Reject if:
-
-    * description too short
-    * no project
-    * spam keywords
-* Optional AI check (OpenAI or local)
-
----
-
-## Flow:
-
-1. User submits portfolio
-2. Status = PendingReview
-3. Run moderation
-4. Update:
-
-   * Approved → public
-   * Rejected → store reason
-
----
-
-# =========================
-
-# PART 6 — MATCHING ENGINE
-
-# =========================
-
-Shared similarity logic:
-
-```csharp
-public interface IMatchingEngine
-{
-    double ComputeSimilarity(float[] v1, float[] v2);
-}
-```
-
-Implement cosine similarity once.
-
----
-
-# =========================
-
-# PART 7 — MATCHING LOGIC
-
-# =========================
-
-## 1. Candidate → Job
-
-Portfolio Service:
-
-```csharp
-Task<List<JobMatchResult>> MatchJobsForPortfolio(Guid portfolioId);
-```
-
-Steps:
-
-1. Get portfolio embedding
-2. Call Company Service API to get jobs (with embeddings)
-3. Deserialize embeddings
-4. Compute similarity
-5. Sort descending
-6. Return top N
-
----
-
-## 2. Company → Candidate
-
-Company Service:
-
-```csharp
-Task<List<PortfolioMatchResult>> MatchPortfoliosForJob(Guid jobId);
-```
-
-Steps:
-
-1. Get job embedding
-2. Call Portfolio Service API
-3. Compute similarity
-4. Sort
-5. Return top N
-
----
-
-# =========================
-
-# PART 8 — API ENDPOINTS
-
-# =========================
-
-Portfolio Service:
-
-GET /api/portfolios/{id}/match-jobs
-
-Company Service:
-
-GET /api/jobs/{id}/match-portfolios
-
----
-
-# =========================
-
-# PART 9 — DTOs
-
-# =========================
-
-```csharp
-class JobMatchResult
-{
-    Guid JobId;
-    string Title;
-    double Score;
-}
-
-class PortfolioMatchResult
-{
-    Guid PortfolioId;
-    string Title;
-    double Score;
-}
-```
-
----
-
-# =========================
-
-# PART 10 — PERFORMANCE
-
-# =========================
-
-* Limit records (100–500)
-* Skip null embeddings
-* Pre-filter:
-
-  * skills
-  * category
-* Optional caching
-
----
-
-# =========================
-
-# PART 11 — ARCHITECTURE
-
-# =========================
-
-* Place AI logic in:
-  /Application/AI/
-
-Modules:
-
-* EmbeddingService
-* ModerationService
-* MatchingEngine
-
----
-
-# =========================
-
-# PART 12 — OPTIONAL (RabbitMQ)
-
-# =========================
-
-Events:
-
-* PortfolioCreated
-* JobCreated
-
-Consumers:
-
-* Generate embedding async
-
----
-
-# =========================
-
-# PART 13 — CONSTRAINTS
-
-# =========================
-
-* MUST use SQL Server
-* DO NOT use PostgreSQL or vector DB
-* DO NOT call OpenAI during matching
-* Keep solution simple and production-ready
-
----
-
-# =========================
-
-# OUTPUT REQUIRED
-
-# =========================
+Model nên dùng
+BEST CHOICE
+Gemini 2.5 Flash
+
+Dùng cho:
+
+đọc portfolio dài
+summarize
+extract highlights
+generate structured JSON
+fast + rẻ
+context lớn
+
+Bạn đang có:
+
+250K context
+20 RPM
+
+=> quá đủ cho portfolio.
+
+Không nên dùng
+Gemini 3.1 Flash Lite
+
+Dùng được nhưng:
+
+chất lượng reasoning kém hơn
+dễ hallucination
+summary thiếu depth
+
+Chỉ nên dùng:
+
+free tier fallback
+retry nhẹ
+background tasks
+Prompt Architecture đề xuất
+SYSTEM PROMPT
+You are an AI portfolio analyzer.
+
+Your task:
+- Read the full portfolio carefully
+- Understand skills, projects, experience, achievements
+- Create an engaging preview for recruiters
+- Focus on impactful and measurable achievements
+- Avoid generic wording
+- Return valid JSON only
+USER PROMPT
+Portfolio Content:
+{{FULL_PORTFOLIO}}
+
+User Requirements:
+- Tone: professional
+- Target: recruiter
+- Highlight:
+  - AI integration
+  - cloud deployment
+  - backend engineering
 
 Generate:
+- title
+- shortPreview
+- highlights
+- recruiterSummary
+- socialCaption
+- visualStyleSuggestion
+Function nên tách
+A. AnalyzePortfolioAsync()
 
-* EmbeddingService (OpenAI integration)
-* ModerationService (rule-based + optional AI)
-* MatchingEngine (cosine similarity)
-* Matching services (both directions)
-* API controllers
-* DTOs
-* SQL migration scripts
-* Sample requests/responses
+Input:
 
----
+portfolioContent
+userPrompt
 
-Deliver clean, maintainable, production-ready .NET code.
+Output:
+
+PortfolioPreviewDto
+B. GeneratePreviewImageAsync()
+
+Input:
+
+summary
+visualStyle
+highlightKeywords
+
+Output:
+
+imageUrl
+2. AI Generate Portfolio Preview Image
+
+Đây là phần QUAN TRỌNG NHẤT.
+
+Bạn KHÔNG nên đưa full portfolio vào image model.
+
+Sai cách:
+
+Generate image from this full portfolio text...
+
+→ token cực lớn
+→ ảnh xấu
+→ không kiểm soát style
+
+Cách đúng
+Bước 1
+
+Gemini text model tạo:
+
+{
+  "visualTheme": "modern cyberpunk developer portfolio",
+  "mainElements": [
+    "laptop setup",
+    "floating AI hologram UI",
+    "cloud architecture",
+    "code editor"
+  ],
+  "colorPalette": ["#111827", "#00D4FF", "#A855F7"],
+  "heroText": "AI Backend Engineer"
+}
+Bước 2
+
+Dùng image model generate ảnh.
+
+Model nên dùng
+BEST
+Imagen 4 Generate
+
+Hoặc:
+
+Imagen 4 Fast Generate
+Chọn model nào?
+Model	Khi dùng
+Imagen 4 Generate	chất lượng cao
+Imagen 4 Fast Generate	realtime preview
+Imagen 4 Ultra	ảnh marketing/banner cao cấp
+Recommended Flow
+Portfolio
+   ↓
+Gemini 2.5 Flash
+   ↓
+Structured Preview JSON
+   ↓
+Generate Visual Prompt
+   ↓
+Imagen 4 Fast
+   ↓
+Preview Image
+Kiến trúc Database nên có
+PortfolioPreview
+Column	Type
+Id	GUID
+PortfolioId	GUID
+Summary	TEXT
+RecruiterSummary	TEXT
+Highlights	JSON
+VisualPrompt	TEXT
+ImageUrl	TEXT
+CreatedAt	DATETIME
+Flow Backend hoàn chỉnh
+User opens portfolio
+    ↓
+Click "Generate AI Preview"
+    ↓
+BE loads all portfolio blocks
+    ↓
+Merge to single AI-readable text
+    ↓
+Gemini summarize
+    ↓
+Store summary
+    ↓
+Generate visual prompt
+    ↓
+Imagen generate image
+    ↓
+Upload image to Cloudinary/Azure Blob
+    ↓
+Save image url
+    ↓
+Return preview DTO
+Prompt cho Image AI
+
+Ví dụ:
+
+Create a modern portfolio preview banner.
+
+Theme:
+AI backend engineer portfolio.
+
+Style:
+minimal futuristic UI, dark mode, neon blue lighting.
+
+Include:
+- laptop coding setup
+- cloud architecture hologram
+- AI visualization
+- modern dashboard UI
+
+Professional and recruiter-friendly.
+Recommendation Production
+Text AI
+Task	Model
+Portfolio summarize	Gemini 2.5 Flash
+Cheap fallback	Gemini 3.1 Flash Lite
+Image AI
+Task	Model
+Fast preview	Imagen 4 Fast
+Final quality	Imagen 4 Generate
+Tối ưu Cost
+
+Bạn nên:
+
+Cache AI output
+
+Không regenerate liên tục.
+
+Ví dụ:
+
+hash(portfolio_content + user_prompt)
+
+Nếu hash giống:
+
+→ trả lại preview cũ.
+
+Feature nâng cao rất đáng làm
+1. Multiple preview styles
+
+Người dùng chọn:
+
+Professional
+Creative
+Minimal
+Startup
+Corporate
+Cyberpunk
+2. Recruiter Persona
+
+Prompt thêm:
+
+Target recruiter:
+- FAANG
+- Startup
+- Game studio
+- AI company
+3. Social Media Preview
+
+Generate luôn:
+
+LinkedIn preview
+GitHub bio
+Portfolio card
+OpenGraph image
+Quan trọng nhất
+
+Bạn nên bắt AI trả về JSON schema cố định.
+
+Ví dụ:
+
+{
+  "title": "",
+  "summary": "",
+  "highlights": [],
+  "visualPrompt": "",
+  "theme": ""
+}
+
+Đừng để AI trả text tự do.
+
+Kiến trúc AI Service đề xuất
+Portfolio AI Service
+ ├── PortfolioReader
+ ├── SummaryGenerator
+ ├── HighlightExtractor
+ ├── VisualPromptGenerator
+ ├── ImageGenerator
+ ├── CacheService
+ └── PromptTemplateService

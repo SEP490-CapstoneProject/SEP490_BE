@@ -145,6 +145,12 @@ realtimeClient.notifyConnection?.on("ReceiveCommunityNotification", (n: Notifica
   setCommunityNotifications(prev => [n, ...prev]);
 });
 
+// 2.5) Kênh chat message (mới) — dành riêng cho thông báo tin nhắn mới
+realtimeClient.notifyConnection?.on("ReceiveChatNotification", (n: NotificationDto) => {
+  // Đưa vào danh sách message-notifications hoặc xử lý hiển thị toast chat
+  setChatNotifications(prev => [n, ...prev]);
+});
+
 // 3) Kênh generic (backward compatibility)
 // Nếu đang migrate dần FE cũ -> mới, có thể giữ listener này tạm thời.
 realtimeClient.notifyConnection?.on("ReceiveNotification", (n: NotificationDto) => {

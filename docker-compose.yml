@@ -1,5 +1,5 @@
 services:
-  # SQL Server
+  # SQL Server Database
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: sqlserver
@@ -30,6 +30,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AuthServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - Azure__KeyVault__Url=
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -48,6 +53,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=UserProfileServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -67,10 +76,23 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PortfolioServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
       - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - ServiceUrls__MediaService=http://media-service:8080
       - ServiceUrls__UserProfileService=http://userprofile-service:8080
+      - Azure__KeyVault__Url=
+      # AI provider configuration (local placeholders)
+      - AI__Provider=Google
+      - AI__Google__ApiKey=
+      - AI__Google__Model=gemini-2.5-flash
+      - AI__Google__ModelTemperature=0.0
+      - GOOGLESEARCH__ApiKey=
+      - GOOGLESEARCH__SearchEngineId=
+    env_file:
+      - ./secrets/google/.env
+    volumes:
+      - ./secrets/google/:/run/secrets/google/:ro
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -89,6 +111,24 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CompanyServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - Azure__KeyVault__Url=
+      - DisableAutoMigrations=true
+      - DisableBackgroundWorkers=true
+      # AI provider configuration (local placeholders)
+      - AI__Provider=Google
+      - AI__Google__ApiKey=
+      - AI__Google__Model=gemini-2.5-flash
+      - AI__Google__ModelTemperature=0.0
+      - GOOGLESEARCH__ApiKey=
+      - GOOGLESEARCH__SearchEngineId=
+    env_file:
+      - ./secrets/google/.env
+    volumes:
+      - ./secrets/google/:/run/secrets/google/:ro
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -107,6 +147,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ConnectionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - Azure__KeyVault__Url=
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -125,6 +170,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CommunityServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - Azure__KeyVault__Url=
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -143,14 +193,55 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=SubscriptionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Port=5672
       - RabbitMQ__Username=guest
       - RabbitMQ__Password=guest
       - Redis__ConnectionString=redis:6379
+      - Azure__KeyVault__Url=
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: src/Services/Notification/Dockerfile
+    container_name: notification-service
+    ports:
+      - "5011:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NotificationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - RabbitMQ__Port=5672
+      - Redis__ConnectionString=redis:6379
+      - ServiceUrls__UserProfile=http://userprofile-service:8080
+      - Azure__KeyVault__Url=
+      - DisableAutoMigrations=true
+      - Firebase__CredentialsPath=/app/firebase-credentials.json
+      - Firebase__ProjectId=skillsnap-notification
+      # Alternative: set Firebase__CredentialsJson to the full JSON if you prefer env var (not recommended for secrets)
+    volumes:
+      - ./secrets/firebase/notification-credentials.json:/app/firebase-credentials.json:ro
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -175,59 +266,43 @@ services:
       - CLOUDINARY_CLOUD_NAME=daxvhwsax
       - CLOUDINARY_API_KEY=934663792441256
       - CLOUDINARY_API_SECRET=gKYTnNC8EErJHieYhTjLjzj6L7k
-    networks:
-      - recruitment-network
-    restart: on-failure
-
-  # Interview Service
-  interview-service:
-    build:
-      context: .
-      dockerfile: src/Services/Interview/Dockerfile
-    container_name: interview-service
-    ports:
-      - "5013:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=InterviewServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
       - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
-      - ServiceUrls__UserProfileService=http://userprofile-service:8080
-    depends_on:
-      sqlserver:
-        condition: service_healthy
+      - Azure__KeyVault__Url=
     networks:
       - recruitment-network
     restart: on-failure
 
-  # Moderation Service
-  moderation-service:
+  # Payment Service
+  payment-service:
     build:
       context: .
-      dockerfile: src/Services/Notification/Dockerfile
-    container_name: notification-service
+      dockerfile: src/Services/Payment/Dockerfile
+    container_name: payment-service
     ports:
-      - "5011:8080"
+      - "5014:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NotificationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
-      - RabbitMQ__HostName=rabbitmq
-      - RabbitMQ__UserName=guest
-      - RabbitMQ__Password=guest
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Port=5672
-      - Redis__ConnectionString=redis:6379
-      - ServiceUrls__UserProfile=http://userprofile-service:8080
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+      - Services__SubscriptionService=http://subscription-service:8080
+      - Azure__KeyVault__Url=
     depends_on:
       sqlserver:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      subscription-service:
+        condition: service_started
     networks:
       - recruitment-network
     restart: on-failure
@@ -242,18 +317,54 @@ services:
       - "5015:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__UserName=guest
       - RabbitMQ__Password=guest
       - RabbitMQ__Port=5672
       - Redis__ConnectionString=redis:6379
+      - Azure__KeyVault__Url=
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
+        condition: service_healthy
+    networks:
+      - recruitment-network
+    restart: on-failure
+
+  # Challenge Service
+  challenge-service:
+    build:
+      context: .
+      dockerfile: src/Services/Challenge/Dockerfile
+    container_name: challenge-service
+    ports:
+      - "5016:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ChallengeServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
+      - Azure__KeyVault__Url=
+      # AI provider configuration (local placeholders)
+      - AI__Provider=Google
+      - AI__Google__ApiKey=
+      - AI__Google__Model=gemini-2.5-flash
+      - AI__Google__ModelTemperature=0.0
+      - GOOGLESEARCH__ApiKey=
+      - GOOGLESEARCH__SearchEngineId=
+    env_file:
+      - ./secrets/google/.env
+    volumes:
+      - ./secrets/google/:/run/secrets/google/:ro
+    depends_on:
+      sqlserver:
         condition: service_healthy
     networks:
       - recruitment-network
@@ -266,16 +377,18 @@ services:
       dockerfile: src/Services/Application/Dockerfile
     container_name: application-service
     ports:
-      - "5013:8080"
+      - "5017:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ApplicationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
+      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
       - ServiceUrls__UserProfileService=http://userprofile-service:8080
       - ServiceUrls__SubscriptionService=http://subscription-service:8080
       - Redis__ConnectionString=redis:6379
+      # Disable Azure Key Vault for local development (leave empty)
+      - Azure__KeyVault__Url=
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -287,6 +400,7 @@ services:
       - recruitment-network
     restart: on-failure
 
+  # RabbitMQ Message Queue
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -304,6 +418,7 @@ services:
     networks:
       - recruitment-network
 
+  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -330,36 +445,6 @@ services:
     depends_on:
       - auth-service
       - userprofile-service
-    networks:
-      - recruitment-network
-    restart: on-failure
-
-  # Payment Service
-  payment-service:
-    build:
-      context: .
-      dockerfile: src/Services/Payment/Dockerfile
-    container_name: payment-service
-    ports:
-      - "5014:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=${SQLSERVER_PASSWORD:-YourStrong@Passw0rd};TrustServerCertificate=True;
-      - JwtSettings__Secret=${JWT_SECRET:-YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456}
-      - JwtSettings__Issuer=${JWT_ISSUER:-RecruitmentPlatform}
-      - JwtSettings__Audience=${JWT_AUDIENCE:-RecruitmentPlatformUsers}
-      - RabbitMQ__Host=${RABBITMQ_HOST:-rabbitmq}
-      - RabbitMQ__Port=${RABBITMQ_PORT:-5672}
-      - RabbitMQ__Username=${RABBITMQ_USERNAME:-guest}
-      - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
-      - Services__SubscriptionService=${SERVICE_SUBSCRIPTION:-http://subscription-service:8080}
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      subscription-service:
-        condition: service_started
     networks:
       - recruitment-network
     restart: on-failure

@@ -139,3 +139,10 @@ public sealed class NewMessageNotificationEvent : RealtimeEventBase
     public string ActorType { get; set; } = "USER";
     public NotificationActorDto? Author { get; set; }
 }
+public sealed class SkillPointsAwardedEvent : RealtimeEventBase
+{
+    public int UserId { get; set; }
+    public int ChallengeId { get; set; }
+    public Dictionary<int, double> SkillPoints { get; set; } = new();
+    public DateTime AwardedAt { get; set; }
+}

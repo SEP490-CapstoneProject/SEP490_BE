@@ -2,12 +2,14 @@ namespace Connection.Application.Interfaces;
 
 /// <summary>
 /// Publishes connection- and message-related events to RabbitMQ
+/// so downstream notification services can create and fan out notifications.
 /// so the Realtime Service can forward them via SignalR.
 /// </summary>
 public interface IConnectionEventPublisher
 {
     Task PublishConnectionRequestedAsync(int connectionId, int fromUserId, int toUserId, int profileId, DateTime requestedAt, CancellationToken cancellationToken = default);
     Task PublishConnectionAcceptedAsync(int connectionId, int fromUserId, int toUserId, DateTime acceptedAt, CancellationToken cancellationToken = default);
+    Task PublishChatMessageNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default);
     Task PublishNewMessageNotificationAsync(int messageId, int roomId, int fromUserId, int toUserId, string content, DateTime sentAt, CancellationToken cancellationToken = default);
     Task PublishConnectionRequestNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default);
     Task PublishConnectionAcceptedNotificationAsync(ConnectionNotificationEventPayload payload, CancellationToken cancellationToken = default);

@@ -101,6 +101,8 @@ builder.Services.AddScoped<IBlockTypeRepository, BlockTypeRepository>();
 builder.Services.AddScoped<IComplimentRepository, ComplimentRepository>();
 builder.Services.AddScoped<ICriterionRepository, CriterionRepository>();
 builder.Services.AddScoped<IPortfolioPreviewRepository, PortfolioPreviewRepository>();
+builder.Services.AddScoped<IRewardPointTransactionRepository, RewardPointTransactionRepository>();
+builder.Services.AddScoped<ISponsoredPostRepository, SponsoredPostRepository>();
 
 // Application Services
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
@@ -111,7 +113,12 @@ builder.Services.AddScoped<IComplimentService, ComplimentService>();
 builder.Services.AddScoped<IPortfolioFollowService, PortfolioFollowService>();
 builder.Services.AddScoped<IPortfolioFollowCategoryService, PortfolioFollowCategoryService>();
 builder.Services.AddScoped<IPortfolioPreviewService, PortfolioPreviewService>();
+builder.Services.AddScoped<IComplimentPointEvaluator, ComplimentPointEvaluator>();
+builder.Services.AddScoped<IRewardPointsService, RewardPointsService>();
+builder.Services.AddScoped<ISponsoredPostService, SponsoredPostService>();
 builder.Services.AddScoped<GoogleAiPreviewGenerator>();
+builder.Services.AddScoped<VisualPromptService>();
+builder.Services.AddScoped<ImageGenerationService>();
 builder.Services.AddScoped<IPortfolioEmbeddingEventPublisher, PortfolioEmbeddingEventPublisher>();
 builder.Services.AddScoped<IPortfolioNotificationEventPublisher, PortfolioNotificationEventPublisher>();
 builder.Services.AddScoped<IPortfolioModerationEventPublisher, PortfolioModerationEventPublisher>();
@@ -165,11 +172,32 @@ builder.Services.AddHttpClient<ICompanyMatchingClient, CompanyMatchingClient>(cl
     client.Timeout = TimeSpan.FromSeconds(2);
 });
 
+builder.Services.AddHttpClient<IFeatureVerificationService, SubscriptionFeatureVerificationService>(client =>
+{
+    client.BaseAddress = new Uri(serviceUrls["SubscriptionService"] ?? "http://subscription-service:8080");
+});
+
 builder.Services.AddHttpClient<GoogleAiPreviewGenerator>(client =>
 {
     client.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+
+builder.Services.AddHttpClient<VisualPromptService>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+builder.Services.AddHttpClient<CloudflareImageService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.cloudflare.com");
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+
+builder.Services.AddScoped<CloudflareImageService>();
+builder.Services.AddScoped<ImageGenerationService>();
+
 
 // CORS
 builder.Services.AddCors(options =>
@@ -209,7 +237,23 @@ IF COL_LENGTH('Portfolio', 'ModerationStatus') IS NULL
 IF COL_LENGTH('Portfolio', 'ModerationReason') IS NULL
     ALTER TABLE [Portfolio] ADD [ModerationReason] NVARCHAR(500) NULL;
 IF COL_LENGTH('Portfolio', 'ModeratedAt') IS NULL
-    ALTER TABLE [Portfolio] ADD [ModeratedAt] DATETIME2 NULL;");
+    ALTER TABLE [Portfolio] ADD [ModeratedAt] DATETIME2 NULL;
+IF COL_LENGTH('PortfolioPreview', 'VisualPrompt') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [VisualPrompt] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImageUrl') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImageUrl] NVARCHAR(500) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImageId') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImageId] NVARCHAR(200) NULL;
+IF COL_LENGTH('PortfolioPreview', 'RecruiterSummary') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [RecruiterSummary] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('PortfolioPreview', 'SelectedTheme') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [SelectedTheme] NVARCHAR(50) NULL;
+IF COL_LENGTH('PortfolioPreview', 'SocialCaption') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [SocialCaption] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImagegenModel') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImagegenModel] NVARCHAR(100) NULL;
+IF COL_LENGTH('PortfolioPreview', 'CacheKey') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [CacheKey] NVARCHAR(200) NULL;");
 }
 
 // Pipeline - Enable Swagger in all environments

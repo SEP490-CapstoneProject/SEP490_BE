@@ -4,6 +4,7 @@ using Portfolio.Application.Interfaces;
 using Portfolio.Domain.Entities;
 using Portfolio.Infrastructure.Data;
 using RecruitmentPlatform.AI.Models;
+using RecruitmentPlatform.AI.Models;
 
 namespace Portfolio.Infrastructure.Repositories;
 
@@ -36,6 +37,9 @@ public class PortfolioRepository : IPortfolioRepository
             .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)
             .FirstOrDefaultAsync();
 
+    public async Task<int> CountByEmployeeIdAsync(int employeeId)
+        => await _context.Portfolios.CountAsync(p => p.EmployeeId == employeeId);
+
     public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total, Dictionary<int, (decimal TotalScore, decimal AverageScore, int RankPosition)> RankingMap)> GetAllAsync(int page, int pageSize, string? status, string? searchTerm, string? blockType, PortfolioSortMode sort, PortfolioRankBy rankBy)
     {
         var query = _context.Portfolios
@@ -57,6 +61,22 @@ public class PortfolioRepository : IPortfolioRepository
             .ToList();
 
         return (items, total, rankingMap);
+    }
+
+    public async Task<(List<Portfolio.Domain.Entities.Portfolio> Items, int Total)> GetPendingForModerationAsync(int page, int pageSize)
+    {
+        var query = _context.Portfolios
+            .Where(p => p.ModerationStatus == "PendingReview")
+            .OrderByDescending(p => p.ModeratedAt ?? p.UpdatedAt ?? p.CreatedAt)
+            .ThenByDescending(p => p.Id);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, total);
     }
 
     public async Task<bool> ExistsByEmployeeIdAsync(int employeeId)
@@ -367,6 +387,18 @@ WHERE [EmployeeId] = {employeeId}
             .ToListAsync();
     }
 
+    public async Task<List<Portfolio.Domain.Entities.Portfolio>> GetPortfoliosByIdsAsync(IEnumerable<int> ids)
+    {
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0) return new List<Portfolio.Domain.Entities.Portfolio>();
+        return await _context.Portfolios
+            .AsNoTracking()
+            .Include(p => p.Blocks)
+                .ThenInclude(b => b.BlockType)
+            .Where(p => idList.Contains(p.Id))
+            .ToListAsync();
+    }
+
     public async Task UpdateEmbeddingAsync(int portfolioId, string? embedding, int embeddingVersion, DateTime? embeddingUpdatedAt, string embeddingStatus)
     {
         var portfolio = await _context.Portfolios.FirstOrDefaultAsync(p => p.Id == portfolioId);
@@ -376,6 +408,48 @@ WHERE [EmployeeId] = {employeeId}
         portfolio.EmbeddingVersion = embeddingVersion;
         portfolio.EmbeddingUpdatedAt = embeddingUpdatedAt;
         portfolio.EmbeddingStatus = embeddingStatus;
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<PortfolioReport> CreatePortfolioReportAsync(PortfolioReport report)
+    {
+        _context.PortfolioReports.Add(report);
+        await _context.SaveChangesAsync();
+        return report;
+    }
+
+    public async Task<PortfolioReport?> GetPortfolioReportByIdAndReporterAsync(int portfolioId, int reporterUserId)
+    {
+        return await _context.PortfolioReports
+            .FirstOrDefaultAsync(r => r.PortfolioId == portfolioId && r.ReporterUserId == reporterUserId);
+    }
+
+    public async Task<(List<PortfolioReport> Items, int Total)> GetPortfolioReportsAsync(int page, int pageSize)
+    {
+        var query = _context.PortfolioReports
+            .AsNoTracking()
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100))
+            .Take(Math.Clamp(pageSize, 1, 100))
+            .ToListAsync();
+
+        return (items, total);
+    }
+
+    public async Task<PortfolioReport?> GetPortfolioReportByIdAsync(int reportId)
+    {
+        return await _context.PortfolioReports
+            .Include(r => r.Portfolio)
+            .FirstOrDefaultAsync(r => r.Id == reportId);
+    }
+
+    public async Task UpdatePortfolioReportAsync(PortfolioReport report)
+    {
+        _context.PortfolioReports.Update(report);
         await _context.SaveChangesAsync();
     }
 }

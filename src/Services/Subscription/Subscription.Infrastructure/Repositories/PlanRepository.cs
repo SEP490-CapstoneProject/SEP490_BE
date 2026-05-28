@@ -35,6 +35,25 @@ public class PlanRepository : IPlanRepository
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<Plan>> GetActiveByRoleAsync(string role)
+    {
+        // Trả về plans có AllowedRole match với role, hoặc AllowedRole = null (all roles)
+        return await _context.Plans
+            .Include(p => p.Features.Where(f => f.IsActive))
+            .Where(p => p.IsActive && (p.AllowedRole == null || p.AllowedRole == role))
+            .OrderBy(p => p.Price)
+            .ToListAsync();
+    }
+
+    public async Task<Plan?> GetFreePlanByRoleAsync(string role)
+    {
+        // Lấy plan có Price = 0 và AllowedRole khớp với role
+        return await _context.Plans
+            .Include(p => p.Features.Where(f => f.IsActive))
+            .Where(p => p.IsActive && p.Price == 0 && p.AllowedRole == role)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<Plan> CreateAsync(Plan plan)
     {
         plan.CreatedAt = DateTime.UtcNow;

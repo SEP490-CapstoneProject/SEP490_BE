@@ -1,5 +1,6 @@
 using Company.Application.DTOs;
 using Company.Application.Interfaces;
+using Company.API.Swagger;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
@@ -109,6 +110,34 @@ public class CompanyPostController : ControllerBase
 
         var result = await _service.GetPostsByIdsAsync(postIds, GetUserId());
         return Ok(result);
+    }
+
+    /// <summary>Search and filter job posts with advanced filtering</summary>
+    [HttpGet("search")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? q,
+        [FromQuery] string? position,
+        [FromQuery] string? salary,
+        [FromQuery] string? location,
+        [FromQuery] string? type,
+        [FromQuery] string? level,
+        [FromQuery, SwaggerIgnore] string? q_position,
+        [FromQuery, SwaggerIgnore] string? q_description,
+        [FromQuery, SwaggerIgnore] string? q_requirements,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 20)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var result = await _service.SearchPostsAsync(q, position, salary, location, type, level, q_position, q_description, q_requirements, skip, take, userId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error searching posts", detail = ex.Message });
+        }
     }
 
     /// <summary>Get job post detail with all media</summary>
@@ -303,5 +332,32 @@ public class CompanyPostController : ControllerBase
 
         await _service.UnsavePostAsync(id, userId);
         return Ok(new { message = "Post unsaved" });
+    }
+
+    /// <summary>Report a job post</summary>
+    [Authorize]
+    [HttpPost("{postId:int}/report")]
+    public async Task<IActionResult> ReportPost(int postId, [FromBody] CreatePostReportRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized(new { error = "Invalid token" });
+
+        try
+        {
+            var created = await _service.ReportPostAsync(postId, userId.Value, request);
+            return StatusCode(201, created);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }
