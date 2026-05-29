@@ -116,6 +116,8 @@ builder.Services.AddScoped<IPortfolioPreviewService, PortfolioPreviewService>();
 builder.Services.AddScoped<IComplimentPointEvaluator, ComplimentPointEvaluator>();
 builder.Services.AddScoped<IRewardPointsService, RewardPointsService>();
 builder.Services.AddScoped<ISponsoredPostService, SponsoredPostService>();
+builder.Services.AddScoped<RankingEngine>();
+builder.Services.AddScoped<FeedInjectionEngine>();
 builder.Services.AddScoped<GoogleAiPreviewGenerator>();
 builder.Services.AddScoped<VisualPromptService>();
 builder.Services.AddScoped<ImageGenerationService>();
@@ -222,7 +224,25 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PortfolioDbContext>();
-    db.Database.Migrate();
+    var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Portfolio.StartupSchema");
+
+    try
+    {
+        var conn = db.Database.GetDbConnection();
+        startupLogger.LogInformation(
+            "Database target resolved. DataSource={DataSource}, Database={Database}",
+            conn.DataSource,
+            conn.Database);
+
+        db.Database.Migrate();
+        startupLogger.LogInformation("EF migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        // Keep service alive with guarded SQL schema recovery in drifted environments.
+        startupLogger.LogError(ex, "EF migration failed. Falling back to guarded schema recovery SQL.");
+    }
+
     db.Database.ExecuteSqlRaw(@"
 IF COL_LENGTH('Portfolio', 'Embedding') IS NULL
     ALTER TABLE [Portfolio] ADD [Embedding] NVARCHAR(MAX) NULL;
@@ -253,7 +273,120 @@ IF COL_LENGTH('PortfolioPreview', 'SocialCaption') IS NULL
 IF COL_LENGTH('PortfolioPreview', 'ImagegenModel') IS NULL
     ALTER TABLE [PortfolioPreview] ADD [ImagegenModel] NVARCHAR(100) NULL;
 IF COL_LENGTH('PortfolioPreview', 'CacheKey') IS NULL
-    ALTER TABLE [PortfolioPreview] ADD [CacheKey] NVARCHAR(200) NULL;");
+    ALTER TABLE [PortfolioPreview] ADD [CacheKey] NVARCHAR(200) NULL;
+
+IF OBJECT_ID(N'[dbo].[RewardPointTransaction]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[RewardPointTransaction](
+        [Id] INT IDENTITY(1,1) NOT NULL,
+        [UserId] INT NOT NULL,
+        [Points] decimal(10,2) NOT NULL,
+        [Type] INT NOT NULL,
+        [SourceType] INT NOT NULL,
+        [SourceId] nvarchar(36) NOT NULL,
+        [Description] nvarchar(500) NULL,
+        [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_RewardPointTransaction_CreatedAt] DEFAULT GETDATE(),
+        CONSTRAINT [PK_RewardPointTransaction] PRIMARY KEY ([Id])
+    );
+END
+ELSE
+BEGIN
+    IF COL_LENGTH('RewardPointTransaction', 'UserId') IS NULL
+        ALTER TABLE [RewardPointTransaction] ADD [UserId] INT NOT NULL CONSTRAINT [DF_RewardPointTransaction_UserId] DEFAULT 0;
+    IF COL_LENGTH('RewardPointTransaction', 'Points') IS NULL
+        ALTER TABLE [RewardPointTransaction] ADD [Points] decimal(10,2) NOT NULL CONSTRAINT [DF_RewardPointTransaction_Points] DEFAULT 0;
+    IF COL_LENGTH('RewardPointTransaction', 'Type') IS NULL
+        ALTER TABLE [RewardPointTransaction] ADD [Type] INT NOT NULL CONSTRAINT [DF_RewardPointTransaction_Type] DEFAULT 0;
+    IF COL_LENGTH('RewardPointTransaction', 'SourceType') IS NULL
+        ALTER TABLE [RewardPointTransaction] ADD [SourceType] INT NOT NULL CONSTRAINT [DF_RewardPointTransaction_SourceType] DEFAULT 0;
+    IF COL_LENGTH('RewardPointTransaction', 'SourceId') IS NULL
+        ALTER TABLE [RewardPointTransaction] ADD [SourceId] NVARCHAR(36) NOT NULL CONSTRAINT [DF_RewardPointTransaction_SourceId] DEFAULT '';
+    IF COL_LENGTH('RewardPointTransaction', 'Description') IS NULL
+        ALTER TABLE [RewardPointTransaction] ADD [Description] NVARCHAR(500) NULL;
+    IF COL_LENGTH('RewardPointTransaction', 'CreatedAt') IS NULL
+        ALTER TABLE [RewardPointTransaction] ADD [CreatedAt] DATETIME2 NOT NULL CONSTRAINT [DF_RewardPointTransaction_CreatedAt_Compat] DEFAULT GETDATE();
+END
+
+IF OBJECT_ID(N'[dbo].[SponsoredPost]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[SponsoredPost](
+        [Id] INT IDENTITY(1,1) NOT NULL,
+        [CreatedBy] INT NOT NULL,
+        [ContentType] INT NOT NULL,
+        [TextContent] nvarchar(max) NULL,
+        [ImageUrl] nvarchar(500) NULL,
+        [VideoUrl] nvarchar(500) NULL,
+        [PointsSpent] decimal(10,2) NOT NULL,
+        [DurationDays] INT NOT NULL,
+        [StartDate] datetime2 NOT NULL,
+        [ExpiryDate] datetime2 NOT NULL,
+        [Status] INT NOT NULL,
+        [ClickThroughUrl] nvarchar(500) NULL,
+        [ViewCount] INT NOT NULL CONSTRAINT [DF_SponsoredPost_ViewCount] DEFAULT 0,
+        [ClickCount] INT NOT NULL CONSTRAINT [DF_SponsoredPost_ClickCount] DEFAULT 0,
+        [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_SponsoredPost_CreatedAt] DEFAULT GETDATE(),
+        [UpdatedAt] datetime2 NULL,
+        CONSTRAINT [PK_SponsoredPost] PRIMARY KEY ([Id])
+    );
+END
+ELSE
+BEGIN
+    IF COL_LENGTH('SponsoredPost', 'CreatedBy') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [CreatedBy] INT NOT NULL CONSTRAINT [DF_SponsoredPost_CreatedBy] DEFAULT 0;
+    IF COL_LENGTH('SponsoredPost', 'ContentType') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [ContentType] INT NOT NULL CONSTRAINT [DF_SponsoredPost_ContentType] DEFAULT 0;
+    IF COL_LENGTH('SponsoredPost', 'TextContent') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [TextContent] NVARCHAR(MAX) NULL;
+    IF COL_LENGTH('SponsoredPost', 'ImageUrl') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [ImageUrl] NVARCHAR(500) NULL;
+    IF COL_LENGTH('SponsoredPost', 'VideoUrl') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [VideoUrl] NVARCHAR(500) NULL;
+    IF COL_LENGTH('SponsoredPost', 'PointsSpent') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [PointsSpent] DECIMAL(10,2) NOT NULL CONSTRAINT [DF_SponsoredPost_PointsSpent] DEFAULT 0;
+    IF COL_LENGTH('SponsoredPost', 'DurationDays') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [DurationDays] INT NOT NULL CONSTRAINT [DF_SponsoredPost_DurationDays] DEFAULT 0;
+    IF COL_LENGTH('SponsoredPost', 'StartDate') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [StartDate] DATETIME2 NOT NULL CONSTRAINT [DF_SponsoredPost_StartDate] DEFAULT GETDATE();
+    IF COL_LENGTH('SponsoredPost', 'ExpiryDate') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [ExpiryDate] DATETIME2 NOT NULL CONSTRAINT [DF_SponsoredPost_ExpiryDate] DEFAULT GETDATE();
+    IF COL_LENGTH('SponsoredPost', 'Status') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [Status] INT NOT NULL CONSTRAINT [DF_SponsoredPost_Status] DEFAULT 0;
+    IF COL_LENGTH('SponsoredPost', 'ClickThroughUrl') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [ClickThroughUrl] NVARCHAR(500) NULL;
+    IF COL_LENGTH('SponsoredPost', 'ViewCount') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [ViewCount] INT NOT NULL CONSTRAINT [DF_SponsoredPost_ViewCount_Compat] DEFAULT 0;
+    IF COL_LENGTH('SponsoredPost', 'ClickCount') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [ClickCount] INT NOT NULL CONSTRAINT [DF_SponsoredPost_ClickCount_Compat] DEFAULT 0;
+    IF COL_LENGTH('SponsoredPost', 'CreatedAt') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [CreatedAt] DATETIME2 NOT NULL CONSTRAINT [DF_SponsoredPost_CreatedAt_Compat] DEFAULT GETDATE();
+    IF COL_LENGTH('SponsoredPost', 'UpdatedAt') IS NULL
+        ALTER TABLE [SponsoredPost] ADD [UpdatedAt] DATETIME2 NULL;
+END
+
+IF OBJECT_ID(N'[dbo].[RewardPointTransaction]', N'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_RewardPointTransaction_UserId' AND object_id = OBJECT_ID(N'[dbo].[RewardPointTransaction]'))
+        CREATE INDEX [IX_RewardPointTransaction_UserId] ON [dbo].[RewardPointTransaction]([UserId]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_RewardPointTransaction_UserId_CreatedAt' AND object_id = OBJECT_ID(N'[dbo].[RewardPointTransaction]'))
+        CREATE INDEX [IX_RewardPointTransaction_UserId_CreatedAt] ON [dbo].[RewardPointTransaction]([UserId], [CreatedAt]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_RewardPointTransaction_UserId_Type' AND object_id = OBJECT_ID(N'[dbo].[RewardPointTransaction]'))
+        CREATE INDEX [IX_RewardPointTransaction_UserId_Type] ON [dbo].[RewardPointTransaction]([UserId], [Type]);
+END
+
+IF OBJECT_ID(N'[dbo].[SponsoredPost]', N'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_CreatedAt' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_CreatedAt] ON [dbo].[SponsoredPost]([CreatedAt]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_CreatedBy' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_CreatedBy] ON [dbo].[SponsoredPost]([CreatedBy]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_Status' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_Status] ON [dbo].[SponsoredPost]([Status]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_Status_ExpiryDate' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_Status_ExpiryDate] ON [dbo].[SponsoredPost]([Status], [ExpiryDate]);
+END
+");
+
+    startupLogger.LogInformation("Guarded schema recovery SQL applied successfully.");
 }
 
 // Pipeline - Enable Swagger in all environments

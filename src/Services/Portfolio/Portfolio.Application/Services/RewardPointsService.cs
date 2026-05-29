@@ -30,7 +30,11 @@ public class RewardPointsService : IRewardPointsService
     public async Task<bool> EarnPointsAsync(int complimentId, int recruiterId, string complimentContent, int portfolioId)
     {
         // Validate compliment qualifies for points
-        var qualifies = await _evaluator.IsQualifyingComplimentAsync(portfolioId, recruiterId, complimentContent);
+        var qualifies = await _evaluator.IsQualifyingComplimentAsync(
+            portfolioId,
+            recruiterId,
+            complimentContent,
+            excludeComplimentId: complimentId);
         if (!qualifies)
             return false;
 

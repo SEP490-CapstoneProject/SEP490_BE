@@ -11,135 +11,92 @@ namespace Portfolio.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "CacheKey",
-                table: "PortfolioPreview",
-                type: "nvarchar(max)",
-                nullable: true);
+            migrationBuilder.Sql(@"
+IF COL_LENGTH('PortfolioPreview', 'CacheKey') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [CacheKey] nvarchar(max) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImageId') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImageId] nvarchar(200) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImageUrl') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImageUrl] nvarchar(max) NULL;
+IF COL_LENGTH('PortfolioPreview', 'ImagegenModel') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [ImagegenModel] nvarchar(max) NULL;
+IF COL_LENGTH('PortfolioPreview', 'RecruiterSummary') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [RecruiterSummary] nvarchar(max) NULL;
+IF COL_LENGTH('PortfolioPreview', 'SelectedTheme') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [SelectedTheme] nvarchar(max) NULL;
+IF COL_LENGTH('PortfolioPreview', 'SocialCaption') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [SocialCaption] nvarchar(max) NULL;
+IF COL_LENGTH('PortfolioPreview', 'VisualPrompt') IS NULL
+    ALTER TABLE [PortfolioPreview] ADD [VisualPrompt] nvarchar(max) NULL;
+");
 
-            migrationBuilder.AddColumn<string>(
-                name: "ImageId",
-                table: "PortfolioPreview",
-                type: "nvarchar(200)",
-                maxLength: 200,
-                nullable: true);
+            migrationBuilder.Sql(@"
+IF OBJECT_ID(N'[dbo].[RewardPointTransaction]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[RewardPointTransaction](
+        [Id] INT IDENTITY(1,1) NOT NULL,
+        [UserId] INT NOT NULL,
+        [Points] decimal(10,2) NOT NULL,
+        [Type] INT NOT NULL,
+        [SourceType] INT NOT NULL,
+        [SourceId] nvarchar(36) NOT NULL,
+        [Description] nvarchar(500) NULL,
+        [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_RewardPointTransaction_CreatedAt] DEFAULT GETDATE(),
+        CONSTRAINT [PK_RewardPointTransaction] PRIMARY KEY ([Id])
+    );
+END
+");
 
-            migrationBuilder.AddColumn<string>(
-                name: "ImageUrl",
-                table: "PortfolioPreview",
-                type: "nvarchar(max)",
-                nullable: true);
+            migrationBuilder.Sql(@"
+IF OBJECT_ID(N'[dbo].[SponsoredPost]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[SponsoredPost](
+        [Id] INT IDENTITY(1,1) NOT NULL,
+        [CreatedBy] INT NOT NULL,
+        [ContentType] INT NOT NULL,
+        [TextContent] nvarchar(max) NULL,
+        [ImageUrl] nvarchar(500) NULL,
+        [VideoUrl] nvarchar(500) NULL,
+        [PointsSpent] decimal(10,2) NOT NULL,
+        [DurationDays] INT NOT NULL,
+        [StartDate] datetime2 NOT NULL,
+        [ExpiryDate] datetime2 NOT NULL,
+        [Status] INT NOT NULL,
+        [ClickThroughUrl] nvarchar(500) NULL,
+        [ViewCount] INT NOT NULL CONSTRAINT [DF_SponsoredPost_ViewCount] DEFAULT 0,
+        [ClickCount] INT NOT NULL CONSTRAINT [DF_SponsoredPost_ClickCount] DEFAULT 0,
+        [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_SponsoredPost_CreatedAt] DEFAULT GETDATE(),
+        [UpdatedAt] datetime2 NULL,
+        CONSTRAINT [PK_SponsoredPost] PRIMARY KEY ([Id])
+    );
+END
+");
 
-            migrationBuilder.AddColumn<string>(
-                name: "ImagegenModel",
-                table: "PortfolioPreview",
-                type: "nvarchar(max)",
-                nullable: true);
+            migrationBuilder.Sql(@"
+IF OBJECT_ID(N'[dbo].[RewardPointTransaction]', N'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_RewardPointTransaction_UserId' AND object_id = OBJECT_ID(N'[dbo].[RewardPointTransaction]'))
+        CREATE INDEX [IX_RewardPointTransaction_UserId] ON [dbo].[RewardPointTransaction]([UserId]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_RewardPointTransaction_UserId_CreatedAt' AND object_id = OBJECT_ID(N'[dbo].[RewardPointTransaction]'))
+        CREATE INDEX [IX_RewardPointTransaction_UserId_CreatedAt] ON [dbo].[RewardPointTransaction]([UserId], [CreatedAt]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_RewardPointTransaction_UserId_Type' AND object_id = OBJECT_ID(N'[dbo].[RewardPointTransaction]'))
+        CREATE INDEX [IX_RewardPointTransaction_UserId_Type] ON [dbo].[RewardPointTransaction]([UserId], [Type]);
+END
+");
 
-            migrationBuilder.AddColumn<string>(
-                name: "RecruiterSummary",
-                table: "PortfolioPreview",
-                type: "nvarchar(max)",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "SelectedTheme",
-                table: "PortfolioPreview",
-                type: "nvarchar(max)",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "SocialCaption",
-                table: "PortfolioPreview",
-                type: "nvarchar(max)",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "VisualPrompt",
-                table: "PortfolioPreview",
-                type: "nvarchar(max)",
-                nullable: true);
-
-            migrationBuilder.CreateTable(
-                name: "RewardPointTransaction",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<int>(type: "int", nullable: false),
-                    Points = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
-                    Type = table.Column<int>(type: "int", nullable: false),
-                    SourceType = table.Column<int>(type: "int", nullable: false),
-                    SourceId = table.Column<string>(type: "nvarchar(36)", maxLength: 36, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RewardPointTransaction", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "SponsoredPost",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CreatedBy = table.Column<int>(type: "int", nullable: false),
-                    ContentType = table.Column<int>(type: "int", nullable: false),
-                    TextContent = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ImageUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    VideoUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    PointsSpent = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
-                    DurationDays = table.Column<int>(type: "int", nullable: false),
-                    StartDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    ExpiryDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    Status = table.Column<int>(type: "int", nullable: false),
-                    ClickThroughUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    ViewCount = table.Column<int>(type: "int", nullable: false, defaultValue: 0),
-                    ClickCount = table.Column<int>(type: "int", nullable: false, defaultValue: 0),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()"),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SponsoredPost", x => x.Id);
-                });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RewardPointTransaction_UserId",
-                table: "RewardPointTransaction",
-                column: "UserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RewardPointTransaction_UserId_CreatedAt",
-                table: "RewardPointTransaction",
-                columns: new[] { "UserId", "CreatedAt" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RewardPointTransaction_UserId_Type",
-                table: "RewardPointTransaction",
-                columns: new[] { "UserId", "Type" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SponsoredPost_CreatedAt",
-                table: "SponsoredPost",
-                column: "CreatedAt");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SponsoredPost_CreatedBy",
-                table: "SponsoredPost",
-                column: "CreatedBy");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SponsoredPost_Status",
-                table: "SponsoredPost",
-                column: "Status");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SponsoredPost_Status_ExpiryDate",
-                table: "SponsoredPost",
-                columns: new[] { "Status", "ExpiryDate" });
+            migrationBuilder.Sql(@"
+IF OBJECT_ID(N'[dbo].[SponsoredPost]', N'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_CreatedAt' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_CreatedAt] ON [dbo].[SponsoredPost]([CreatedAt]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_CreatedBy' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_CreatedBy] ON [dbo].[SponsoredPost]([CreatedBy]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_Status' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_Status] ON [dbo].[SponsoredPost]([Status]);
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SponsoredPost_Status_ExpiryDate' AND object_id = OBJECT_ID(N'[dbo].[SponsoredPost]'))
+        CREATE INDEX [IX_SponsoredPost_Status_ExpiryDate] ON [dbo].[SponsoredPost]([Status], [ExpiryDate]);
+END
+");
         }
 
         /// <inheritdoc />

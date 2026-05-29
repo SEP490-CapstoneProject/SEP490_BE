@@ -14,7 +14,7 @@ public interface IComplimentPointEvaluator
     /// <summary>
     /// Checks if recruiter has already created compliment on this portfolio.
     /// </summary>
-    Task<bool> IsDuplicateAsync(int portfolioId, int recruiterId);
+    Task<bool> IsDuplicateAsync(int portfolioId, int recruiterId, int? excludeComplimentId = null);
 
     /// <summary>
     /// Checks if content passes spam detection (no disallowed keywords, no excessive links, etc.).
@@ -24,10 +24,10 @@ public interface IComplimentPointEvaluator
     /// <summary>
     /// Checks if recruiter reviewed this portfolio within the specified days (default 30).
     /// </summary>
-    Task<bool> HasRecentReviewAsync(int portfolioId, int recruiterId, int days = 30);
+    Task<bool> HasRecentReviewAsync(int portfolioId, int recruiterId, int days = 30, int? excludeComplimentId = null);
 
     /// <summary>
     /// Comprehensive validation: content quality AND not duplicate AND not spam AND not recent review.
     /// </summary>
-    Task<bool> IsQualifyingComplimentAsync(int portfolioId, int recruiterId, string content);
+    Task<bool> IsQualifyingComplimentAsync(int portfolioId, int recruiterId, string content, int? excludeComplimentId = null);
 }

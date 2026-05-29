@@ -61,8 +61,8 @@ public class ComplimentService : IComplimentService
             await tx.CommitAsync();
             await TryPublishComplimentNotificationAsync(created);
             
-            // Award reward points (fire and forget with graceful error handling)
-            _ = TryEarnPointsAsync(created);
+            // Award reward points inside request scope; TryEarnPointsAsync handles/logs failures gracefully.
+            await TryEarnPointsAsync(created);
             
             _logger.LogInformation("Compliment {Id} created for portfolio {PortfolioId}", created.Id, request.PortfolioId);
             return MapToDto(created);

@@ -291,6 +291,11 @@ public class PortfolioDbContext : DbContext
             e.Property(x => x.ClickCount).HasDefaultValue(0);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
             e.Property(x => x.UpdatedAt).IsRequired(false);
+            e.Property(x => x.PriorityScore).HasColumnType("decimal(3,2)").IsRequired(false).HasDefaultValue(50m);
+            e.Property(x => x.MaxImpression).HasDefaultValue(1000).IsRequired();
+            e.Property(x => x.CurrentImpression).HasDefaultValue(0).IsRequired();
+            e.Property(x => x.MaxClick).HasDefaultValue(100).IsRequired();
+            e.Property(x => x.CurrentClick).HasDefaultValue(0).IsRequired();
 
             e.HasIndex(x => x.CreatedBy).HasDatabaseName("IX_SponsoredPost_CreatedBy");
             e.HasIndex(x => x.Status).HasDatabaseName("IX_SponsoredPost_Status");
