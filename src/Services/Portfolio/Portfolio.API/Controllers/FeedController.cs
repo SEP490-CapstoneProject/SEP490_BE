@@ -16,6 +16,7 @@ public class FeedController : ControllerBase
     private readonly BlockService _blockService;
     private readonly ISponsoredPostRepository _sponsoredPostRepository;
     private readonly FeedInjectionEngine _feedInjectionEngine;
+    private readonly RankingEngine _rankingEngine;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<FeedController> _logger;
 
@@ -25,6 +26,7 @@ public class FeedController : ControllerBase
         BlockService blockService,
         ISponsoredPostRepository sponsoredPostRepository,
         FeedInjectionEngine feedInjectionEngine,
+        RankingEngine rankingEngine,
         ICurrentUserService currentUser,
         ILogger<FeedController> logger)
     {
@@ -33,6 +35,7 @@ public class FeedController : ControllerBase
         _blockService = blockService;
         _sponsoredPostRepository = sponsoredPostRepository;
         _feedInjectionEngine = feedInjectionEngine;
+        _rankingEngine = rankingEngine;
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -113,8 +116,7 @@ public class FeedController : ControllerBase
                 return Ok(new List<UnifiedFeedItemDto>());
 
             // Filter by frequency cap and rank
-            var ranking = new RankingEngine();
-            var ranked = ranking.RankSponsoredPosts(sponsoredPosts);
+            var ranked = _rankingEngine.RankSponsoredPosts(sponsoredPosts);
 
             var result = ranked.Select(s => new UnifiedFeedItemDto
             {
