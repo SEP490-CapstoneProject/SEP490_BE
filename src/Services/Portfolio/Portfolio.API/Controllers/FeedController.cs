@@ -4,6 +4,7 @@ using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
 using Portfolio.Application.Services;
 using Portfolio.Domain.Entities;
+using RecruitmentPlatform.Contracts.DTOs;
 
 namespace Portfolio.API.Controllers;
 

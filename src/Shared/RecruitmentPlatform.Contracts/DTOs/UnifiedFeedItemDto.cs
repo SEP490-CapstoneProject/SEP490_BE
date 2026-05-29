@@ -1,8 +1,8 @@
-namespace Portfolio.Application.DTOs;
+namespace RecruitmentPlatform.Contracts.DTOs;
 
 /// <summary>
 /// Unified DTO for all feed item types: Portfolio, CompanyPost, CommunityPost, SponsoredPost.
-/// Allows mixed feed presentation with natural sponsored post injection.
+/// Allows mixed feed presentation with natural sponsored post injection across all services.
 /// </summary>
 public class UnifiedFeedItemDto
 {

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using Portfolio.Application.DTOs;
 using Portfolio.Domain.Entities;
+using RecruitmentPlatform.Contracts.DTOs;
 
 namespace Portfolio.Application.Services;
 
