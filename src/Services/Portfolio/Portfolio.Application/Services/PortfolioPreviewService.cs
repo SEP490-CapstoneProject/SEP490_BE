@@ -15,6 +15,7 @@ public class PortfolioPreviewService : IPortfolioPreviewService
     private readonly GoogleAiPreviewGenerator _aiGenerator;
     private readonly VisualPromptService _visualPromptService;
     private readonly ImageGenerationService _imageGenerationService;
+    private readonly AvatarIntegrationService _avatarIntegrationService;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<PortfolioPreviewService> _logger;
 
@@ -24,6 +25,7 @@ public class PortfolioPreviewService : IPortfolioPreviewService
         GoogleAiPreviewGenerator aiGenerator,
         VisualPromptService visualPromptService,
         ImageGenerationService imageGenerationService,
+        AvatarIntegrationService avatarIntegrationService,
         ICurrentUserService currentUser,
         ILogger<PortfolioPreviewService> logger)
     {
@@ -32,11 +34,12 @@ public class PortfolioPreviewService : IPortfolioPreviewService
         _aiGenerator = aiGenerator;
         _visualPromptService = visualPromptService;
         _imageGenerationService = imageGenerationService;
+        _avatarIntegrationService = avatarIntegrationService;
         _currentUser = currentUser;
         _logger = logger;
     }
 
-    async Task<Interfaces.GeneratePreviewResponse?> IPortfolioPreviewService.GeneratePreviewAsync(int portfolioId, string? highlightsDescription)
+    async Task<Interfaces.GeneratePreviewResponse?> IPortfolioPreviewService.GeneratePreviewAsync(int portfolioId, string? highlightsDescription, string? avatarUrl = null)
     {
         try
         {
@@ -98,12 +101,26 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             VisualPromptDto? visualPrompt = null;
             string? visualPromptJson = null;
             string? avatarBase64 = null;
-            string? avatarUrl = null;
+            string? storedAvatarUrl = null;
 
             if (!string.IsNullOrEmpty(previewJson))
             {
-                // Try to fetch avatar from portfolio employee (if available via endpoint parameter or from employee service)
-                // For now, avatar integration is optional - can be added via endpoint parameter or employee service call
+                // Fetch and convert avatar if provided
+                if (!string.IsNullOrEmpty(avatarUrl))
+                {
+                    _logger.LogInformation("🎨 Fetching avatar from URL: {AvatarUrl}", avatarUrl);
+                    avatarBase64 = await _avatarIntegrationService.FetchAndConvertAvatarToBase64Async(avatarUrl);
+                    
+                    if (!string.IsNullOrEmpty(avatarBase64))
+                    {
+                        storedAvatarUrl = avatarUrl;
+                        _logger.LogInformation("✅ Avatar converted to base64 successfully");
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️ Avatar conversion failed, continuing without avatar");
+                    }
+                }
                 
                 var (promptSuccess, prompt, promptError) = await _visualPromptService.GenerateVisualPromptAsync(
                     previewJson,
@@ -169,6 +186,8 @@ public class PortfolioPreviewService : IPortfolioPreviewService
                 existingPreview.ImagegenModel = "imagen-4.0-generate-001";
                 existingPreview.GenerationModel = "gemini-2.5-flash";
                 existingPreview.CacheKey = cacheKey;
+                existingPreview.AvatarUrl = storedAvatarUrl;
+                existingPreview.IncludesAvatar = !string.IsNullOrEmpty(storedAvatarUrl);
                 existingPreview.Version++;
                 existingPreview.RegeneratedCount++;
                 existingPreview.UpdatedAt = DateTime.UtcNow;
@@ -193,6 +212,8 @@ public class PortfolioPreviewService : IPortfolioPreviewService
                     ImagegenModel = "imagen-4.0-generate-001",
                     GenerationModel = "gemini-2.5-flash",
                     CacheKey = cacheKey,
+                    AvatarUrl = storedAvatarUrl,
+                    IncludesAvatar = !string.IsNullOrEmpty(storedAvatarUrl),
                     Version = 1,
                     RegeneratedCount = 0,
                     TokensUsed = tokensUsed,

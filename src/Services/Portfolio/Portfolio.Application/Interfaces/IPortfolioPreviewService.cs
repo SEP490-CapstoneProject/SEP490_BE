@@ -7,7 +7,7 @@ public interface IPortfolioPreviewService
     /// <summary>
     /// Generate a new portfolio preview or update existing one
     /// </summary>
-    Task<GeneratePreviewResponse?> GeneratePreviewAsync(int portfolioId, string? highlightsDescription = null);
+    Task<GeneratePreviewResponse?> GeneratePreviewAsync(int portfolioId, string? highlightsDescription = null, string? avatarUrl = null);
 
     /// <summary>
     /// Get current preview for a portfolio

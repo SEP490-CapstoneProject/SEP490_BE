@@ -199,9 +199,10 @@ builder.Services.AddHttpClient<CloudflareImageService>(client =>
 
 builder.Services.AddScoped<CloudflareImageService>();
 builder.Services.AddScoped<ImageGenerationService>();
-
-
-// CORS
+builder.Services.AddHttpClient<AvatarIntegrationService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>

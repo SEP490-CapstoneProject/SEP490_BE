@@ -25,11 +25,12 @@ public class PortfolioPreviewController : ControllerBase
     }
 
     /// <summary>
-    /// Generate or regenerate portfolio preview
+    /// Generate or regenerate portfolio preview with optional avatar integration
     /// Portfolio owner can generate a preview by providing portfolio ID and optional highlights
+    /// Optionally pass avatarUrl to include avatar in the generated image layout
     /// </summary>
     /// <param name="portfolioId">Portfolio ID</param>
-    /// <param name="request">Generate request with optional highlights description</param>
+    /// <param name="request">Generate request with optional highlights description and avatarUrl</param>
     /// <returns>Generated preview with JSON structure</returns>
     /// <response code="200">Preview generated successfully</response>
     /// <response code="400">Invalid request or portfolio not approved</response>
@@ -43,12 +44,14 @@ public class PortfolioPreviewController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Generating preview for portfolio {PortfolioId}", portfolioId);
+            _logger.LogInformation("Generating preview for portfolio {PortfolioId}, hasAvatar: {HasAvatar}", 
+                portfolioId, !string.IsNullOrEmpty(request?.AvatarUrl));
 
             var highlightsDescription = request?.HighlightsDescription;
+            var avatarUrl = request?.AvatarUrl;
 
-            // Call service to generate preview
-            var result = await _previewService.GeneratePreviewAsync(portfolioId, highlightsDescription);
+            // Call service to generate preview with optional avatar
+            var result = await _previewService.GeneratePreviewAsync(portfolioId, highlightsDescription, avatarUrl);
 
             if (result == null || !result.Success)
             {
@@ -141,4 +144,12 @@ public class GeneratePortfolioPreviewRequest
     /// If not provided, defaults to portfolio name/description
     /// </summary>
     public string? HighlightsDescription { get; set; }
+
+    /// <summary>
+    /// Optional avatar URL to include in the generated preview image
+    /// If provided, avatar will be converted to base64 and included in the layout
+    /// Avatar should be publicly accessible URL to PNG or JPG image
+    /// If not provided or fails to load, preview generates without avatar (graceful fallback)
+    /// </summary>
+    public string? AvatarUrl { get; set; }
 }
