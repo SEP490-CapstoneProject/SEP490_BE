@@ -214,7 +214,7 @@ public class CloudflareImageService
     }
 
     /// <summary>
-    /// Build detailed prompt for FLUX.1 Schnell from visual prompt DTO
+    /// Build detailed prompt for FLUX.1 Schnell from visual prompt DTO with FIXED LAYOUT
     /// FLUX.1 Schnell works best with detailed, descriptive prompts
     /// </summary>
     private string BuildCloudflarePrompt(VisualPromptDto visualPrompt)
@@ -222,7 +222,7 @@ public class CloudflareImageService
         var elements = string.Join(", ", visualPrompt.MainElements ?? new List<string>());
         var colors = string.Join(", ", visualPrompt.ColorPalette ?? new List<string>());
 
-        return $@"Professional portfolio preview image, {visualPrompt.Style ?? "clean and modern"} art style.
+        return $@"Professional portfolio preview image with FIXED LAYOUT, {visualPrompt.Style ?? "clean and modern"} art style.
 
 Visual Theme: {visualPrompt.VisualTheme}
 
@@ -230,7 +230,21 @@ Key Elements: {elements}
 
 Color Palette: {colors}
 
-Hero Text: {visualPrompt.HeroText}
+Hero Text/Title: {visualPrompt.HeroText}
+
+MANDATORY FIXED LAYOUT (must be enforced):
+- TOP-LEFT: Circular avatar photo (80x80px area with subtle border)
+- TOP-RIGHT: Name/Title text (bold, large, professional)
+- CENTER: Skills and technology badges (3-5 rounded pills with professional colors)
+- BOTTOM: Achievement statement (centered, prominent, legible)
+
+Layout Requirements:
+- Avatar positioned EXACTLY at top-left corner in circular frame
+- Name/Title positioned EXACTLY at top-right area
+- Skills badges positioned in CENTER section horizontally arranged
+- Achievement statement positioned at BOTTOM center
+- Clean margins and balanced spacing throughout
+- Professional, structured composition
 
 Style Requirements:
 - Professional, polished appearance
@@ -243,7 +257,7 @@ Style Requirements:
 - Suitable for portfolio presentation and professional use
 - No watermarks or extra text
 
-Technical Specifications: HD quality, professional lighting, sharp details, web and print ready";
+Technical Specifications: 1920x1080px, HD quality, professional lighting, sharp details, web and print ready, legible text";
     }
 
     #region Cloudflare Workers AI Response Models

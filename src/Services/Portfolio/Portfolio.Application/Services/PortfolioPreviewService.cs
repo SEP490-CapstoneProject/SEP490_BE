@@ -97,12 +97,19 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             // Generate visual prompt (Phase 2)
             VisualPromptDto? visualPrompt = null;
             string? visualPromptJson = null;
+            string? avatarBase64 = null;
+            string? avatarUrl = null;
+
             if (!string.IsNullOrEmpty(previewJson))
             {
+                // Try to fetch avatar from portfolio employee (if available via endpoint parameter or from employee service)
+                // For now, avatar integration is optional - can be added via endpoint parameter or employee service call
+                
                 var (promptSuccess, prompt, promptError) = await _visualPromptService.GenerateVisualPromptAsync(
                     previewJson,
                     "professional",
-                    null
+                    null,
+                    avatarBase64
                 );
 
                 if (promptSuccess && prompt != null)

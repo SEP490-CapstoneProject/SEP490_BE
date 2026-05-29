@@ -50,6 +50,7 @@ public class VisualPromptService
         string previewJson,
         string selectedTheme = "professional",
         string? recruiterPersona = null,
+        string? avatarBase64 = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(_apiKey))
@@ -60,11 +61,11 @@ public class VisualPromptService
 
         try
         {
-            _logger.LogInformation("Generating visual prompt for theme: {Theme}, persona: {Persona}",
-                selectedTheme, recruiterPersona ?? "default");
+            _logger.LogInformation("Generating visual prompt for theme: {Theme}, persona: {Persona}, hasAvatar: {HasAvatar}",
+                selectedTheme, recruiterPersona ?? "default", !string.IsNullOrEmpty(avatarBase64));
 
             // Create the prompt for AI
-            var prompt = CreateVisualPromptSystemPrompt(previewJson, selectedTheme, recruiterPersona);
+            var prompt = CreateVisualPromptSystemPrompt(previewJson, selectedTheme, recruiterPersona, avatarBase64);
 
             // Call Gemini API
             var result = await CallGeminiAsync(prompt, cancellationToken);
@@ -95,12 +96,13 @@ public class VisualPromptService
     }
 
     /// <summary>
-    /// Create system prompt for visual prompt generation
+    /// Create system prompt for visual prompt generation with FIXED LAYOUT
     /// </summary>
     private string CreateVisualPromptSystemPrompt(
         string previewJson,
         string selectedTheme,
-        string? recruiterPersona)
+        string? recruiterPersona,
+        string? avatarBase64 = null)
     {
         var personaDescription = recruiterPersona switch
         {
@@ -111,29 +113,71 @@ public class VisualPromptService
             _ => "for general professional use"
         };
 
-        return $@"You are an expert visual design prompt engineer. Your task is to create a detailed visual prompt that Imagen AI can use to generate a professional portfolio preview image.
+        var avatarSection = string.IsNullOrEmpty(avatarBase64) 
+            ? "" 
+            : $"\n\nAVATAR PROVIDED:\nAvatar image (data URI): {avatarBase64.Substring(0, Math.Min(100, avatarBase64.Length))}...\nMust include this avatar as circular element in top-left corner of layout.";
+
+        return $@"You are an expert visual design prompt engineer. Your task is to create a detailed visual prompt with MANDATORY FIXED LAYOUT that Imagen AI can use to generate a professional portfolio preview image.
 
 Portfolio Preview Data:
 {previewJson}
 
 Design Theme: {selectedTheme} (choose from: professional, creative, minimal, startup, corporate, cyberpunk)
 Target Audience: {personaDescription}
+{avatarSection}
+
+MANDATORY FIXED LAYOUT STRUCTURE:
+You MUST enforce this exact layout - no exceptions:
+1. TOP-LEFT: Avatar (circular, 80x80px area)
+2. TOP-RIGHT: Name/Title (hero text, bold, large)
+3. CENTER: Skills and Technology Badges (3-5 items, rounded pills)
+4. BOTTOM: Achievement Statement (centered, prominent)
 
 Generate a JSON response with the following structure:
 {{
+  ""layout"": ""fixed"",
+  ""layoutStructure"": {{
+    ""avatar"": {{
+      ""position"": ""top-left"",
+      ""size"": ""80x80px"",
+      ""style"": ""circular with subtle border"",
+      ""includeAvatar"": {(string.IsNullOrEmpty(avatarBase64) ? "false" : "true")}
+    }},
+    ""nameTitle"": {{
+      ""position"": ""top-right"",
+      ""content"": ""[Extract portfolio title from preview]"",
+      ""fontStyle"": ""bold, large, professional, 24-28pt""
+    }},
+    ""skills"": {{
+      ""position"": ""center"",
+      ""type"": ""badge-array"",
+      ""count"": 3-5,
+      ""items"": [""[Skill 1]"", ""[Skill 2]"", ""[Skill 3]""],
+      ""style"": ""rounded pills with colors, professional palette""
+    }},
+    ""achievement"": {{
+      ""position"": ""bottom"",
+      ""content"": ""[Extract key achievement from preview]"",
+      ""fontStyle"": ""prominent, centered, 16-18pt""
+    }}
+  }},
   ""visualTheme"": ""[Brief description of overall visual theme]"",
   ""mainElements"": [""[Element 1]"", ""[Element 2]"", ""[Element 3]""],
   ""colorPalette"": [""[Primary Color]"", ""[Secondary Color]"", ""[Accent Color]""],
-  ""heroText"": ""[Main headline/text to display prominently]"",
-  ""style"": ""[Art style description for Imagen: photorealistic, illustrated, minimalist, gradient-based, etc]""
+  ""style"": ""[Art style description for Imagen: photorealistic, illustrated, minimalist, etc]""
 }}
+
+CRITICAL LAYOUT ENFORCEMENT:
+- Avatar MUST be circular and positioned EXACTLY in top-left corner
+- Name/Title MUST be in top-right area
+- Skills badges MUST be in center section
+- Achievement MUST be at bottom
+- Do NOT vary from this structure
+- Layout must be consistent and predictable
 
 IMPORTANT GUIDELINES:
 - Output ONLY valid JSON, no markdown or extra text
-- mainElements should be 3-5 visual elements that represent the portfolio's strengths
-- colorPalette should be hex colors or descriptive color names (e.g., #007AFF, professional-blue, vibrant-orange)
-- heroText should be a powerful 1-2 word statement from the portfolio
-- style should guide the Imagen model's visual approach
+- colorPalette should be hex colors or descriptive color names
 - Ensure theme consistency:
   - Professional: corporate colors, clean layouts, traditional elements
   - Creative: vibrant colors, artistic elements, dynamic composition
