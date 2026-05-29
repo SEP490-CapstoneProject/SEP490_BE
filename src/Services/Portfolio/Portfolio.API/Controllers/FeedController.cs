@@ -42,6 +42,7 @@ public class FeedController : ControllerBase
 
     /// <summary>
     /// Get portfolio feed with injected sponsored posts.
+    /// Supports same filters as GET /api/portfolio endpoint.
     /// </summary>
     [HttpGet("portfolio")]
     [AllowAnonymous]
@@ -50,13 +51,70 @@ public class FeedController : ControllerBase
         [FromQuery] int pageSize = 10,
         [FromQuery] string? status = null,
         [FromQuery] string? q = null,
-        [FromQuery] PortfolioSortMode sort = PortfolioSortMode.newest,
-        [FromQuery] PortfolioRankBy rankBy = PortfolioRankBy.average)
+        [FromQuery] string? blockType = null,
+        [FromQuery] bool includeCompliments = false,
+        [FromQuery] ComplimentState? complimentState = null,
+        [FromQuery] bool? hasCompliment = null,
+        [FromQuery] PortfolioRankBy rankBy = PortfolioRankBy.average,
+        [FromQuery] PortfolioSortMode sort = PortfolioSortMode.newest)
     {
         try
         {
-            // Fetch normal portfolio items
-            var normalFeed = await _portfolioService.GetAllAsync(page, pageSize, status, q, null, sort, rankBy);
+            // Use compliment filter path when any compliment param is specified
+            if (includeCompliments || complimentState.HasValue || hasCompliment.HasValue)
+            {
+                var queryParams = new PortfolioQueryParams
+                {
+                    Page = page,
+                    PageSize = pageSize,
+                    Status = status,
+                    SearchTerm = q,
+                    BlockType = blockType,
+                    IncludeCompliments = includeCompliments,
+                    ComplimentState = complimentState,
+                    HasCompliment = hasCompliment,
+                    RankBy = rankBy,
+                    Sort = sort
+                };
+                var filteredResult = await _portfolioService.GetAllWithComplimentFilterAsync(queryParams);
+
+                foreach (var p in filteredResult.Items)
+                {
+                    var blocks = await _blockRepo.GetByPortfolioIdAsync(p.Id);
+                    p.Blocks = blocks.Select(b => _blockService.MapBlockToDto(b)).ToList();
+                }
+
+                // Map to UnifiedFeedItemDto
+                var complimentFeedItems = filteredResult.Items
+                    .Select(p => new UnifiedFeedItemDto
+                    {
+                        Type = "Portfolio",
+                        IsSponsored = false,
+                        Data = p
+                    })
+                    .ToList();
+
+                // Fetch active sponsored posts for injection
+                var complimentSponsoredPosts = await _sponsoredPostRepository.GetActivePostsAsync();
+
+                // Inject sponsored posts with frequency capping
+                var complimentMixedFeed = _feedInjectionEngine.InjectSponsoredPosts(
+                    complimentFeedItems,
+                    complimentSponsoredPosts,
+                    _currentUser.UserId
+                );
+
+                return Ok(new
+                {
+                    items = complimentMixedFeed,
+                    totalCount = filteredResult.Total,
+                    currentPage = page,
+                    pageSize = pageSize
+                });
+            }
+
+            // Standard portfolio feed without compliment filters
+            var normalFeed = await _portfolioService.GetAllAsync(page, pageSize, status, q, blockType, sort, rankBy);
 
             // Enrich with blocks
             foreach (var p in normalFeed.Items)
@@ -92,6 +150,11 @@ public class FeedController : ControllerBase
                 currentPage = page,
                 pageSize = pageSize
             });
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "ArgumentException fetching portfolio feed: {Message}", ex.Message);
+            return BadRequest(new { error = ex.Message });
         }
         catch (Exception ex)
         {
