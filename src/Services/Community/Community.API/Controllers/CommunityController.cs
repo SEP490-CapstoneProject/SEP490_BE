@@ -54,6 +54,19 @@ public class CommunityController : ControllerBase
         [FromQuery] int? cursor = null,
         [FromQuery] string? q = null)
     {
+        var userId = GetCurrentUserId();
+        var result = await _service.GetFeedAsync(cursor, pageSize, userId, q);
+        return Ok(result);
+    }
+
+    /// <summary>Get community posts feed with injected sponsored posts (cursor-based pagination)</summary>
+    [Authorize]
+    [HttpGet("posts/feed")]
+    public async Task<IActionResult> GetFeedWithSponsorship(
+        [FromQuery] int pageSize = 20,
+        [FromQuery] int? cursor = null,
+        [FromQuery] string? q = null)
+    {
         try
         {
             var userId = GetCurrentUserId();
