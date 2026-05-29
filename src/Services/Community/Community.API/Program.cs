@@ -87,6 +87,13 @@ var portfolioUrl = builder.Configuration["ServiceUrls:PortfolioService"] ?? "htt
 builder.Services.AddHttpClient<IPortfolioPreviewClient, PortfolioPreviewClient>(c =>
     c.BaseAddress = new Uri(portfolioUrl));
 
+// Add HTTP client for Portfolio feed service (sponsored posts)
+builder.Services.AddHttpClient("PortfolioFeedClient", client =>
+{
+    client.BaseAddress = new Uri(portfolioUrl);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 // JWT Authentication - Use consistent JwtSettings configuration
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings
 {

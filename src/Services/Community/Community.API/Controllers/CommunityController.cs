@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Community.Application.DTOs;
 using Community.Application.Interfaces;
+using RecruitmentPlatform.Contracts.DTOs;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -15,13 +16,16 @@ public class CommunityController : ControllerBase
 
     private readonly ICommunityService _service;
     private readonly ILogger<CommunityController> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public CommunityController(
-        ICommunityService service,
-        ILogger<CommunityController> logger)
+       ICommunityService service,
+       ILogger<CommunityController> logger,
+       IHttpClientFactory httpClientFactory)
     {
-        _service = service;
-        _logger = logger;
+       _service = service;
+       _logger = logger;
+       _httpClientFactory = httpClientFactory;
     }
 
     private int? GetCurrentUserId()
@@ -50,9 +54,42 @@ public class CommunityController : ControllerBase
         [FromQuery] int? cursor = null,
         [FromQuery] string? q = null)
     {
-        var userId = GetCurrentUserId();
-        var result = await _service.GetFeedAsync(cursor, pageSize, userId, q);
-        return Ok(result);
+        try
+        {
+            var userId = GetCurrentUserId();
+            
+            // 1. Fetch normal community posts
+            var normalFeed = await _service.GetFeedAsync(cursor, pageSize, userId, q);
+
+            // Map to UnifiedFeedItemDto
+            var normalItems = normalFeed.Items
+                .Select(p => new UnifiedFeedItemDto
+                {
+                    Type = "CommunityPost",
+                    IsSponsored = false,
+                    Data = p
+                })
+                .ToList();
+
+            // 2. Fetch ranked sponsored posts from Portfolio service
+            var sponsoredItems = await GetRankedSponsoredPostsAsync(userId);
+
+            // 3. Inject sponsored posts into feed
+            var mixedFeed = InjectSponsoredPosts(normalItems, sponsoredItems);
+
+            return Ok(new
+            {
+                items = mixedFeed,
+                cursor = normalFeed.NextCursor,
+                hasMore = normalFeed.HasMore,
+                pageSize = pageSize
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching community feed with sponsorship");
+            return StatusCode(500, new { error = "Failed to fetch feed" });
+        }
     }
 
     [Authorize]
@@ -337,6 +374,74 @@ public class CommunityController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    /// <summary>Fetch ranked sponsored posts from Portfolio service</summary>
+    private async Task<List<UnifiedFeedItemDto>> GetRankedSponsoredPostsAsync(int? userId)
+    {
+        try
+        {
+            var httpClient = _httpClientFactory.CreateClient("PortfolioFeedClient");
+            var userIdParam = userId.HasValue ? userId.Value : 0;
+            var response = await httpClient.GetAsync($"/api/feed/sponsored-posts/ranked?userId={userIdParam}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Portfolio feed service returned {StatusCode}", response.StatusCode);
+                return new List<UnifiedFeedItemDto>();
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var items = JsonSerializer.Deserialize<List<UnifiedFeedItemDto>>(content, options) ?? new List<UnifiedFeedItemDto>();
+
+            return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching sponsored posts from Portfolio service");
+            return new List<UnifiedFeedItemDto>();
+        }
+    }
+
+    /// <summary>Inject sponsored posts naturally into feed (randomized 5-10 item intervals)</summary>
+    private List<UnifiedFeedItemDto> InjectSponsoredPosts(
+        List<UnifiedFeedItemDto> normalItems,
+        List<UnifiedFeedItemDto> sponsoredItems)
+    {
+        // Edge cases
+        if (!sponsoredItems.Any() || !normalItems.Any())
+            return normalItems;
+
+        if (normalItems.Count < 5)
+            return normalItems;  // Need at least 5 items to start injecting
+
+        var result = new List<UnifiedFeedItemDto>();
+        var random = new Random();
+        var sponsoredQueue = new Queue<UnifiedFeedItemDto>(sponsoredItems);
+        int nextInjectPosition = random.Next(5, 11);  // First inject at position 5-10
+
+        for (int i = 0; i < normalItems.Count; i++)
+        {
+            result.Add(normalItems[i]);
+
+            // Check if we should inject a sponsored post
+            if (sponsoredQueue.Count > 0
+                && i + 1 >= nextInjectPosition
+                && (result.Count == 0 || result[result.Count - 2]?.IsSponsored == false))
+            {
+                result.Add(sponsoredQueue.Dequeue());
+                nextInjectPosition = i + 1 + random.Next(5, 11);  // Next injection in 5-10 items
+            }
+        }
+
+        // Add any remaining sponsored posts if space allows
+        while (sponsoredQueue.Count > 0 && result.Count < 50)
+        {
+            result.Add(sponsoredQueue.Dequeue());
+        }
+
+        return result;
     }
 
 }
