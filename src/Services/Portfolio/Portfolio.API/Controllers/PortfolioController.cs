@@ -199,8 +199,20 @@ public class PortfolioController : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var result = await _portfolioService.MatchJobsForPortfolioAsync(id, page, pageSize, cancellationToken);
-        return Ok(result);
+        try
+        {
+            var result = await _portfolioService.MatchJobsForPortfolioAsync(id, page, pageSize, cancellationToken);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error matching jobs for portfolio {Id}", id);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
 
     [HttpGet("internal/matching-candidates")]
