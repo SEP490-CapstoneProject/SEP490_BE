@@ -90,6 +90,31 @@ public class SubmissionControllerV2 : ControllerBase
     }
 
     /// <summary>
+    /// Get the challenges that the current user has already submitted
+    /// </summary>
+    [HttpGet("me/challenges")]
+    [ProducesResponseType(typeof(ParticipantSubmittedChallengeListResponseDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMySubmittedChallenges(
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 20)
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized();
+
+        try
+        {
+            var result = await _submissionService.GetSubmittedChallengesAsync(userId.Value, skip, take);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting submitted challenges for user {UserId}", userId);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Get all submissions for a challenge
     /// </summary>
     [HttpGet("challenge/{challengeId:guid}")]

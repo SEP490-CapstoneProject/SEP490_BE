@@ -6,6 +6,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Portfolio.Application.DTOs;
 using Portfolio.Application.Interfaces;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace Portfolio.Application.Services;
 
@@ -39,6 +42,7 @@ public class CloudflareImageService
     public async Task<(bool Success, string? ImageUrl, string? ImageId, string? ErrorMessage)> GenerateAndUploadImageAsync(
         VisualPromptDto visualPrompt,
         string selectedTheme = "professional",
+        string? avatarBase64 = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -46,7 +50,7 @@ public class CloudflareImageService
             _logger.LogInformation("🎨 Generating image via Cloudflare Workers AI for theme: {Theme}", selectedTheme);
 
             // Generate image using Cloudflare Workers AI
-            var (imageSuccess, imageBytes, imageError) = await GenerateImageAsync(visualPrompt, cancellationToken);
+            var (imageSuccess, imageBytes, imageError) = await GenerateImageAsync(visualPrompt, avatarBase64, cancellationToken);
 
             if (!imageSuccess || imageBytes == null || imageBytes.Length == 0)
             {
@@ -84,6 +88,7 @@ public class CloudflareImageService
     /// </summary>
     private async Task<(bool Success, byte[]? ImageBytes, string? ErrorMessage)> GenerateImageAsync(
         VisualPromptDto visualPrompt,
+        string? avatarBase64,
         CancellationToken cancellationToken)
     {
         try
@@ -150,6 +155,11 @@ public class CloudflareImageService
             {
                 _logger.LogError(ex, "❌ Failed to decode base64 image data from Cloudflare");
                 return (false, null, "Invalid image format");
+            }
+
+            if (!string.IsNullOrWhiteSpace(avatarBase64))
+            {
+                imageBytes = await OverlayAvatarAsync(imageBytes, avatarBase64, cancellationToken);
             }
 
             _logger.LogInformation("✅ Image generated from Cloudflare Workers AI: {SizeBytes} bytes", imageBytes.Length);
@@ -219,45 +229,81 @@ public class CloudflareImageService
     /// </summary>
     private string BuildCloudflarePrompt(VisualPromptDto visualPrompt)
     {
-        var elements = string.Join(", ", visualPrompt.MainElements ?? new List<string>());
-        var colors = string.Join(", ", visualPrompt.ColorPalette ?? new List<string>());
+        var elements = LimitList(visualPrompt.MainElements, 4, 40);
+        var colors = LimitList(visualPrompt.ColorPalette, 3, 20);
+        var heroText = Truncate(visualPrompt.HeroText, 80);
+        var style = Truncate(visualPrompt.Style, 120) ?? "clean and modern";
 
-        return $@"Professional portfolio preview image with FIXED LAYOUT, {visualPrompt.Style ?? "clean and modern"} art style.
+        var prompt = $@"Professional portfolio preview image, {style}.
+Theme: {Truncate(visualPrompt.VisualTheme, 80)}
+Hero text: {heroText}
+Key elements: {elements}
+Colors: {colors}
+Layout: fixed 4-zone composition.
+TOP-LEFT avatar, TOP-RIGHT name/title, CENTER skill badges, BOTTOM achievement.
+Requirements: clean margins, balanced spacing, professional, legible, no watermarks.
+Output: 1920x1080px, polished editorial design.";
 
-Visual Theme: {visualPrompt.VisualTheme}
+        return prompt.Length <= 1800 ? prompt : BuildCompactCloudflarePrompt(heroText, colors);
+    }
 
-Key Elements: {elements}
+    private static string BuildCompactCloudflarePrompt(string heroText, string colors)
+        => $@"Professional portfolio preview image. Hero text: {heroText}. Colors: {colors}. Fixed layout: top-left avatar, top-right title, center skill badges, bottom achievement. 1920x1080px. Clean, professional, legible, no watermarks.";
 
-Color Palette: {colors}
+    private static string Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
 
-Hero Text/Title: {visualPrompt.HeroText}
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
 
-MANDATORY FIXED LAYOUT (must be enforced):
-- TOP-LEFT: Circular avatar photo (80x80px area with subtle border)
-- TOP-RIGHT: Name/Title text (bold, large, professional)
-- CENTER: Skills and technology badges (3-5 rounded pills with professional colors)
-- BOTTOM: Achievement statement (centered, prominent, legible)
+    private static string LimitList(IEnumerable<string>? items, int maxItems, int maxItemLength)
+    {
+        if (items == null)
+        {
+            return string.Empty;
+        }
 
-Layout Requirements:
-- Avatar positioned EXACTLY at top-left corner in circular frame
-- Name/Title positioned EXACTLY at top-right area
-- Skills badges positioned in CENTER section horizontally arranged
-- Achievement statement positioned at BOTTOM center
-- Clean margins and balanced spacing throughout
-- Professional, structured composition
+        return string.Join(", ", items
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Take(maxItems)
+            .Select(x => Truncate(x, maxItemLength)));
+    }
 
-Style Requirements:
-- Professional, polished appearance
-- High resolution, crystal clear and legible
-- Balanced composition with strong visual hierarchy
-- Prominently feature the hero text: '{visualPrompt.HeroText}'
-- Use specified colors: {colors}
-- Convey professional expertise and quality
-- Modern, minimalist aesthetic
-- Suitable for portfolio presentation and professional use
-- No watermarks or extra text
+    private static async Task<byte[]> OverlayAvatarAsync(byte[] imageBytes, string avatarBase64, CancellationToken cancellationToken)
+    {
+        var avatarBytes = DecodeBase64Image(avatarBase64);
 
-Technical Specifications: 1920x1080px, HD quality, professional lighting, sharp details, web and print ready, legible text";
+        using var baseImage = await Image.LoadAsync<Rgba32>(new MemoryStream(imageBytes), cancellationToken);
+        using var avatarImage = await Image.LoadAsync<Rgba32>(new MemoryStream(avatarBytes), cancellationToken);
+
+        avatarImage.Mutate(x => x.Resize(new ResizeOptions
+        {
+            Size = new Size(96, 96),
+            Mode = ResizeMode.Crop
+        }));
+
+        baseImage.Mutate(x => x.DrawImage(avatarImage, new Point(32, 32), 1f));
+
+        using var output = new MemoryStream();
+        await baseImage.SaveAsPngAsync(output, cancellationToken);
+        return output.ToArray();
+    }
+
+    private static byte[] DecodeBase64Image(string avatarBase64)
+    {
+        var cleaned = avatarBase64.Trim();
+        var commaIndex = cleaned.IndexOf(',');
+        if (cleaned.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && commaIndex >= 0)
+        {
+            cleaned = cleaned[(commaIndex + 1)..];
+        }
+
+        return Convert.FromBase64String(cleaned);
     }
 
     #region Cloudflare Workers AI Response Models

@@ -11,6 +11,10 @@ public interface ISubmissionService
     Task<SubmissionDto> SubmitSolutionAsync(Guid challengeId, SubmitSolutionDto request, int userId);
     Task<SubmissionDto?> GetSubmissionByIdAsync(Guid id, int? currentUserId);
     Task<List<SubmissionDto>> GetUserSubmissionsAsync(int userId, Guid? challengeId = null);
+    Task<ParticipantSubmittedChallengeListResponseDto> GetSubmittedChallengesAsync(
+        int userId,
+        int skip,
+        int take);
     Task<List<SubmissionDto>> GetChallengeSubmissionsAsync(Guid challengeId);
 
     // Grading

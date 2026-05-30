@@ -22,6 +22,7 @@ public class PortfolioRepository : IPortfolioRepository
     public async Task<Portfolio.Domain.Entities.Portfolio?> GetByIdAsync(int id)
         => await _context.Portfolios
             .Include(p => p.Blocks)
+            .ThenInclude(b => b.BlockType)
             .FirstOrDefaultAsync(p => p.Id == id);
 
     public async Task<IEnumerable<Portfolio.Domain.Entities.Portfolio>> GetByEmployeeIdAsync(int employeeId)

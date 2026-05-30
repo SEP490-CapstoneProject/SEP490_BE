@@ -74,3 +74,35 @@ public class ParticipantSubmissionListResponseDto
     public int Skip { get; set; }
     public int Take { get; set; }
 }
+
+/// <summary>
+/// Challenge data for participant view (grouped by submitted challenge)
+/// </summary>
+public class ParticipantSubmittedChallengeDto
+{
+    public Guid ChallengeId { get; set; }
+    public string ChallengeTitle { get; set; } = string.Empty;
+    public string ChallengeDescription { get; set; } = string.Empty;
+    public DateTime ChallengeDeadline { get; set; }
+    public DateTime? PublishedAt { get; set; }
+
+    public Guid LatestSubmissionId { get; set; }
+    public string LatestSubmissionStatus { get; set; } = string.Empty;
+    public DateTime LatestSubmittedAt { get; set; }
+    public decimal? LatestEvaluationScore { get; set; }
+    public string LatestEvaluationStatus { get; set; } = string.Empty;
+    public DateTime? LatestEvaluatedAt { get; set; }
+    public string LatestFeedback { get; set; } = string.Empty;
+    public int AttemptCount { get; set; }
+}
+
+/// <summary>
+/// Paginated response for participant submitted challenges list
+/// </summary>
+public class ParticipantSubmittedChallengeListResponseDto
+{
+    public List<ParticipantSubmittedChallengeDto> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Skip { get; set; }
+    public int Take { get; set; }
+}
