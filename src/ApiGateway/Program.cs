@@ -84,6 +84,12 @@ app.UseSwaggerUI(c =>
 
 app.UseCors("AllowAll");
 
+// Enable WebSocket proxying for SignalR (mobile clients use WebSocket transport, not long-polling)
+app.UseWebSockets(new WebSocketOptions
+{
+    KeepAliveInterval = TimeSpan.FromSeconds(30)
+});
+
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "api-gateway" }));
 
