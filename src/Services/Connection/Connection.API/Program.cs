@@ -109,20 +109,16 @@ builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionService,
 builder.Services.AddScoped<Connection.Application.Interfaces.IConnectionEventPublisher, Connection.Infrastructure.Messaging.RabbitMqConnectionEventPublisher>();
 builder.Services.AddScoped<Connection.Application.Interfaces.IUserProfileResolver, Connection.API.Services.UserProfileResolver>();
 
-// CORS
+// CORS — single policy covering both web browsers and mobile apps (Flutter/React Native).
+// SetIsOriginAllowed allows requests without an Origin header (mobile) while
+// AllowCredentials still lets browsers send credentials.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.WithOrigins(
-                  "https://sep-490-web-fork.vercel.app",
-                  "http://localhost:3000",
-                  "https://sep-490-dashboard-fork.vercel.app",
-                  "http://localhost:5173"
-              )
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials());
-
 });
 
 var app = builder.Build();
@@ -176,10 +172,20 @@ app.UseExceptionHandler(errApp =>
 });
 
 app.UseCors("AllowAll");
+
+// Enable WebSocket transport for SignalR (required for mobile clients)
+app.UseWebSockets(new WebSocketOptions
+{
+    KeepAliveInterval = TimeSpan.FromSeconds(30)
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<Connection.API.Hubs.ChatHub>("/hubs/chat");  // ✅ Changed from /hubs/chat to /hubs/realtime
+app.MapHub<Connection.API.Hubs.ChatHub>("/hubs/chat",
+    options => options.Transports =
+        Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
+        Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling);
 
 app.Run();
 
