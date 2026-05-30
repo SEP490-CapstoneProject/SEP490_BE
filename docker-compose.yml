@@ -66,7 +66,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PortfolioServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - ServiceUrls__MediaService=http://media-service:8080
@@ -143,9 +143,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=SubscriptionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Port=5672
       - RabbitMQ__Username=guest
@@ -190,7 +190,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=InterviewServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - ServiceUrls__UserProfileService=http://userprofile-service:8080
@@ -212,9 +212,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NotificationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__UserName=guest
       - RabbitMQ__Password=guest
@@ -242,9 +242,9 @@ services:
       - "5015:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__HostName=rabbitmq
       - RabbitMQ__UserName=guest
       - RabbitMQ__Password=guest
@@ -270,9 +270,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ApplicationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=your-256-bit-secret-key-here-make-it-long
-      - JwtSettings__Issuer=SkillSnapAuth
-      - JwtSettings__Audience=SkillSnapUsers
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Issuer=RecruitmentPlatform
+      - JwtSettings__Audience=RecruitmentPlatformUsers
       - ServiceUrls__UserProfileService=http://userprofile-service:8080
       - ServiceUrls__SubscriptionService=http://subscription-service:8080
       - Redis__ConnectionString=redis:6379
@@ -345,7 +345,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=${SQLSERVER_PASSWORD:-YourStrong@Passw0rd};TrustServerCertificate=True;
-      - JwtSettings__Secret=${JWT_SECRET:-YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456}
+      - JwtSettings__Secret=${JWT_SECRET:-HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn}
       - JwtSettings__Issuer=${JWT_ISSUER:-RecruitmentPlatform}
       - JwtSettings__Audience=${JWT_AUDIENCE:-RecruitmentPlatformUsers}
       - RabbitMQ__Host=${RABBITMQ_HOST:-rabbitmq}
