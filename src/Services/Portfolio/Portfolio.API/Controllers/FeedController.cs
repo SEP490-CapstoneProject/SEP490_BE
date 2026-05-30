@@ -179,10 +179,20 @@ public class FeedController : ControllerBase
             if (!sponsoredPosts.Any())
                 return Ok(new List<UnifiedFeedItemDto>());
 
-            // Filter by frequency cap and rank
-            var ranked = _rankingEngine.RankSponsoredPosts(sponsoredPosts);
+            // Use feed injection engine to filter by frequency cap and seen-set, then rank
+            var eligibleRanked = _feedInjectionEngine.GetEligibleAndRankedSponsoredPosts(sponsoredPosts, userId);
 
-            var result = ranked.Select(s => new UnifiedFeedItemDto
+            // Mark these as seen so subsequent calls don't return same ones (hidden state)
+            try
+            {
+                _feedInjectionEngine.MarkSponsoredIdsSeen(userId, eligibleRanked.Select(p => p.Id));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to mark sponsored ids as seen for user {UserId}", userId);
+            }
+
+            var result = eligibleRanked.Select(s => new UnifiedFeedItemDto
             {
                 Type = "SponsoredPost",
                 IsSponsored = true,
