@@ -30,8 +30,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AuthServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - Azure__KeyVault__Url=
@@ -53,8 +53,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=UserProfileServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
     depends_on:
@@ -75,8 +75,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PortfolioServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - ServiceUrls__MediaService=http://media-service:8080
@@ -111,8 +111,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CompanyServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - Azure__KeyVault__Url=
@@ -147,8 +147,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ConnectionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - Azure__KeyVault__Url=
@@ -170,8 +170,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CommunityServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - Azure__KeyVault__Url=
@@ -193,8 +193,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=SubscriptionServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__Host=rabbitmq
@@ -225,8 +225,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NotificationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__HostName=rabbitmq
@@ -266,8 +266,8 @@ services:
       - CLOUDINARY_CLOUD_NAME=daxvhwsax
       - CLOUDINARY_API_KEY=934663792441256
       - CLOUDINARY_API_SECRET=gKYTnNC8EErJHieYhTjLjzj6L7k
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - Azure__KeyVault__Url=
@@ -286,8 +286,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PaymentServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__Host=rabbitmq
@@ -317,8 +317,8 @@ services:
       - "5015:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - RabbitMQ__HostName=rabbitmq
@@ -347,8 +347,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ChallengeServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
+      - JwtSettings__Secret=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - Azure__KeyVault__Url=
@@ -381,7 +381,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ApplicationServiceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=YourSuperSecretKeyForJWTTokenGenerationMustBeLongEnough123456
+      - JwtSettings__SecretKey=HMEw6UwMUhuXg1zp8JdPIzk8rAeqh1eorwNEzOx7HpaNUfsn
       - JwtSettings__Issuer=RecruitmentPlatform
       - JwtSettings__Audience=RecruitmentPlatformUsers
       - ServiceUrls__UserProfileService=http://userprofile-service:8080
