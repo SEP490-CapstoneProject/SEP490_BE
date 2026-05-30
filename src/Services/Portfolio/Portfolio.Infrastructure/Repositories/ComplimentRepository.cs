@@ -45,4 +45,24 @@ public class ComplimentRepository : IComplimentRepository
                 .SetProperty(c => c.UpdatedAt, DateTime.UtcNow)
                 .SetProperty(c => c.UpdatedBy, updatedBy));
     }
+
+    public async Task<bool> HasComplimentFromCreatorAsync(int portfolioId, int createdBy, int? excludeComplimentId = null)
+    {
+        return await _context.Compliments.IgnoreQueryFilters()
+            .AnyAsync(c => c.PortfolioId == portfolioId
+                           && c.CreatedBy == createdBy
+                           && (!excludeComplimentId.HasValue || c.Id != excludeComplimentId.Value)
+                           && c.State != ComplimentState.Deleted);
+    }
+
+    public async Task<bool> HasComplimentFromCreatorInLastDaysAsync(int portfolioId, int createdBy, int days, int? excludeComplimentId = null)
+    {
+        var cutoffDate = DateTime.UtcNow.AddDays(-days);
+        return await _context.Compliments.IgnoreQueryFilters()
+            .AnyAsync(c => c.PortfolioId == portfolioId
+                           && c.CreatedBy == createdBy
+                           && (!excludeComplimentId.HasValue || c.Id != excludeComplimentId.Value)
+                           && c.State != ComplimentState.Deleted
+                           && c.CreatedAt >= cutoffDate);
+    }
 }

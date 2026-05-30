@@ -494,9 +494,8 @@ public class ChallengeService : IChallengeService
         string? skillFilter = null)
     {
         var published = await _challengeRepository.GetPublishedAsync();
-        
         var filtered = published
-            .Where(c => c.CurrentVersionId.HasValue) // Must have active version
+            .Where(c => IsActiveForDiscovery(c, DateTime.UtcNow))
             .AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -547,7 +546,7 @@ public class ChallengeService : IChallengeService
     public async Task<PublicChallengeDto?> GetPublicChallengeByIdAsync(Guid id)
     {
         var challenge = await _challengeRepository.GetByIdAsync(id);
-        if (challenge is null || challenge.Status != ChallengeStatus.Published || !challenge.CurrentVersionId.HasValue)
+        if (challenge is null || !IsActiveForDiscovery(challenge, DateTime.UtcNow))
         {
             return null;
         }
@@ -574,6 +573,15 @@ public class ChallengeService : IChallengeService
             CurrentVersionId = version.Id,
             ActiveVersion = publicVersion
         };
+    }
+
+    private static bool IsActiveForDiscovery(ChallengeEntity challenge, DateTime nowUtc)
+    {
+        return challenge.Status == ChallengeStatus.Published
+            && challenge.PublishedAt.HasValue
+            && challenge.PublishedAt.Value <= nowUtc
+            && challenge.Deadline >= nowUtc
+            && challenge.CurrentVersionId.HasValue;
     }
 
     private async Task<PublicVersionDto> MapToPublicVersionDtoAsync(ChallengeVersion version)

@@ -35,6 +35,7 @@ public class ApplicationService : IApplicationService
     {
         var employeeId = _currentUser.GetEmployeeId();
         var userId = _currentUser.GetUserId();
+        var quotaIncremented = false;
 
         try
         {

@@ -8,6 +8,7 @@ public interface IChallengeRepository
 {
     Task<ChallengeEntity> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IEnumerable<ChallengeEntity>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<ChallengeEntity>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
     Task<IEnumerable<ChallengeEntity>> GetByStatusAsync(ChallengeStatus status, CancellationToken cancellationToken = default);
     Task<IEnumerable<ChallengeEntity>> GetPublishedAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<ChallengeEntity>> GetExpiredAsync(CancellationToken cancellationToken = default);

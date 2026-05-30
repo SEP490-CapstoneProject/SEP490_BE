@@ -117,6 +117,62 @@ public class SubmissionService : ISubmissionService
         return submissions.Select(Map).ToList();
     }
 
+    public async Task<ParticipantSubmittedChallengeListResponseDto> GetSubmittedChallengesAsync(
+        int userId,
+        int skip,
+        int take)
+    {
+        var submissions = await _submissionRepository.GetByUserAsync(userId);
+        var latestSubmissions = submissions
+            .OrderByDescending(s => s.CreatedAt)
+            .GroupBy(s => s.ChallengeId)
+            .Select(group => group.First())
+            .OrderByDescending(s => s.CreatedAt)
+            .ToList();
+
+        var totalCount = latestSubmissions.Count;
+        var paginated = latestSubmissions
+            .Skip(skip)
+            .Take(take)
+            .ToList();
+
+        var challengeIds = paginated.Select(s => s.ChallengeId).Distinct().ToList();
+        var challenges = await _challengeRepository.GetByIdsAsync(challengeIds);
+        var challengeMap = challenges.ToDictionary(challenge => challenge.Id);
+
+        var items = paginated
+            .Where(submission => challengeMap.ContainsKey(submission.ChallengeId))
+            .Select(submission =>
+            {
+                var challenge = challengeMap[submission.ChallengeId];
+                return new ParticipantSubmittedChallengeDto
+                {
+                    ChallengeId = challenge.Id,
+                    ChallengeTitle = challenge.Title,
+                    ChallengeDescription = challenge.Description,
+                    ChallengeDeadline = challenge.Deadline,
+                    PublishedAt = challenge.PublishedAt,
+                    LatestSubmissionId = submission.Id,
+                    LatestSubmissionStatus = submission.Status.ToString(),
+                    LatestSubmittedAt = submission.CreatedAt,
+                    LatestEvaluationScore = submission.OverallScore > 0 ? submission.OverallScore : null,
+                    LatestEvaluationStatus = submission.GradedAt.HasValue ? "Completed" : "Pending",
+                    LatestEvaluatedAt = submission.GradedAt,
+                    LatestFeedback = submission.AiFeedback,
+                    AttemptCount = submission.AttemptCount
+                };
+            })
+            .ToList();
+
+        return new ParticipantSubmittedChallengeListResponseDto
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Skip = skip,
+            Take = take
+        };
+    }
+
     public async Task<List<SubmissionDto>> GetChallengeSubmissionsAsync(Guid challengeId)
     {
         var submissions = await _submissionRepository.GetByChallengeAsync(challengeId);

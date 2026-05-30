@@ -1,302 +1,217 @@
-1. Pipeline AI đọc Portfolio và tạo Preview Content
-Mục tiêu
-
-Người dùng upload hoặc chọn portfolio → AI:
-
-đọc toàn bộ nội dung
-hiểu cấu trúc
-lọc thông tin nổi bật
-tạo:
-short preview
-recruiter summary
-social preview
-AI highlight
-CTA
-
-Ví dụ output:
-
-{
-  "title": "Senior Backend Developer",
-  "shortPreview": "Backend engineer with 4 years of experience building scalable microservices and AI-integrated systems.",
-  "highlights": [
-    "Built scalable chat system with SignalR",
-    "Integrated Gemini AI into portfolio analysis",
-    "Deployed microservices on Azure"
-  ],
-  "tone": "professional",
-  "style": "modern tech"
-}
-Model nên dùng
-BEST CHOICE
-Gemini 2.5 Flash
-
-Dùng cho:
-
-đọc portfolio dài
-summarize
-extract highlights
-generate structured JSON
-fast + rẻ
-context lớn
-
-Bạn đang có:
-
-250K context
-20 RPM
-
-=> quá đủ cho portfolio.
-
-Không nên dùng
-Gemini 3.1 Flash Lite
-
-Dùng được nhưng:
-
-chất lượng reasoning kém hơn
-dễ hallucination
-summary thiếu depth
-
-Chỉ nên dùng:
-
-free tier fallback
-retry nhẹ
-background tasks
-Prompt Architecture đề xuất
-SYSTEM PROMPT
-You are an AI portfolio analyzer.
-
-Your task:
-- Read the full portfolio carefully
-- Understand skills, projects, experience, achievements
-- Create an engaging preview for recruiters
-- Focus on impactful and measurable achievements
-- Avoid generic wording
-- Return valid JSON only
-USER PROMPT
-Portfolio Content:
-{{FULL_PORTFOLIO}}
-
-User Requirements:
-- Tone: professional
-- Target: recruiter
-- Highlight:
-  - AI integration
-  - cloud deployment
-  - backend engineering
-
-Generate:
-- title
-- shortPreview
-- highlights
-- recruiterSummary
-- socialCaption
-- visualStyleSuggestion
-Function nên tách
-A. AnalyzePortfolioAsync()
-
-Input:
-
-portfolioContent
-userPrompt
-
-Output:
-
-PortfolioPreviewDto
-B. GeneratePreviewImageAsync()
-
-Input:
-
-summary
-visualStyle
-highlightKeywords
-
-Output:
-
-imageUrl
-2. AI Generate Portfolio Preview Image
-
-Đây là phần QUAN TRỌNG NHẤT.
-
-Bạn KHÔNG nên đưa full portfolio vào image model.
-
-Sai cách:
-
-Generate image from this full portfolio text...
-
-→ token cực lớn
-→ ảnh xấu
-→ không kiểm soát style
-
-Cách đúng
-Bước 1
-
-Gemini text model tạo:
-
-{
-  "visualTheme": "modern cyberpunk developer portfolio",
-  "mainElements": [
-    "laptop setup",
-    "floating AI hologram UI",
-    "cloud architecture",
-    "code editor"
-  ],
-  "colorPalette": ["#111827", "#00D4FF", "#A855F7"],
-  "heroText": "AI Backend Engineer"
-}
-Bước 2
-
-Dùng image model generate ảnh.
-
-Model nên dùng
-BEST
-Imagen 4 Generate
-
-Hoặc:
-
-Imagen 4 Fast Generate
-Chọn model nào?
-Model	Khi dùng
-Imagen 4 Generate	chất lượng cao
-Imagen 4 Fast Generate	realtime preview
-Imagen 4 Ultra	ảnh marketing/banner cao cấp
-Recommended Flow
-Portfolio
-   ↓
-Gemini 2.5 Flash
-   ↓
-Structured Preview JSON
-   ↓
-Generate Visual Prompt
-   ↓
-Imagen 4 Fast
-   ↓
-Preview Image
-Kiến trúc Database nên có
-PortfolioPreview
-Column	Type
-Id	GUID
-PortfolioId	GUID
-Summary	TEXT
-RecruiterSummary	TEXT
-Highlights	JSON
-VisualPrompt	TEXT
-ImageUrl	TEXT
-CreatedAt	DATETIME
-Flow Backend hoàn chỉnh
-User opens portfolio
-    ↓
-Click "Generate AI Preview"
-    ↓
-BE loads all portfolio blocks
-    ↓
-Merge to single AI-readable text
-    ↓
-Gemini summarize
-    ↓
-Store summary
-    ↓
-Generate visual prompt
-    ↓
-Imagen generate image
-    ↓
-Upload image to Cloudinary/Azure Blob
-    ↓
-Save image url
-    ↓
-Return preview DTO
-Prompt cho Image AI
-
-Ví dụ:
-
-Create a modern portfolio preview banner.
-
-Theme:
-AI backend engineer portfolio.
-
-Style:
-minimal futuristic UI, dark mode, neon blue lighting.
-
-Include:
-- laptop coding setup
-- cloud architecture hologram
-- AI visualization
-- modern dashboard UI
-
-Professional and recruiter-friendly.
-Recommendation Production
-Text AI
-Task	Model
-Portfolio summarize	Gemini 2.5 Flash
-Cheap fallback	Gemini 3.1 Flash Lite
-Image AI
-Task	Model
-Fast preview	Imagen 4 Fast
-Final quality	Imagen 4 Generate
-Tối ưu Cost
-
-Bạn nên:
-
-Cache AI output
-
-Không regenerate liên tục.
-
-Ví dụ:
-
-hash(portfolio_content + user_prompt)
-
-Nếu hash giống:
-
-→ trả lại preview cũ.
-
-Feature nâng cao rất đáng làm
-1. Multiple preview styles
-
-Người dùng chọn:
-
-Professional
-Creative
-Minimal
-Startup
-Corporate
-Cyberpunk
-2. Recruiter Persona
-
-Prompt thêm:
-
-Target recruiter:
-- FAANG
-- Startup
-- Game studio
-- AI company
-3. Social Media Preview
-
-Generate luôn:
-
-LinkedIn preview
-GitHub bio
-Portfolio card
-OpenGraph image
-Quan trọng nhất
-
-Bạn nên bắt AI trả về JSON schema cố định.
-
-Ví dụ:
-
-{
-  "title": "",
-  "summary": "",
-  "highlights": [],
-  "visualPrompt": "",
-  "theme": ""
-}
-
-Đừng để AI trả text tự do.
-
-Kiến trúc AI Service đề xuất
-Portfolio AI Service
- ├── PortfolioReader
- ├── SummaryGenerator
- ├── HighlightExtractor
- ├── VisualPromptGenerator
- ├── ImageGenerator
- ├── CacheService
- └── PromptTemplateService
+ You are a senior backend system architect and senior .NET engineer.                                                           
+                                                                                                                                
+  Your task is to implement a lightweight Sponsored Feed Injection System for a social/recruitment platform similar to LinkedIn.
+                                                                                                                                
+  The platform contains:                                                                                                        
+  - Company Posts                                                                                                               
+  - Community Posts                                                                                                             
+  - Portfolio Posts                                                                                                             
+                                                                                                                                
+  The goal is:                                                                                                                  
+  - Companies earn reward points by writing high quality compliments/reviews                                                    
+  - Points can be redeemed to create sponsored content                                                                          
+  - Sponsored content is injected naturally into the feed                                                                       
+                                                                                                                                
+  =====================================================                                                                         
+  BUSINESS RULES                                                                                                                
+  =====================================================                                                                         
+                                                                                                                                
+  1. Reward Point Rules                                                                                                         
+  - Company earns +1 point when:                                                                                                
+    - compliment content length >= 20 characters                                                                                
+    - compliment is not duplicated                                                                                              
+    - compliment is not spam                                                                                                    
+    - company has not reviewed the same portfolio recently                                                                      
+                                                                                                                                
+  - Daily max reward:                                                                                                           
+    - 10 points/day/company                                                                                                     
+                                                                                                                                
+  2. Sponsored Post Rules                                                                                                       
+  - Companies can redeem points:                                                                                                
+    - 5 points = 1 day sponsored                                                                                                
+    - 12 points = 3 days sponsored                                                                                              
+                                                                                                                                
+  3. Feed Injection Rules                                                                                                       
+  - Sponsored posts must appear naturally                                                                                       
+  - Inject 1 sponsored post every 5-10 normal posts                                                                             
+  - Randomized injection distance                                                                                               
+  - Never place 2 sponsored posts consecutively                                                                                 
+                                                                                                                                
+  4. Impression Tracking Rules                                                                                                  
+  DO NOT count impression when feed is queried.                                                                                 
+                                                                                                                                
+  Count impression ONLY IF:                                                                                                     
+  - post visible >= 1.5 seconds                                                                                                 
+  - AND >= 50% visible in viewport                                                                                              
+                                                                                                                                
+  5. Frequency Cap                                                                                                              
+  - same sponsored content:                                                                                                     
+    - max 3 impressions/day/user                                                                                                
+                                                                                                                                
+  =====================================================                                                                         
+  TECHNICAL REQUIREMENTS                                                                                                        
+  =====================================================                                                                         
+                                                                                                                                
+  Use:                                                                                                                          
+  - ASP.NET Core Web API                                                                                                        
+  - Clean Architecture                                                                                                          
+  - CQRS pattern                                                                                                                
+  - EF Core                                                                                                                     
+  - PostgreSQL                                                                                                                  
+                                                                                                                                
+  =====================================================                                                                         
+  DATABASE DESIGN                                                                                                               
+  =====================================================                                                                         
+                                                                                                                                
+  Create entities:                                                                                                              
+                                                                                                                                
+  1. RewardPointTransaction                                                                                                     
+  - Id                                                                                                                          
+  - UserId                                                                                                                      
+  - Points                                                                                                                      
+  - Type (Earn/Spend)                                                                                                           
+  - SourceType                                                                                                                  
+  - SourceId                                                                                                                    
+  - Description                                                                                                                 
+  - CreatedAt                                                                                                                   
+                                                                                                                                
+  2. SponsoredContent                                                                                                           
+  - Id                                                                                                                          
+  - UserId                                                                                                                      
+  - ContentType                                                                                                                 
+    - Portfolio                                                                                                                 
+    - CompanyPost                                                                                                               
+    - CommunityPost                                                                                                             
+  - ContentId                                                                                                                   
+  - PriorityScore                                                                                                               
+  - MaxImpression                                                                                                               
+  - CurrentImpression                                                                                                           
+  - MaxClick                                                                                                                    
+  - CurrentClick                                                                                                                
+  - StartAt                                                                                                                     
+  - EndAt                                                                                                                       
+  - IsActive                                                                                                                    
+                                                                                                                                
+  3. SponsoredImpressionHistory                                                                                                 
+  - Id                                                                                                                          
+  - UserId                                                                                                                      
+  - SponsoredContentId                                                                                                          
+  - ViewedAt                                                                                                                    
+                                                                                                                                
+  4. SponsoredClickHistory                                                                                                      
+  - Id                                                                                                                          
+  - UserId                                                                                                                      
+  - SponsoredContentId                                                                                                          
+  - ClickedAt                                                                                                                   
+                                                                                                                                
+  =====================================================                                                                         
+  FEED SYSTEM REQUIREMENTS                                                                                                      
+  =====================================================                                                                         
+                                                                                                                                
+  Implement a Feed Mixer system.                                                                                                
+                                                                                                                                
+  Architecture:                                                                                                                 
+                                                                                                                                
+  FeedService                                                                                                                   
+    NormalFeedProvider                                                                                                          
+    SponsoredFeedProvider                                                                                                       
+    FeedInjectionEngine                                                                                                         
+    RankingEngine                                                                                                               
+    ImpressionTracker                                                                                                           
+                                                                                                                                
+  =====================================================                                                                         
+  FEED GENERATION FLOW                                                                                                          
+  =====================================================                                                                         
+                                                                                                                                
+  1. Query normal posts                                                                                                         
+  2. Query active sponsored content                                                                                             
+  3. Rank sponsored content                                                                                                     
+  4. Inject sponsored items into feed                                                                                           
+  5. Return unified feed response                                                                                               
+                                                                                                                                
+  =====================================================                                                                         
+  UNIFIED FEED ITEM MODEL                                                                                                       
+  =====================================================                                                                         
+                                                                                                                                
+  Create a unified DTO:                                                                                                         
+                                                                                                                                
+  FeedItemDto                                                                                                                   
+  - Type                                                                                                                        
+  - IsSponsored                                                                                                                 
+  - SponsoredLabel                                                                                                              
+  - Data                                                                                                                        
+                                                                                                                                
+  =====================================================                                                                         
+  INJECTION ALGORITHM                                                                                                           
+  =====================================================                                                                         
+                                                                                                                                
+  Rules:                                                                                                                        
+  - inject after random interval (5-10)                                                                                         
+  - no consecutive sponsored items                                                                                              
+  - respect frequency cap                                                                                                       
+                                                                                                                                
+  Pseudo logic:                                                                                                                 
+                                                                                                                                
+  nextInject = random(5,10)                                                                                                     
+                                                                                                                                
+  for each normal item:                                                                                                         
+      add normal item                                                                                                           
+                                                                                                                                
+      if currentPosition >= nextInject:                                                                                         
+          inject sponsored item                                                                                                 
+          nextInject += random(5,10)                                                                                            
+                                                                                                                                
+  =====================================================                                                                         
+  RANKING ENGINE                                                                                                                
+  =====================================================                                                                         
+                                                                                                                                
+  Sponsored ranking score:                                                                                                      
+                                                                                                                                
+  score =                                                                                                                       
+  priorityScore * 0.5                                                                                                           
+  + remainingImpressionRatio * 0.3                                                                                              
+  + ctr * 0.2                                                                                                                   
+                                                                                                                                
+  =====================================================                                                                         
+  API ENDPOINTS                                                                                                                 
+  =====================================================                                                                         
+                                                                                                                                
+  Implement:                                                                                                                    
+                                                                                                                                
+  GET /api/feed                                                                                                                 
+                                                                                                                                
+  POST /api/sponsored/impression                                                                                                
+                                                                                                                                
+  POST /api/sponsored/click                                                                                                     
+                                                                                                                                
+  POST /api/sponsored/redeem                                                                                                    
+                                                                                                                                
+  =====================================================                                                                         
+  IMPORTANT CONSTRAINTS                                                                                                         
+  =====================================================                                                                         
+                                                                                                                                
+  DO NOT:                                                                                                                       
+  - increase impression on feed query                                                                                           
+  - inject sponsored post too frequently                                                                                        
+  - use SQL OFFSET hacks for injection                                                                                          
+  - tightly couple sponsored content to one content type                                                                        
+                                                                                                                                
+  =====================================================                                                                         
+  EXPECTED OUTPUT                                                                                                               
+  =====================================================                                                                         
+                                                                                                                                
+  Generate:                                                                                                                     
+  - Entity models                                                                                                               
+  - DbContext configuration                                                                                                     
+  - Clean Architecture folders                                                                                                  
+  - CQRS commands/queries                                                                                                       
+  - Feed injection service                                                                                                      
+  - Ranking engine                                                                                                              
+  - DTOs                                                                                                                        
+  - Repository interfaces                                                                                                       
+  - Example API controllers                                                                                                     
+  - Example feed JSON response                                                                                                  
+  - EF Core configurations                                                                                                      
+  - Production-ready architecture                                                                                               
+                                                                                                                                
+  The implementation should be scalable, modular, and extensible.

@@ -149,6 +149,7 @@ firebase-credentials-prod.json
 firebase-credentials-*.json
 *-credentials-prod.json
 google-services.json
+secrets/
 
 ## OS
 .DS_Store

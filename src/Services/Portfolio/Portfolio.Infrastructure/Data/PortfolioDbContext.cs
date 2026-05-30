@@ -24,6 +24,8 @@ public class PortfolioDbContext : DbContext
     public DbSet<Criterion> Criteria { get; set; }
     public DbSet<PortfolioPreview> PortfolioPreview { get; set; }
     public DbSet<PortfolioReport> PortfolioReports { get; set; }
+    public DbSet<RewardPointTransaction> RewardPointTransactions { get; set; }
+    public DbSet<SponsoredPost> SponsoredPosts { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -249,6 +251,56 @@ public class PortfolioDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.PortfolioId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // RewardPointTransaction
+        modelBuilder.Entity<RewardPointTransaction>(e =>
+        {
+            e.ToTable("RewardPointTransaction");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.Points).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(x => x.Type).HasConversion<int>().IsRequired();
+            e.Property(x => x.SourceType).HasConversion<int>().IsRequired();
+            e.Property(x => x.SourceId).HasMaxLength(36).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+
+            e.HasIndex(x => x.UserId).HasDatabaseName("IX_RewardPointTransaction_UserId");
+            e.HasIndex(x => new { x.UserId, x.CreatedAt }).HasDatabaseName("IX_RewardPointTransaction_UserId_CreatedAt");
+            e.HasIndex(x => new { x.UserId, x.Type }).HasDatabaseName("IX_RewardPointTransaction_UserId_Type");
+        });
+
+        // SponsoredPost
+        modelBuilder.Entity<SponsoredPost>(e =>
+        {
+            e.ToTable("SponsoredPost");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.CreatedBy).IsRequired();
+            e.Property(x => x.ContentType).HasConversion<int>().IsRequired();
+            e.Property(x => x.TextContent).HasColumnType("nvarchar(max)").IsRequired(false);
+            e.Property(x => x.ImageUrl).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.VideoUrl).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.PointsSpent).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(x => x.DurationDays).IsRequired();
+            e.Property(x => x.StartDate).IsRequired();
+            e.Property(x => x.ExpiryDate).IsRequired();
+            e.Property(x => x.Status).HasConversion<int>().IsRequired();
+            e.Property(x => x.ClickThroughUrl).HasMaxLength(500).IsRequired(false);
+            e.Property(x => x.ViewCount).HasDefaultValue(0);
+            e.Property(x => x.ClickCount).HasDefaultValue(0);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.Property(x => x.UpdatedAt).IsRequired(false);
+            e.Property(x => x.PriorityScore).HasColumnType("decimal(10,2)").IsRequired(false).HasDefaultValue(50m);
+            e.Property(x => x.MaxImpression).HasDefaultValue(1000).IsRequired();
+            e.Property(x => x.CurrentImpression).HasDefaultValue(0).IsRequired();
+            e.Property(x => x.MaxClick).HasDefaultValue(100).IsRequired();
+            e.Property(x => x.CurrentClick).HasDefaultValue(0).IsRequired();
+
+            e.HasIndex(x => x.CreatedBy).HasDatabaseName("IX_SponsoredPost_CreatedBy");
+            e.HasIndex(x => x.Status).HasDatabaseName("IX_SponsoredPost_Status");
+            e.HasIndex(x => new { x.Status, x.ExpiryDate }).HasDatabaseName("IX_SponsoredPost_Status_ExpiryDate");
+            e.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_SponsoredPost_CreatedAt");
         });
     }
 }
