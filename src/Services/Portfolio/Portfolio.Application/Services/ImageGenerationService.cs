@@ -33,6 +33,7 @@ public class ImageGenerationService
     public async Task<(bool Success, string? ImageUrl, string? ImageId, string? ErrorMessage)> GenerateAndUploadImageAsync(
         VisualPromptDto visualPrompt,
         string selectedTheme = "professional",
+        string? avatarBase64 = null,
         CancellationToken cancellationToken = default)
     {
         if (_cloudflareImageService == null)
@@ -42,7 +43,7 @@ public class ImageGenerationService
 
         _logger.LogInformation("🎨 Generating image via Cloudflare Workers AI for theme: {Theme}", selectedTheme);
 
-        return await _cloudflareImageService.GenerateAndUploadImageAsync(visualPrompt, selectedTheme, cancellationToken);
+        return await _cloudflareImageService.GenerateAndUploadImageAsync(visualPrompt, selectedTheme, avatarBase64, cancellationToken);
     }
 
 
@@ -54,4 +55,3 @@ public class ImageGenerationService
     // Removed NanoBananaResponse, Candidate, Content, Part, InlineData, UsageMetadata classes
     #endregion
 }
-

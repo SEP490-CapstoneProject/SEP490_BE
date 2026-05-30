@@ -30,6 +30,21 @@ public class ChallengeRepository : IChallengeRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IEnumerable<ChallengeEntity>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        var challengeIds = ids.Distinct().ToList();
+
+        if (challengeIds.Count == 0)
+        {
+            return Array.Empty<ChallengeEntity>();
+        }
+
+        return await _context.Challenges
+            .Include(c => c.CurrentVersion)
+            .Where(c => challengeIds.Contains(c.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IEnumerable<ChallengeEntity>> GetByStatusAsync(
         ChallengeStatus status, CancellationToken cancellationToken = default)
     {

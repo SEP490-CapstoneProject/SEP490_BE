@@ -28,9 +28,9 @@ public class ComplimentPointEvaluator : IComplimentPointEvaluator
         return Task.FromResult(content.Length >= MinContentLength);
     }
 
-    public async Task<bool> IsDuplicateAsync(int portfolioId, int recruiterId)
+    public async Task<bool> IsDuplicateAsync(int portfolioId, int recruiterId, int? excludeComplimentId = null)
     {
-        return await _complimentRepository.HasComplimentFromCreatorAsync(portfolioId, recruiterId);
+        return await _complimentRepository.HasComplimentFromCreatorAsync(portfolioId, recruiterId, excludeComplimentId);
     }
 
     public Task<bool> IsSpamAsync(string content)
@@ -56,19 +56,19 @@ public class ComplimentPointEvaluator : IComplimentPointEvaluator
         return Task.FromResult(false);
     }
 
-    public async Task<bool> HasRecentReviewAsync(int portfolioId, int recruiterId, int days = 30)
+    public async Task<bool> HasRecentReviewAsync(int portfolioId, int recruiterId, int days = 30, int? excludeComplimentId = null)
     {
-        return await _complimentRepository.HasComplimentFromCreatorInLastDaysAsync(portfolioId, recruiterId, days);
+        return await _complimentRepository.HasComplimentFromCreatorInLastDaysAsync(portfolioId, recruiterId, days, excludeComplimentId);
     }
 
-    public async Task<bool> IsQualifyingComplimentAsync(int portfolioId, int recruiterId, string content)
+    public async Task<bool> IsQualifyingComplimentAsync(int portfolioId, int recruiterId, string content, int? excludeComplimentId = null)
     {
         // All conditions must be true
         var isQuality = await IsContentQualityAsync(content);
         if (!isQuality)
             return false;
 
-        var isDuplicate = await IsDuplicateAsync(portfolioId, recruiterId);
+        var isDuplicate = await IsDuplicateAsync(portfolioId, recruiterId, excludeComplimentId);
         if (isDuplicate)
             return false;
 
@@ -76,7 +76,7 @@ public class ComplimentPointEvaluator : IComplimentPointEvaluator
         if (isSpam)
             return false;
 
-        var hasRecentReview = await HasRecentReviewAsync(portfolioId, recruiterId, ReviewRecencyDays);
+        var hasRecentReview = await HasRecentReviewAsync(portfolioId, recruiterId, ReviewRecencyDays, excludeComplimentId);
         if (hasRecentReview)
             return false;
 

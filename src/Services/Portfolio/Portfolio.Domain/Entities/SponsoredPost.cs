@@ -104,4 +104,29 @@ public class SponsoredPost
     /// When the post was last updated
     /// </summary>
     public DateTime? UpdatedAt { get; set; }
+    
+    /// <summary>
+    /// Priority score for ranking in feeds (0-100, default 50)
+    /// </summary>
+    public decimal? PriorityScore { get; set; } = 50m;
+    
+    /// <summary>
+    /// Maximum impressions allowed for this sponsored post
+    /// </summary>
+    public int MaxImpression { get; set; } = 1000;
+    
+    /// <summary>
+    /// Current impression count
+    /// </summary>
+    public int CurrentImpression { get; set; } = 0;
+    
+    /// <summary>
+    /// Maximum clicks allowed for this sponsored post
+    /// </summary>
+    public int MaxClick { get; set; } = 100;
+    
+    /// <summary>
+    /// Current click count (tracked separately for analytics)
+    /// </summary>
+    public int CurrentClick { get; set; } = 0;
 }

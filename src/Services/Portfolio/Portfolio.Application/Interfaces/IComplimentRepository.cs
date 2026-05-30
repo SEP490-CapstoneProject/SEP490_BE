@@ -13,11 +13,10 @@ public interface IComplimentRepository
     /// <summary>
     /// Checks if creator has any non-deleted compliment on this portfolio.
     /// </summary>
-    Task<bool> HasComplimentFromCreatorAsync(int portfolioId, int createdBy);
+    Task<bool> HasComplimentFromCreatorAsync(int portfolioId, int createdBy, int? excludeComplimentId = null);
     
     /// <summary>
     /// Checks if creator has any non-deleted compliment on this portfolio within last N days.
     /// </summary>
-    Task<bool> HasComplimentFromCreatorInLastDaysAsync(int portfolioId, int createdBy, int days);
+    Task<bool> HasComplimentFromCreatorInLastDaysAsync(int portfolioId, int createdBy, int days, int? excludeComplimentId = null);
 }
-

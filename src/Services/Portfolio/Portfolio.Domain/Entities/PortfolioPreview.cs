@@ -32,6 +32,10 @@ public class PortfolioPreview
     public string? ImagegenModel { get; set; }
     public string? CacheKey { get; set; }
     
+    // Avatar integration (Phase 18)
+    public string? AvatarUrl { get; set; }
+    public bool IncludesAvatar { get; set; } = false;
+    
     // Navigation
     public Portfolio Portfolio { get; set; } = null!;
 }

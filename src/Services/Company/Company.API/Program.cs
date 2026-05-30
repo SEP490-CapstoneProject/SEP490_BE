@@ -97,6 +97,13 @@ builder.Services.AddHttpClient<IPortfolioMatchingClient, PortfolioMatchingClient
     client.Timeout = TimeSpan.FromSeconds(2);
 });
 
+// Add HTTP client for Portfolio feed service (sponsored posts)
+builder.Services.AddHttpClient("PortfolioFeedClient", client =>
+{
+    client.BaseAddress = new Uri(portfolioServiceUrl);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings
 {
     Secret = "default-secret-key-32-characters!",

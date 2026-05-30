@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Portfolio.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Portfolio.Infrastructure.Data;
 namespace Portfolio.Infrastructure.Migrations
 {
     [DbContext(typeof(PortfolioDbContext))]
-    partial class PortfolioDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260529054122_AddSponsoredPostRankingFields")]
+    partial class AddSponsoredPostRankingFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -447,9 +450,6 @@ namespace Portfolio.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AvatarUrl")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("CacheKey")
                         .HasColumnType("nvarchar(max)");
 
@@ -478,9 +478,6 @@ namespace Portfolio.Infrastructure.Migrations
 
                     b.Property<string>("ImagegenModel")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IncludesAvatar")
-                        .HasColumnType("bit");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -673,14 +670,10 @@ namespace Portfolio.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("CurrentClick")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
+                        .HasColumnType("int");
 
                     b.Property<int>("CurrentImpression")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
+                        .HasColumnType("int");
 
                     b.Property<int>("DurationDays")
                         .HasColumnType("int");
@@ -693,22 +686,16 @@ namespace Portfolio.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("MaxClick")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(100);
+                        .HasColumnType("int");
 
                     b.Property<int>("MaxImpression")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1000);
+                        .HasColumnType("int");
 
                     b.Property<decimal>("PointsSpent")
                         .HasColumnType("decimal(10,2)");
 
                     b.Property<decimal?>("PriorityScore")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("decimal(10,2)")
-                        .HasDefaultValue(50m);
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");

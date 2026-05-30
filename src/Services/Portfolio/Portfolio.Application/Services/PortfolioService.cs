@@ -887,6 +887,12 @@ public class PortfolioService : IPortfolioService
     public async Task<JobMatchPagedResult> MatchJobsForPortfolioAsync(int portfolioId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var (safePage, safePageSize) = NormalizeMatchPaging(page, pageSize);
+        var hasAiMatching = await _featureVerificationService.HasFeatureAccessAsync(_currentUser.UserId, "AI_MATCHING");
+        if (!hasAiMatching)
+        {
+            throw new UnauthorizedAccessException("gói hiện tại không được sử dụng AI");
+        }
+
         var portfolio = await _repo.GetByIdAsync(portfolioId);
         if (portfolio == null)
         {

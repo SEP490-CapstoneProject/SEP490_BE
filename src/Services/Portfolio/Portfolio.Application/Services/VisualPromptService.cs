@@ -20,8 +20,8 @@ public class VisualPromptService
     private readonly ILogger<VisualPromptService> _logger;
 
     // Constants for AI generation
-    private const int MaxOutputTokens = 800;
-    private const float Temperature = 0.5f;  // Slightly higher for creative visual prompts
+    private const int MaxOutputTokens = 400;
+    private const float Temperature = 0.2f;
     private const int TopK = 40;
     private const float TopP = 0.95f;
 
@@ -50,6 +50,7 @@ public class VisualPromptService
         string previewJson,
         string selectedTheme = "professional",
         string? recruiterPersona = null,
+        string? avatarBase64 = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(_apiKey))
@@ -60,11 +61,11 @@ public class VisualPromptService
 
         try
         {
-            _logger.LogInformation("Generating visual prompt for theme: {Theme}, persona: {Persona}",
-                selectedTheme, recruiterPersona ?? "default");
+            _logger.LogInformation("Generating visual prompt for theme: {Theme}, persona: {Persona}, hasAvatar: {HasAvatar}",
+                selectedTheme, recruiterPersona ?? "default", !string.IsNullOrEmpty(avatarBase64));
 
             // Create the prompt for AI
-            var prompt = CreateVisualPromptSystemPrompt(previewJson, selectedTheme, recruiterPersona);
+            var prompt = CreateVisualPromptSystemPrompt(previewJson, selectedTheme, recruiterPersona, avatarBase64);
 
             // Call Gemini API
             var result = await CallGeminiAsync(prompt, cancellationToken);
@@ -80,8 +81,9 @@ public class VisualPromptService
 
             if (!isValid || visualPrompt == null)
             {
-                _logger.LogError("❌ Invalid visual prompt response from Gemini: {Response}", result.ResponseText);
-                return (false, null, "Invalid visual prompt response from AI");
+                _logger.LogWarning("⚠️ Invalid visual prompt response from Gemini, using deterministic prompt");
+                var fallbackPrompt = BuildDeterministicVisualPrompt(previewJson, selectedTheme, recruiterPersona, avatarBase64);
+                return (true, fallbackPrompt, null);
             }
 
             _logger.LogInformation("✅ Visual prompt generated successfully");
@@ -94,13 +96,114 @@ public class VisualPromptService
         }
     }
 
+    private static VisualPromptDto BuildDeterministicVisualPrompt(
+        string previewBriefJson,
+        string selectedTheme,
+        string? recruiterPersona,
+        string? avatarBase64)
+    {
+        string title = "Professional Portfolio";
+        string summary = "Professional portfolio";
+        string specialization = "Professional portfolio showcase";
+        string recentProjects = "Recent projects";
+        string achievement = "Professional achievement";
+        var skills = new List<string> { "C#", ".NET", "React" };
+
+        try
+        {
+            using var jsonDoc = JsonDocument.Parse(previewBriefJson);
+            var root = jsonDoc.RootElement;
+
+            if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+            {
+                title = Truncate(titleProp.GetString(), 80) ?? title;
+            }
+
+            if (root.TryGetProperty("summary", out var summaryProp) && summaryProp.ValueKind == JsonValueKind.String)
+            {
+                summary = Truncate(summaryProp.GetString(), 120) ?? summary;
+            }
+
+            if (root.TryGetProperty("specialization", out var specializationProp) && specializationProp.ValueKind == JsonValueKind.String)
+            {
+                specialization = Truncate(specializationProp.GetString(), 140) ?? specialization;
+            }
+
+            if (root.TryGetProperty("recentProjects", out var projectsProp) && projectsProp.ValueKind == JsonValueKind.String)
+            {
+                recentProjects = Truncate(projectsProp.GetString(), 140) ?? recentProjects;
+            }
+
+            if (root.TryGetProperty("achievement", out var achievementProp) && achievementProp.ValueKind == JsonValueKind.String)
+            {
+                achievement = Truncate(achievementProp.GetString(), 140) ?? achievement;
+            }
+
+            if (root.TryGetProperty("keySkills", out var skillsProp))
+            {
+                skills = ParseSkillsFromBrief(skillsProp);
+            }
+        }
+        catch
+        {
+            // Keep defaults.
+        }
+
+        var mainElements = new List<string> { title };
+        mainElements.AddRange(skills.Take(4));
+        mainElements.Add(recentProjects);
+        mainElements.Add(achievement);
+
+        return new VisualPromptDto
+        {
+            VisualTheme = selectedTheme switch
+            {
+                "creative" => "Creative portfolio showcase",
+                "minimal" => "Minimal professional showcase",
+                "startup" => "Startup portfolio showcase",
+                "corporate" => "Corporate portfolio showcase",
+                _ => "Professional portfolio showcase"
+            },
+            MainElements = mainElements
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => Truncate(x, 80) ?? x)
+                .Take(5)
+                .ToList(),
+            ColorPalette = new List<string> { "#0F172A", "#2563EB", "#F8FAFC" },
+            HeroText = title,
+            Style = $"clean editorial layout, {string.Join(", ", skills.Take(4))}. {specialization}. {summary}. {recruiterPersona ?? "general professional use"}"
+        };
+    }
+
+    private static List<string> ParseSkillsFromBrief(JsonElement skillsElement)
+    {
+        if (skillsElement.ValueKind == JsonValueKind.Array)
+        {
+            return skillsElement.EnumerateArray()
+                .Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() : x.ToString())
+                .Select(x => Truncate(x, 40))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>()
+                .Take(5)
+                .ToList();
+        }
+
+        if (skillsElement.ValueKind == JsonValueKind.String)
+        {
+            return SplitSkills(skillsElement.GetString());
+        }
+
+        return new List<string>();
+    }
+
     /// <summary>
-    /// Create system prompt for visual prompt generation
+    /// Create system prompt for visual prompt generation with FIXED LAYOUT
     /// </summary>
     private string CreateVisualPromptSystemPrompt(
         string previewJson,
         string selectedTheme,
-        string? recruiterPersona)
+        string? recruiterPersona,
+        string? avatarBase64 = null)
     {
         var personaDescription = recruiterPersona switch
         {
@@ -111,38 +214,36 @@ public class VisualPromptService
             _ => "for general professional use"
         };
 
-        return $@"You are an expert visual design prompt engineer. Your task is to create a detailed visual prompt that Imagen AI can use to generate a professional portfolio preview image.
+        var avatarLine = string.IsNullOrEmpty(avatarBase64)
+            ? "Avatar: none"
+            : "Avatar: provided circular avatar reference (must match the portfolio source avatar)";
 
-Portfolio Preview Data:
+        return $@"You are a visual prompt engineer for portfolio previews.
+
+Brief:
 {previewJson}
 
-Design Theme: {selectedTheme} (choose from: professional, creative, minimal, startup, corporate, cyberpunk)
-Target Audience: {personaDescription}
+Theme: {selectedTheme}
+Audience: {personaDescription}
+{avatarLine}
 
-Generate a JSON response with the following structure:
+Rules:
+- Output valid JSON only.
+- Keep it compact and parseable.
+- Use the same order every time.
+- Must describe 4 zones only: top-left avatar, top-right name/title, center skills/technology badges, bottom achievement.
+- Ensure the brief reflects the portfolio title, skill/tech stack, project summary, and achievement from the input.
+- Use 3-5 main elements max.
+- Keep the style professional and legible.
+
+Return this JSON shape:
 {{
-  ""visualTheme"": ""[Brief description of overall visual theme]"",
-  ""mainElements"": [""[Element 1]"", ""[Element 2]"", ""[Element 3]""],
-  ""colorPalette"": [""[Primary Color]"", ""[Secondary Color]"", ""[Accent Color]""],
-  ""heroText"": ""[Main headline/text to display prominently]"",
-  ""style"": ""[Art style description for Imagen: photorealistic, illustrated, minimalist, gradient-based, etc]""
-}}
-
-IMPORTANT GUIDELINES:
-- Output ONLY valid JSON, no markdown or extra text
-- mainElements should be 3-5 visual elements that represent the portfolio's strengths
-- colorPalette should be hex colors or descriptive color names (e.g., #007AFF, professional-blue, vibrant-orange)
-- heroText should be a powerful 1-2 word statement from the portfolio
-- style should guide the Imagen model's visual approach
-- Ensure theme consistency:
-  - Professional: corporate colors, clean layouts, traditional elements
-  - Creative: vibrant colors, artistic elements, dynamic composition
-  - Minimal: 1-2 colors, spacious layouts, typography-focused
-  - Startup: bold colors, modern elements, energetic vibe
-  - Corporate: brand colors, structured, authoritative
-  - Cyberpunk: neon colors, futuristic elements, digital aesthetics
-- Match the selected theme exactly
-- Consider the recruiter persona to emphasize relevant visual signals";
+  ""visualTheme"": ""..."",
+  ""mainElements"": [""..."", ""..."", ""...""],
+  ""colorPalette"": [""..."", ""..."", ""...""],
+  ""heroText"": ""..."",
+  ""style"": ""...""
+}}";
     }
 
     /// <summary>
@@ -244,38 +345,16 @@ IMPORTANT GUIDELINES:
                 return (false, null);
             }
 
-            // Remove markdown code blocks if present
-            var cleaned = responseText.Trim();
-            if (cleaned.StartsWith("```json"))
+            var cleaned = ExtractJsonText(responseText);
+            if (string.IsNullOrWhiteSpace(cleaned))
             {
-                cleaned = cleaned["```json".Length..];
-            }
-            if (cleaned.StartsWith("```"))
-            {
-                cleaned = cleaned["```".Length..];
-            }
-            if (cleaned.EndsWith("```"))
-            {
-                cleaned = cleaned[..^3];
-            }
-            cleaned = cleaned.Trim();
-
-            // Extract JSON from response
-            var jsonStartIdx = cleaned.IndexOf('{');
-            var jsonEndIdx = cleaned.LastIndexOf('}');
-
-            if (jsonStartIdx < 0 || jsonEndIdx < 0 || jsonStartIdx >= jsonEndIdx)
-            {
-                _logger.LogWarning("⚠️ No JSON object found in response: {Response}", cleaned[..Math.Min(200, cleaned.Length)]);
+                _logger.LogWarning("⚠️ No JSON object found in response: {Response}", responseText[..Math.Min(200, responseText.Length)]);
                 return (false, null);
             }
 
-            var jsonText = cleaned.Substring(jsonStartIdx, jsonEndIdx - jsonStartIdx + 1);
-            _logger.LogDebug("📝 Extracted JSON: {Json}", jsonText[..Math.Min(300, jsonText.Length)]);
-
             // Parse JSON
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var visualPrompt = JsonSerializer.Deserialize<VisualPromptDto>(jsonText, options);
+            var visualPrompt = JsonSerializer.Deserialize<VisualPromptDto>(cleaned, options);
 
             if (visualPrompt == null)
             {
@@ -319,6 +398,33 @@ IMPORTANT GUIDELINES:
         }
     }
 
+    private static string? Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
+    private static List<string> SplitSkills(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new List<string>();
+        }
+
+        return value
+            .Split(new[] { ',', ';', '/', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => Truncate(x, 40))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>()
+            .Take(5)
+            .ToList();
+    }
+
     #region Gemini API Response Models
 
     private sealed class GeminiResponse
@@ -358,6 +464,36 @@ IMPORTANT GUIDELINES:
 
         [JsonPropertyName("candidatesTokenCount")]
         public int CandidatesTokenCount { get; set; }
+    }
+
+    private static string? ExtractJsonText(string responseText)
+    {
+        var cleaned = responseText.Trim();
+
+        if (cleaned.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+        {
+            cleaned = cleaned[7..];
+        }
+        else if (cleaned.StartsWith("```", StringComparison.OrdinalIgnoreCase))
+        {
+            cleaned = cleaned[3..];
+        }
+
+        if (cleaned.EndsWith("```", StringComparison.OrdinalIgnoreCase))
+        {
+            cleaned = cleaned[..^3];
+        }
+
+        cleaned = cleaned.Trim();
+
+        var start = cleaned.IndexOf('{');
+        var end = cleaned.LastIndexOf('}');
+        if (start >= 0 && end > start)
+        {
+            return cleaned.Substring(start, end - start + 1);
+        }
+
+        return null;
     }
 
     #endregion

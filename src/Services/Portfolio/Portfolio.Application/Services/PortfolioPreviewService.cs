@@ -15,6 +15,7 @@ public class PortfolioPreviewService : IPortfolioPreviewService
     private readonly GoogleAiPreviewGenerator _aiGenerator;
     private readonly VisualPromptService _visualPromptService;
     private readonly ImageGenerationService _imageGenerationService;
+    private readonly AvatarIntegrationService _avatarIntegrationService;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<PortfolioPreviewService> _logger;
 
@@ -24,6 +25,7 @@ public class PortfolioPreviewService : IPortfolioPreviewService
         GoogleAiPreviewGenerator aiGenerator,
         VisualPromptService visualPromptService,
         ImageGenerationService imageGenerationService,
+        AvatarIntegrationService avatarIntegrationService,
         ICurrentUserService currentUser,
         ILogger<PortfolioPreviewService> logger)
     {
@@ -32,11 +34,12 @@ public class PortfolioPreviewService : IPortfolioPreviewService
         _aiGenerator = aiGenerator;
         _visualPromptService = visualPromptService;
         _imageGenerationService = imageGenerationService;
+        _avatarIntegrationService = avatarIntegrationService;
         _currentUser = currentUser;
         _logger = logger;
     }
 
-    async Task<Interfaces.GeneratePreviewResponse?> IPortfolioPreviewService.GeneratePreviewAsync(int portfolioId, string? highlightsDescription)
+    async Task<Interfaces.GeneratePreviewResponse?> IPortfolioPreviewService.GeneratePreviewAsync(int portfolioId, string? highlightsDescription, string? avatarUrl = null)
     {
         try
         {
@@ -94,15 +97,46 @@ public class PortfolioPreviewService : IPortfolioPreviewService
                 };
             }
 
+            var resolvedAvatarUrl = ResolveAvatarUrl(portfolio, avatarUrl);
+            if (!string.IsNullOrWhiteSpace(resolvedAvatarUrl))
+            {
+                _logger.LogInformation(
+                    string.IsNullOrWhiteSpace(avatarUrl)
+                        ? "🎨 Using avatar URL from INTRO block"
+                        : "🎨 Using provided avatar URL");
+            }
+
             // Generate visual prompt (Phase 2)
             VisualPromptDto? visualPrompt = null;
             string? visualPromptJson = null;
+            string? avatarBase64 = null;
+            string? storedAvatarUrl = null;
+            var visualPromptBrief = BuildVisualPromptBrief(previewJson, portfolio.Name, resolvedAvatarUrl);
+
             if (!string.IsNullOrEmpty(previewJson))
             {
+                // Fetch and convert avatar if provided
+                if (!string.IsNullOrEmpty(resolvedAvatarUrl))
+                {
+                    _logger.LogInformation("🎨 Fetching avatar from URL: {AvatarUrl}", resolvedAvatarUrl);
+                    avatarBase64 = await _avatarIntegrationService.FetchAndConvertAvatarToBase64Async(resolvedAvatarUrl);
+                    
+                    if (!string.IsNullOrEmpty(avatarBase64))
+                    {
+                        storedAvatarUrl = resolvedAvatarUrl;
+                        _logger.LogInformation("✅ Avatar converted to base64 successfully");
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️ Avatar conversion failed, continuing without avatar");
+                    }
+                }
+                
                 var (promptSuccess, prompt, promptError) = await _visualPromptService.GenerateVisualPromptAsync(
-                    previewJson,
+                    visualPromptBrief,
                     "professional",
-                    null
+                    null,
+                    avatarBase64
                 );
 
                 if (promptSuccess && prompt != null)
@@ -114,7 +148,7 @@ public class PortfolioPreviewService : IPortfolioPreviewService
                 else
                 {
                     _logger.LogWarning("⚠️ Visual prompt generation failed: {Error}", promptError);
-                    visualPrompt = BuildFallbackVisualPrompt(previewJson, highlightsDescription);
+                    visualPrompt = BuildFallbackVisualPrompt(visualPromptBrief, highlightsDescription);
                     visualPromptJson = JsonSerializer.Serialize(visualPrompt);
                     _logger.LogInformation("✅ Using fallback visual prompt for image generation");
                 }
@@ -127,7 +161,8 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             {
                 var (imageSuccess, url, generatedImageId, imageError) = await _imageGenerationService.GenerateAndUploadImageAsync(
                     visualPrompt,
-                    "professional"
+                    "professional",
+                    avatarBase64
                 );
 
                 if (imageSuccess && !string.IsNullOrEmpty(url))
@@ -162,6 +197,8 @@ public class PortfolioPreviewService : IPortfolioPreviewService
                 existingPreview.ImagegenModel = "imagen-4.0-generate-001";
                 existingPreview.GenerationModel = "gemini-2.5-flash";
                 existingPreview.CacheKey = cacheKey;
+                existingPreview.AvatarUrl = storedAvatarUrl;
+                existingPreview.IncludesAvatar = !string.IsNullOrEmpty(storedAvatarUrl);
                 existingPreview.Version++;
                 existingPreview.RegeneratedCount++;
                 existingPreview.UpdatedAt = DateTime.UtcNow;
@@ -186,6 +223,8 @@ public class PortfolioPreviewService : IPortfolioPreviewService
                     ImagegenModel = "imagen-4.0-generate-001",
                     GenerationModel = "gemini-2.5-flash",
                     CacheKey = cacheKey,
+                    AvatarUrl = storedAvatarUrl,
+                    IncludesAvatar = !string.IsNullOrEmpty(storedAvatarUrl),
                     Version = 1,
                     RegeneratedCount = 0,
                     TokensUsed = tokensUsed,
@@ -275,6 +314,8 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             PortfolioId = preview.PortfolioId,
             PreviewJson = previewJson,
             HighlightsDescription = preview.HighlightsDescription,
+            AvatarUrl = preview.AvatarUrl,
+            IncludesAvatar = preview.IncludesAvatar,
             ImageUrl = preview.ImageUrl,
             ImageId = imageId ?? preview.ImageId,
             Version = preview.Version,
@@ -322,6 +363,78 @@ public class PortfolioPreviewService : IPortfolioPreviewService
     }
 
     /// <summary>
+    /// Build a compact structured brief for visual prompt generation.
+    /// </summary>
+    private static string BuildVisualPromptBrief(string previewJson, string portfolioName, string? avatarUrl)
+    {
+        string title = portfolioName;
+        string summary = "Professional portfolio";
+        var keySkills = new List<string>();
+        string specialization = "Professional profile";
+        string recentProjects = "Recent projects not specified";
+        string achievement = "Portfolio highlights";
+
+        try
+        {
+            using var jsonDoc = JsonDocument.Parse(previewJson);
+            var root = jsonDoc.RootElement;
+
+            if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+            {
+                title = Truncate(titleProp.GetString(), 80) ?? title;
+            }
+
+            if (root.TryGetProperty("summary", out var summaryProp) && summaryProp.ValueKind == JsonValueKind.String)
+            {
+                summary = Truncate(summaryProp.GetString(), 140) ?? summary;
+            }
+
+            if (root.TryGetProperty("keySkills", out var skillsProp) && skillsProp.ValueKind == JsonValueKind.String)
+            {
+                keySkills = SplitSkills(skillsProp.GetString());
+            }
+
+            if (root.TryGetProperty("specialization", out var specProp) && specProp.ValueKind == JsonValueKind.String)
+            {
+                specialization = Truncate(specProp.GetString(), 180) ?? specialization;
+            }
+
+            if (root.TryGetProperty("recentProjects", out var projectProp) && projectProp.ValueKind == JsonValueKind.String)
+            {
+                recentProjects = Truncate(projectProp.GetString(), 180) ?? recentProjects;
+            }
+
+            if (root.TryGetProperty("achievement", out var achievementProp) && achievementProp.ValueKind == JsonValueKind.String)
+            {
+                achievement = Truncate(achievementProp.GetString(), 180) ?? achievement;
+            }
+        }
+        catch
+        {
+            // Keep deterministic defaults when preview JSON is missing or malformed.
+        }
+
+        if (keySkills.Count == 0)
+        {
+            keySkills = new List<string> { "C#", ".NET", "React" };
+        }
+
+        var brief = new
+        {
+            title,
+            summary,
+            keySkills,
+            techStack = keySkills,
+            specialization,
+            recentProjects,
+            achievement,
+            avatarUrl = Truncate(avatarUrl, 2048)
+        };
+
+        return JsonSerializer.Serialize(brief);
+    }
+
+    /// <summary>
     /// Build a deterministic fallback visual prompt when Gemini visual prompt generation is unavailable.
     /// </summary>
     private static VisualPromptDto BuildFallbackVisualPrompt(string previewJson, string? highlightsDescription)
@@ -329,6 +442,9 @@ public class PortfolioPreviewService : IPortfolioPreviewService
         string title = "Full-stack Developer";
         string summary = highlightsDescription ?? "Professional portfolio";
         string keySkills = "React, .NET, Azure";
+        string specialization = "Professional portfolio showcase";
+        string recentProjects = "Portfolio projects";
+        string achievement = "Professional portfolio highlights";
 
         try
         {
@@ -342,12 +458,27 @@ public class PortfolioPreviewService : IPortfolioPreviewService
 
             if (root.TryGetProperty("summary", out var summaryProp) && summaryProp.ValueKind == JsonValueKind.String)
             {
-                summary = summaryProp.GetString() ?? summary;
+                summary = Truncate(summaryProp.GetString(), 120) ?? summary;
             }
 
             if (root.TryGetProperty("keySkills", out var skillsProp) && skillsProp.ValueKind == JsonValueKind.String)
             {
-                keySkills = skillsProp.GetString() ?? keySkills;
+                keySkills = Truncate(skillsProp.GetString(), 100) ?? keySkills;
+            }
+
+            if (root.TryGetProperty("specialization", out var specializationProp) && specializationProp.ValueKind == JsonValueKind.String)
+            {
+                specialization = Truncate(specializationProp.GetString(), 140) ?? specialization;
+            }
+
+            if (root.TryGetProperty("recentProjects", out var projectProp) && projectProp.ValueKind == JsonValueKind.String)
+            {
+                recentProjects = Truncate(projectProp.GetString(), 140) ?? recentProjects;
+            }
+
+            if (root.TryGetProperty("achievement", out var achievementProp) && achievementProp.ValueKind == JsonValueKind.String)
+            {
+                achievement = Truncate(achievementProp.GetString(), 140) ?? achievement;
             }
         }
         catch
@@ -361,9 +492,9 @@ public class PortfolioPreviewService : IPortfolioPreviewService
             MainElements = new List<string>
             {
                 title,
-                "skill badges",
-                "project highlights",
-                "Azure cloud accents"
+                keySkills,
+                recentProjects,
+                achievement
             },
             ColorPalette = new List<string>
             {
@@ -372,7 +503,82 @@ public class PortfolioPreviewService : IPortfolioPreviewService
                 "#F8FAFC"
             },
             HeroText = title,
-            Style = $"clean editorial layout emphasizing {keySkills} and the user's summary: {summary}"
+            Style = $"clean editorial layout emphasizing {keySkills}. Summary: {summary}. {specialization}"
         };
+    }
+
+    private string? ResolveAvatarUrl(Portfolio.Domain.Entities.Portfolio portfolio, string? explicitAvatarUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitAvatarUrl))
+        {
+            return explicitAvatarUrl.Trim();
+        }
+
+        foreach (var block in portfolio.Blocks.OrderBy(x => x.DisplayOrder))
+        {
+            if (block.BlockTypeId != 1 && !string.Equals(block.BlockType?.Code, "INTRO", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var introAvatarUrl = TryGetIntroAvatarUrl(block.DataJson);
+            if (!string.IsNullOrWhiteSpace(introAvatarUrl))
+            {
+                return introAvatarUrl;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? TryGetIntroAvatarUrl(string dataJson)
+    {
+        try
+        {
+            using var jsonDoc = JsonDocument.Parse(dataJson);
+            var root = jsonDoc.RootElement;
+
+            if (root.TryGetProperty("avatar", out var avatarProp) && avatarProp.ValueKind == JsonValueKind.String)
+            {
+                return Truncate(avatarProp.GetString(), 2048);
+            }
+
+            if (root.TryGetProperty("avatarUrl", out var avatarUrlProp) && avatarUrlProp.ValueKind == JsonValueKind.String)
+            {
+                return Truncate(avatarUrlProp.GetString(), 2048);
+            }
+        }
+        catch
+        {
+            // Ignore invalid block payloads and fall back to no avatar.
+        }
+
+        return null;
+    }
+
+    private static string? Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
+    private static List<string> SplitSkills(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new List<string>();
+        }
+
+        return value
+            .Split(new[] { ',', ';', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Take(5)
+            .Select(x => Truncate(x, 40) ?? x)
+            .ToList();
     }
 }
