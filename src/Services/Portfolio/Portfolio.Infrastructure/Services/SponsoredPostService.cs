@@ -168,6 +168,7 @@ public class SponsoredPostService : ISponsoredPostService
         if (post != null)
         {
             post.ViewCount++;
+            post.CurrentImpression++;
             await _repository.UpdateAsync(post);
         }
     }
@@ -178,6 +179,7 @@ public class SponsoredPostService : ISponsoredPostService
         if (post != null)
         {
             post.ClickCount++;
+            post.CurrentClick++;
             await _repository.UpdateAsync(post);
         }
     }
