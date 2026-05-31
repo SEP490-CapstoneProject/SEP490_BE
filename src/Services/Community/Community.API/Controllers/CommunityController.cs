@@ -47,6 +47,7 @@ public class CommunityController : ControllerBase
 
     // ─── Feed endpoints (Require Authentication) ──────────────────────────────────────────────
 
+    [AllowAnonymous]
     [HttpGet("posts")]
     public async Task<IActionResult> GetFeed(
         [FromQuery] int pageSize = 20,
@@ -59,6 +60,7 @@ public class CommunityController : ControllerBase
     }
 
     /// <summary>Get community posts feed with injected sponsored posts (cursor-based pagination)</summary>
+    [AllowAnonymous]
     [HttpGet("posts/feed")]
     public async Task<IActionResult> GetFeedWithSponsorship(
         [FromQuery] int pageSize = 20,
@@ -103,6 +105,7 @@ public class CommunityController : ControllerBase
         }
     }
 
+    [AllowAnonymous]
     [HttpGet("posts/{id:int}")]
     public async Task<IActionResult> GetPostById(int id)
     {
@@ -116,6 +119,7 @@ public class CommunityController : ControllerBase
         return Ok(post);
     }
 
+    [AllowAnonymous]
     [HttpGet("posts/{postId:int}/comments")]
     public async Task<IActionResult> GetComments(int postId)
     {
@@ -123,6 +127,7 @@ public class CommunityController : ControllerBase
         return Ok(response);
     }
 
+    [AllowAnonymous]
     [HttpGet("posts/user/{userId:int}")]
     public async Task<IActionResult> GetPostsByUser(int userId)
     {
